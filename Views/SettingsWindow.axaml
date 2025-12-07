@@ -1,0 +1,23 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="FactorioModManager.Views.SettingsWindow"
+        Title="Settings"
+        Width="500" Height="250"
+        CanResize="False">
+
+  <StackPanel Margin="20" Spacing="15">
+    <TextBlock Text="Mod Portal Settings" FontSize="18" FontWeight="Bold"/>
+    
+    <StackPanel Spacing="5">
+      <TextBlock Text="API Key (optional):"/>
+      <TextBox Name="ApiKeyBox" Watermark="Enter your Factorio Mod Portal API key"/>
+      <TextBlock Text="Get your API key from: https://mods.factorio.com/settings/api-keys"
+                 FontSize="11" Foreground="#888"/>
+    </StackPanel>
+    
+    <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
+      <Button Content="Save" Click="SaveSettings" Width="100"/>
+      <Button Content="Cancel" Click="CancelSettings" Width="100"/>
+    </StackPanel>
+  </StackPanel>
+</Window>

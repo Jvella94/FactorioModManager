@@ -1,0 +1,233 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:FactorioModManager.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="700"
+        x:Class="FactorioModManager.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="Factorio Mod Manager"
+        Width="1200" Height="700"
+        MinWidth="900" MinHeight="600">
+
+  <Design.DataContext>
+    <vm:MainWindowViewModel/>
+  </Design.DataContext>
+
+  <Grid RowDefinitions="Auto,*,Auto">
+
+    <!-- Toolbar -->
+    <!-- Toolbar -->
+    <Border Grid.Row="0" BorderBrush="#333" BorderThickness="0,0,0,1"
+            Background="#2B2B2B" Padding="10">
+      <StackPanel Orientation="Horizontal" Spacing="10">
+        <Button Content="Refresh Mods" Command="{Binding RefreshModsCommand}"/>
+        <Button Content="Install Mod" Command="{Binding InstallModCommand}"/>
+        <Button Content="Open Mod Folder" Command="{Binding OpenModFolderCommand}"/>
+        <Separator Height="20" Width="1"/>
+        <TextBox Watermark="Search mods..."
+                 Text="{Binding SearchText}"
+                 Width="200"/>
+        <AutoCompleteBox ItemsSource="{Binding FilteredAuthors}"
+                  SelectedItem="{Binding SelectedAuthorFilter}"
+                  Text="{Binding AuthorSearchText}"
+                  Width="200"
+                  Watermark="Filter by author"
+                  MinimumPrefixLength="0"
+                  FilterMode="Contains"
+                  MaxDropDownHeight="300"
+                  GotFocus="AuthorBox_OnGotFocus"
+                  Name="AuthorFilterBox"/>
+        <CheckBox Content="Show Disabled"
+                  IsChecked="{Binding ShowDisabled}"/>
+        <CheckBox Content="Filter by Selected Group"
+                  IsChecked="{Binding FilterBySelectedGroup}"/>
+      </StackPanel>
+    </Border>
+
+
+    <!-- Main Content -->
+    <Grid Grid.Row="1" ColumnDefinitions="200,3*,*">
+
+      <!-- Groups Panel -->
+      <Border Grid.Column="0" BorderBrush="#333" BorderThickness="0,0,1,0"
+              Background="#252525" Padding="10">
+        <Grid RowDefinitions="Auto,*,Auto">
+          <TextBlock Grid.Row="0" Text="Mod Groups"
+                     FontWeight="Bold" FontSize="14" Margin="0,0,0,10"/>
+
+          <ListBox Grid.Row="1"
+                   ItemsSource="{Binding Groups}"
+                   SelectedItem="{Binding SelectedGroup}">
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <StackPanel Spacing="3">
+                  <!-- Display mode -->
+                  <StackPanel IsVisible="{Binding !IsEditing}">
+                    <TextBlock Text="{Binding Name}" FontWeight="Bold"/>
+                    <TextBlock Text="{Binding StatusText}"
+                               FontSize="11" Foreground="#888"/>
+                    <StackPanel Orientation="Horizontal" Spacing="5" Margin="0,3,0,0">
+                      <Button Content="Toggle"
+                              Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ToggleGroupCommand}"
+                              CommandParameter="{Binding}"
+                              FontSize="10" Padding="5,2"/>
+                      <Button Content="Rename"
+                              Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).RenameGroupCommand}"
+                              CommandParameter="{Binding}"
+                              FontSize="10" Padding="5,2"/>
+                      <Button Content="Delete"
+                              Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).DeleteGroupCommand}"
+                              CommandParameter="{Binding}"
+                              FontSize="10" Padding="5,2"/>
+                    </StackPanel>
+                  </StackPanel>
+
+                  <!-- Edit mode -->
+                  <StackPanel IsVisible="{Binding IsEditing}" Spacing="5">
+                    <TextBox Text="{Binding EditName}" Watermark="Group name"/>
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                      <Button Content="Save"
+                              Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ConfirmRenameGroupCommand}"
+                              CommandParameter="{Binding}"
+                              FontSize="10" Padding="5,2"/>
+                      <Button Content="Cancel"
+                              Click="CancelRename"
+                              FontSize="10" Padding="5,2"/>
+                    </StackPanel>
+                  </StackPanel>
+                </StackPanel>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+
+          <StackPanel Grid.Row="2" Spacing="5" Margin="0,10,0,0">
+            <Button Content="Create Group"
+                    Command="{Binding CreateGroupCommand}"
+                    HorizontalAlignment="Stretch"/>
+            <Button Content="Add Selected to Group"
+                    Command="{Binding AddMultipleToGroupCommand}"
+                    HorizontalAlignment="Stretch"/>
+            <Button Content="Remove Selected from Group"
+                    Command="{Binding RemoveMultipleFromGroupCommand}"
+                    HorizontalAlignment="Stretch"/>
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <!-- Mod List -->
+      <Border Grid.Column="1" BorderBrush="#333" BorderThickness="0,0,1,0">
+        <Grid RowDefinitions="Auto,*">
+          <TextBlock Grid.Row="0" Text="{Binding ModCountText}"
+                     Margin="10" FontWeight="Bold"/>
+
+          <DataGrid Grid.Row="1"
+                    ItemsSource="{Binding FilteredMods}"
+                    SelectedItem="{Binding SelectedMod}"
+                    SelectionChanged="DataGrid_OnSelectionChanged"
+                    AutoGenerateColumns="False"
+                    CanUserReorderColumns="True"
+                    CanUserResizeColumns="True"
+                    GridLinesVisibility="Horizontal"
+                    IsReadOnly="True"
+                    SelectionMode="Extended"
+                    RowHeight="32">
+            <DataGrid.Columns>
+              <DataGridTemplateColumn Header="Enabled" Width="100">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate>
+                    <CheckBox IsChecked="{Binding IsEnabled}"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center"/>
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
+
+              <DataGridTextColumn Header="Name"
+                                  Binding="{Binding Title}"
+                                  Width="0.5*"/>
+
+              <DataGridTextColumn Header="Version"
+                                  Binding="{Binding Version}"
+                                  Width="100"/>
+
+              <DataGridTextColumn Header="Author"
+                                  Binding="{Binding Author}"
+                                  Width="120"/>
+
+              <DataGridTextColumn Header="Group"
+                                  Binding="{Binding GroupName}"
+                                  Width="100"/>
+
+              <DataGridTextColumn Header="Last Updated"
+                                  Binding="{Binding LastUpdatedText}"
+                                  Width="120"/>
+            </DataGrid.Columns>
+          </DataGrid>
+
+        </Grid>
+      </Border>
+
+      <!-- Mod Details Panel -->
+      <Border Grid.Column="2" Background="#1E1E1E" Padding="15">
+        <ScrollViewer>
+          <StackPanel Spacing="10" IsVisible="{Binding SelectedMod, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <!-- Thumbnail -->
+            <Image Source="{Binding SelectedMod.Thumbnail}"
+                   Width="200" Height="200"
+                   Stretch="Uniform"
+                   IsVisible="{Binding SelectedMod.Thumbnail, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+
+            <TextBlock Text="{Binding SelectedMod.Title}"
+                       FontSize="18" FontWeight="Bold"
+                       TextWrapping="Wrap"/>
+
+            <TextBlock Text="{Binding SelectedMod.Version}"
+                       Foreground="#888"/>
+
+            <Separator/>
+
+            <TextBlock Text="Author:" FontWeight="Bold"/>
+            <TextBlock Text="{Binding SelectedMod.Author}"/>
+
+            <TextBlock Text="Group:" FontWeight="Bold"/>
+            <TextBlock Text="{Binding SelectedMod.GroupName}"/>
+
+            <TextBlock Text="Description:" FontWeight="Bold" Margin="0,10,0,0"/>
+            <TextBlock Text="{Binding SelectedMod.Description}"
+                       TextWrapping="Wrap"/>
+
+            <TextBlock Text="Dependencies:" FontWeight="Bold" Margin="0,10,0,0"/>
+            <ItemsControl ItemsSource="{Binding SelectedMod.Dependencies}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <TextBlock Text="{Binding}" Margin="5,0,0,0"/>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <StackPanel Orientation="Vertical" Spacing="10" Margin="0,20,0,0">
+              <Button Content="View on Mod Portal"
+                      Command="{Binding OpenModPortalCommand}"
+                      HorizontalAlignment="Stretch"/>
+              <Button Content="Enable/Disable"
+                      Command="{Binding ToggleModCommand}"
+                      CommandParameter="{Binding SelectedMod}"
+                      HorizontalAlignment="Stretch"/>
+              <Button Content="Remove"
+                      Command="{Binding RemoveModCommand}"
+                      CommandParameter="{Binding SelectedMod}"
+                      HorizontalAlignment="Stretch"/>
+            </StackPanel>
+          </StackPanel>
+        </ScrollViewer>
+      </Border>
+    </Grid>
+
+    <!-- Status Bar -->
+    <Border Grid.Row="2" BorderBrush="#333" BorderThickness="0,1,0,0"
+            Background="#2B2B2B" Padding="10">
+      <TextBlock Text="{Binding StatusText}"/>
+    </Border>
+  </Grid>
+</Window>
