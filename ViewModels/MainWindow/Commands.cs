@@ -33,6 +33,7 @@ namespace FactorioModManager.ViewModels.MainWindow
         public ReactiveCommand<Unit, Unit> CheckUpdatesCustomCommand { get; private set; } = null!;
         public ReactiveCommand<ModViewModel?, Unit> DownloadUpdateCommand { get; private set; } = null!;
         public ReactiveCommand<ModViewModel?, Unit> DeleteOldVersionCommand { get; private set; } = null!;
+        public ReactiveCommand<Unit, Unit> CheckSingleModUpdateCommand { get; private set; } = null!;
 
         private void InitializeCommands()
         {
@@ -66,6 +67,7 @@ namespace FactorioModManager.ViewModels.MainWindow
             CheckUpdatesCustomCommand = ReactiveCommand.CreateFromTask(CheckUpdatesCustomAsync);
             DownloadUpdateCommand = ReactiveCommand.CreateFromTask<ModViewModel?>(DownloadUpdateAsync);
             DeleteOldVersionCommand = ReactiveCommand.Create<ModViewModel?>(DeleteOldVersion);
+            CheckSingleModUpdateCommand = ReactiveCommand.CreateFromTask(CheckSingleModUpdateAsync);
         }
 
         private void InstallMod()

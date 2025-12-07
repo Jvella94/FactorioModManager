@@ -21,7 +21,6 @@ namespace FactorioModManager.ViewModels.MainWindow
                 var groupVm = new ModGroupViewModel
                 {
                     Name = newGroup.Name,
-                    Description = newGroup.Description,
                     ModNames = newGroup.ModNames
                 };
 

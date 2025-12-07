@@ -6,7 +6,6 @@ namespace FactorioModManager.ViewModels
     public class ModGroupViewModel : ViewModelBase
     {
         private string _name = string.Empty;
-        private string _description = string.Empty;
         private int _enabledCount;
         private int _totalCount;
         private bool _isEditing;
@@ -16,12 +15,6 @@ namespace FactorioModManager.ViewModels
         {
             get => _name;
             set => this.RaiseAndSetIfChanged(ref _name, value);
-        }
-
-        public string Description
-        {
-            get => _description;
-            set => this.RaiseAndSetIfChanged(ref _description, value);
         }
 
         public List<string> ModNames { get; set; } = [];

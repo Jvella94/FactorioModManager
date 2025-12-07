@@ -10,7 +10,6 @@
         Title="Factorio Mod Manager"
         Width="1500" Height="850"
         MinWidth="1000" MinHeight="700"
-        KeyDown="Window_KeyDown"
         Loaded="Window_Loaded">
 
   <Design.DataContext>
@@ -168,6 +167,7 @@
       <!-- Mod List -->
       <Border Grid.Column="1" BorderBrush="#333" BorderThickness="0,0,1,0">
         <DataGrid ItemsSource="{Binding FilteredMods}"
+                  Name="ModGrid"
                 SelectedItem="{Binding SelectedMod}"
                 SelectionChanged="DataGrid_OnSelectionChanged"
                 AutoGenerateColumns="False"
@@ -224,10 +224,12 @@
       </Border>
 
       <!-- Mod Details Panel -->
-      <!-- Mod Details Panel -->
       <Border Grid.Column="2" Background="#1E1E1E" Padding="15">
+   
+
         <ScrollViewer>
           <StackPanel Spacing="10" IsVisible="{Binding SelectedMod, Converter={x:Static ObjectConverters.IsNotNull}}">
+            
             <!-- Navigation buttons - Previous wider, Next narrower -->
             <Grid ColumnDefinitions="*,80">
               <Button Grid.Column="0" Content="◀ Previous" Command="{Binding NavigateBackCommand}"/>
@@ -278,6 +280,20 @@
                     Background="#2D5016"
                     IsVisible="{Binding SelectedMod.HasUpdate}"/>
 
+            <!-- Download Progress (ADD THIS) -->
+            <StackPanel Spacing="5" IsVisible="{Binding SelectedMod.IsDownloading}">
+              <ProgressBar IsIndeterminate="{Binding !SelectedMod.HasDownloadProgress}"
+                           Value="{Binding SelectedMod.DownloadProgress}"
+                           Maximum="100"
+                           Height="6"
+                           Foreground="#4CAF50"/>
+
+              <TextBlock Text="{Binding SelectedMod.DownloadStatusText}"
+                         FontSize="12"
+                         Foreground="#888"
+                         TextAlignment="Center"/>
+            </StackPanel>
+
             <TextBlock Text="⚠ Unused Internal Mod"
                        Foreground="Orange"
                        FontWeight="Bold"
@@ -311,7 +327,7 @@
               </ItemsControl.ItemTemplate>
             </ItemsControl>
 
-            <StackPanel Orientation="Vertical" Spacing="10" Margin="0,20,0,0">
+            <StackPanel Orientation="Vertical" Spacing="10" Margin="0,20,15,0">
               <Button Content="Open Mod File"
                       Click="OpenModFile"
                       HorizontalAlignment="Stretch"/>
@@ -322,6 +338,9 @@
                       Command="{Binding OpenSourceUrlCommand}"
                       HorizontalAlignment="Stretch"
                       IsEnabled="{Binding SelectedMod.SourceUrl, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+              <Button Content="Check for Update"
+                      Command="{Binding CheckSingleModUpdateCommand}"
+                      HorizontalAlignment="Stretch"/>
               <Button Content="View Changelog"
                       Command="{Binding OpenChangelogCommand}"
                       HorizontalAlignment="Stretch"/>
@@ -338,6 +357,7 @@
                       CommandParameter="{Binding SelectedMod}"
                       HorizontalAlignment="Stretch"/>
             </StackPanel>
+
           </StackPanel>
         </ScrollViewer>
       </Border>

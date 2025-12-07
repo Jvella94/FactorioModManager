@@ -4,9 +4,11 @@ using Avalonia.Interactivity;
 using FactorioModManager.Services;
 using FactorioModManager.ViewModels;
 using FactorioModManager.ViewModels.MainWindow;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Reactive.Linq;
 
 namespace FactorioModManager.Views
 {
@@ -17,7 +19,24 @@ namespace FactorioModManager.Views
         public MainWindow()
         {
             InitializeComponent();
-            DataContext = new MainWindowVM();
+
+            // Add keyboard handler for DataGrid
+            var modGrid = this.FindControl<DataGrid>("ModGrid");
+            if (modGrid != null)
+            {
+                modGrid.KeyDown += ModGrid_KeyDown;
+            }
+        }
+
+        private void ModGrid_KeyDown(object? sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Space && DataContext is MainWindowVM viewModel)
+            {
+                if (viewModel.SelectedMod != null)
+                {
+                    viewModel.ToggleModCommand.Execute(viewModel.SelectedMod).Subscribe();
+                }
+            }
         }
 
         private void Window_Loaded(object? sender, RoutedEventArgs e)
@@ -96,15 +115,6 @@ namespace FactorioModManager.Views
                 {
                     LogService.Instance.Log($"Error opening mod file: {ex.Message}");
                 }
-            }
-        }
-
-        private void Window_KeyDown(object? sender, KeyEventArgs e)
-        {
-            if (e.Key == Key.Space && ViewModel?.SelectedMod != null)
-            {
-                ViewModel.ToggleModCommand.Execute(ViewModel.SelectedMod);
-                e.Handled = true;
             }
         }
 

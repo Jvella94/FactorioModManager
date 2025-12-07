@@ -10,7 +10,7 @@ namespace FactorioModManager.Services
     public class ModGroupService
     {
         private readonly string _groupsFilePath;
-        private static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = true };
+        private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
         public ModGroupService()
         {
@@ -22,20 +22,34 @@ namespace FactorioModManager.Services
         {
             if (!File.Exists(_groupsFilePath))
             {
-               return [];
+                return [];
             }
 
-
-            var json = File.ReadAllText(_groupsFilePath);
-            var collection = JsonSerializer.Deserialize<ModGroupCollection>(json);
-            return collection?.Groups ?? [];
+            try
+            {
+                var json = File.ReadAllText(_groupsFilePath);
+                var collection = JsonSerializer.Deserialize<ModGroupCollection>(json);
+                return collection?.Groups ?? [];
+            }
+            catch
+            {
+                return [];
+            }
         }
 
         public void SaveGroups(List<ModGroup> groups)
         {
-            var collection = new ModGroupCollection { Groups = groups };
-            var json = JsonSerializer.Serialize(collection, SerializerOptions);
-            File.WriteAllText(_groupsFilePath, json);
+            try
+            {
+
+                var collection = new ModGroupCollection { Groups = groups };
+                var json = JsonSerializer.Serialize(collection, JsonOptions);
+                File.WriteAllText(_groupsFilePath, json);
+            }
+            catch (Exception ex)
+            {
+                LogService.LogDebug($"Error saving groups: {ex.Message}");
+            }
         }
 
         public void AddGroup(ModGroup group)
@@ -59,8 +73,12 @@ namespace FactorioModManager.Services
         public void DeleteGroup(string groupName)
         {
             var groups = LoadGroups();
-            groups.RemoveAll(g => g.Name == groupName);
-            SaveGroups(groups);
+            var group = groups.FirstOrDefault(g => g.Name == groupName);
+            if (group != null)
+            {
+                groups.Remove(group);
+                SaveGroups(groups);
+            }
         }
     }
 }

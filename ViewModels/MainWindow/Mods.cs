@@ -43,7 +43,8 @@ namespace FactorioModManager.ViewModels.MainWindow
                         .Select(g => g.OrderByDescending(m => m.Info.Version).First())
                         .ToList();
 
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    // Use InvokeAsync to WAIT for the UI thread to complete loading mods
+                    await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
                     {
                         Mods.Clear();
                         Authors.Clear();
@@ -52,27 +53,27 @@ namespace FactorioModManager.ViewModels.MainWindow
                         var authorCounts = new Dictionary<string, int>();
                         var allDependencies = new HashSet<string>();
 
-                        foreach (var (info, isEnabled, lastUpdated, thumbnailPath) in latestMods)
+                        foreach (var (Info, isEnabled, lastUpdated, thumbnailPath) in latestMods)
                         {
                             var modVm = new ModViewModel
                             {
-                                Name = info.Name,
-                                Title = info.Title ?? info.Name,
-                                Version = info.Version,
-                                Author = info.Author,
-                                Description = info.Description ?? "",
+                                Name = Info.Name,
+                                Title = Info.Title ?? Info.Name,
+                                Version = Info.Version,
+                                Author = Info.Author,
+                                Description = Info.Description ?? "",
                                 IsEnabled = isEnabled,
-                                Dependencies = info.Dependencies,
+                                Dependencies = Info.Dependencies,
                                 LastUpdated = lastUpdated,
                                 ThumbnailPath = thumbnailPath,
-                                Category = _metadataService.GetCategory(info.Name),
-                                SourceUrl = _metadataService.GetSourceUrl(info.Name),
-                                HasUpdate = _metadataService.GetHasUpdate(info.Name),
-                                LatestVersion = _metadataService.GetLatestVersion(info.Name)
+                                Category = _metadataService.GetCategory(Info.Name),
+                                SourceUrl = _metadataService.GetSourceUrl(Info.Name),
+                                HasUpdate = _metadataService.GetHasUpdate(Info.Name),
+                                LatestVersion = _metadataService.GetLatestVersion(Info.Name)
                             };
 
                             // Track all dependencies
-                            foreach (var dep in info.Dependencies)
+                            foreach (var dep in Info.Dependencies)
                             {
                                 var depName = dep.Split(DependencySeparators, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
                                 if (!string.IsNullOrEmpty(depName))
@@ -93,13 +94,13 @@ namespace FactorioModManager.ViewModels.MainWindow
 
                             Mods.Add(modVm);
 
-                            if (!string.IsNullOrEmpty(info.Author))
+                            if (!string.IsNullOrEmpty(Info.Author))
                             {
-                                if (!authorCounts.TryGetValue(info.Author, out var count))
+                                if (!authorCounts.TryGetValue(Info.Author, out var count))
                                 {
                                     count = 0;
                                 }
-                                authorCounts[info.Author] = count + 1;
+                                authorCounts[Info.Author] = count + 1;
                             }
                         }
 
@@ -138,7 +139,6 @@ namespace FactorioModManager.ViewModels.MainWindow
                             var groupVm = new ModGroupViewModel
                             {
                                 Name = group.Name,
-                                Description = group.Description ?? string.Empty,
                                 ModNames = group.ModNames
                             };
                             UpdateGroupStatus(groupVm);
@@ -156,6 +156,9 @@ namespace FactorioModManager.ViewModels.MainWindow
 
                         StatusText = $"Loaded {Mods.Count} mods and {Groups.Count} groups";
                     });
+
+                    // NOW mods are fully loaded - safe to check for updates
+                    await CheckForAlreadyDownloadedUpdatesAsync();
 
                     // Fetch metadata for mods that need it
                     await FetchMissingMetadataAsync(apiKey);
@@ -184,9 +187,13 @@ namespace FactorioModManager.ViewModels.MainWindow
             });
         }
 
+
         private async Task FetchMissingMetadataAsync(string? apiKey)
         {
-            var modsNeedingMetadata = Mods.Where(m =>
+            // Take a snapshot to avoid collection modification issues
+            var modsSnapshot = Mods.ToList();
+
+            var modsNeedingMetadata = modsSnapshot.Where(m =>
                 _metadataService.NeedsCategoryCheck(m.Name) ||
                 _metadataService.NeedsSourceUrlCheck(m.Name)).ToList();
 

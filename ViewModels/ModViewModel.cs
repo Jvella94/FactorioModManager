@@ -157,5 +157,34 @@ namespace FactorioModManager.ViewModels
                 return null;
             }
         }
+
+        private bool _isDownloading;
+        public bool IsDownloading
+        {
+            get => _isDownloading;
+            set => this.RaiseAndSetIfChanged(ref _isDownloading, value);
+        }
+
+        private double _downloadProgress;
+        public double DownloadProgress
+        {
+            get => _downloadProgress;
+            set => this.RaiseAndSetIfChanged(ref _downloadProgress, value);
+        }
+
+        private bool _hasDownloadProgress;
+        public bool HasDownloadProgress
+        {
+            get => _hasDownloadProgress;
+            set => this.RaiseAndSetIfChanged(ref _hasDownloadProgress, value);
+        }
+
+        private string _downloadStatusText = "";
+        public string DownloadStatusText
+        {
+            get => _downloadStatusText;
+            set => this.RaiseAndSetIfChanged(ref _downloadStatusText, value);
+        }
+
     }
 }

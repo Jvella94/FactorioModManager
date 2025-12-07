@@ -1,7 +1,6 @@
 ﻿using System;
 using System.IO;
 using System.Text.Json;
-using System.Diagnostics;
 
 namespace FactorioModManager.Services
 {
@@ -9,22 +8,25 @@ namespace FactorioModManager.Services
     {
         public string? FactorioModsPath { get; set; }
         public string? ApiKey { get; set; }
+        public string? Username { get; set; }
+        public string? Token { get; set; }
         public DateTime? LastUpdateCheck { get; set; }
-        public bool KeepOldModFiles { get; set; } = false; // ADDED - default to deleting old files
+        public bool KeepOldModFiles { get; set; } = false;
     }
-
 
     public class SettingsService
     {
         private readonly string _settingsPath;
-        // FIXED: Made readonly (IDE0044)
         private readonly Settings _settings;
-        private static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = true };
+        private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
         public SettingsService()
         {
-            var modsDir = ModPathHelper.GetModsDirectory();
-            _settingsPath = Path.Combine(modsDir, "mod-manager-settings.json");
+            var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            var appFolder = Path.Combine(appDataPath, "FactorioModManager");
+            Directory.CreateDirectory(appFolder);
+            _settingsPath = Path.Combine(appFolder, "settings.json");
+
             _settings = LoadSettings();
         }
 
@@ -32,35 +34,116 @@ namespace FactorioModManager.Services
         {
             if (!File.Exists(_settingsPath))
             {
-                return new Settings();
+                // Try to load defaults from Factorio's player-data.json
+                var (Username, Token) = LoadFactorioDefaults();
+                return new Settings
+                {
+                    FactorioModsPath = ModPathHelper.GetModsDirectory(),
+                    Username = Username,
+                    Token = Token
+                };
             }
 
             try
             {
                 var json = File.ReadAllText(_settingsPath);
-                return JsonSerializer.Deserialize<Settings>(json) ?? new Settings();
+                var settings = JsonSerializer.Deserialize<Settings>(json) ?? new Settings();
+
+                // If mods path is not set, use default
+                if (string.IsNullOrEmpty(settings.FactorioModsPath))
+                {
+                    settings.FactorioModsPath = ModPathHelper.GetModsDirectory();
+                }
+
+                // If username/token not set, try to load from Factorio
+                if (string.IsNullOrEmpty(settings.Username) || string.IsNullOrEmpty(settings.Token))
+                {
+                    var (Username, Token) = LoadFactorioDefaults();
+                    settings.Username ??= Username;
+                    settings.Token ??= Token;
+                }
+
+                return settings;
             }
-            catch (Exception ex)
+            catch
             {
-                LogService.LogDebug($"Error loading settings: {ex.Message}");
-                return new Settings();
+                var (Username, Token) = LoadFactorioDefaults();
+                return new Settings
+                {
+                    FactorioModsPath = ModPathHelper.GetModsDirectory(),
+                    Username = Username,
+                    Token = Token
+                };
             }
         }
 
-        public void SaveSettings()
+        private static (string? Username, string? Token) LoadFactorioDefaults()
         {
             try
             {
-                var json = JsonSerializer.Serialize(_settings, SerializerOptions);
+                var playerDataPath = ModPathHelper.GetPlayerDataPath();
+
+                if (File.Exists(playerDataPath))
+                {
+                    var json = File.ReadAllText(playerDataPath);
+
+                    // Parse the JSON to extract service-username and service-token
+                    using var doc = JsonDocument.Parse(json);
+                    var root = doc.RootElement;
+
+                    var username = root.TryGetProperty("service-username", out var usernameElement)
+                        ? usernameElement.GetString()
+                        : null;
+
+                    var token = root.TryGetProperty("service-token", out var tokenElement)
+                        ? tokenElement.GetString()
+                        : null;
+
+                    LogService.LogDebug($"Loaded Factorio credentials from player-data.json: Username={username}, Token={(token != null ? "***" : "null")}");
+
+                    return (username, token);
+                }
+                else
+                {
+                    LogService.LogDebug($"player-data.json not found at {playerDataPath}");
+                }
+            }
+            catch (Exception ex)
+            {
+                LogService.LogDebug($"Error loading Factorio player-data.json: {ex.Message}");
+            }
+
+            return (null, null);
+        }
+
+        private void SaveSettings()
+        {
+            try
+            {
+                var json = JsonSerializer.Serialize(_settings, JsonOptions);
                 File.WriteAllText(_settingsPath, json);
             }
             catch (Exception ex)
             {
-                LogService.LogDebug($"Error saving settings: {ex.Message}");
+                Console.WriteLine($"Error saving settings: {ex.Message}");
             }
         }
 
-        public string? GetApiKey() => _settings.ApiKey;
+        public string? GetModsPath()
+        {
+            return _settings.FactorioModsPath ?? ModPathHelper.GetModsDirectory();
+        }
+
+        public void SetModsPath(string path)
+        {
+            _settings.FactorioModsPath = path;
+            SaveSettings();
+        }
+
+        public string? GetApiKey()
+        {
+            return _settings.ApiKey;
+        }
 
         public void SetApiKey(string? apiKey)
         {
@@ -68,11 +151,36 @@ namespace FactorioModManager.Services
             SaveSettings();
         }
 
-        public DateTime? GetLastUpdateCheck() => _settings.LastUpdateCheck;
-
-        public void SetLastUpdateCheck(DateTime? date)
+        public string? GetUsername()
         {
-            _settings.LastUpdateCheck = date;
+            return _settings.Username;
+        }
+
+        public void SetUsername(string? username)
+        {
+            _settings.Username = username;
+            SaveSettings();
+        }
+
+        public string? GetToken()
+        {
+            return _settings.Token;
+        }
+
+        public void SetToken(string? token)
+        {
+            _settings.Token = token;
+            SaveSettings();
+        }
+
+        public DateTime? GetLastUpdateCheck()
+        {
+            return _settings.LastUpdateCheck;
+        }
+
+        public void SetLastUpdateCheck(DateTime dateTime)
+        {
+            _settings.LastUpdateCheck = dateTime;
             SaveSettings();
         }
 
@@ -85,17 +193,6 @@ namespace FactorioModManager.Services
         {
             _settings.KeepOldModFiles = keepOldFiles;
             SaveSettings();
-        }
-
-        public void SetModsPath(string path)
-        {
-            _settings.FactorioModsPath = path;
-            SaveSettings();
-        }
-
-        public string? GetModsPath()
-        {
-            return _settings.FactorioModsPath;
         }
     }
 }

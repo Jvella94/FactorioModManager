@@ -8,32 +8,56 @@ namespace FactorioModManager.Services
     {
         public static string GetModsDirectory()
         {
-            string baseDir;
-
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
-                baseDir = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-                return Path.Combine(baseDir, "Factorio", "mods");
+                // Windows: %appdata%\Factorio\mods
+                var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                return Path.Combine(appData, "Factorio", "mods");
             }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             {
-                baseDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-                return Path.Combine(baseDir, ".factorio", "mods");
+                // Linux: ~/.factorio/mods
+                var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                return Path.Combine(home, ".factorio", "mods");
             }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
             {
-                baseDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-                return Path.Combine(baseDir, "Library", "Application Support", "factorio", "mods");
+                // macOS: ~/Library/Application Support/factorio/mods
+                var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                return Path.Combine(home, "Library", "Application Support", "factorio", "mods");
             }
-            else
-            {
-                throw new PlatformNotSupportedException("Unsupported operating system");
-            }
+
+            throw new PlatformNotSupportedException("Unsupported operating system");
         }
 
         public static string GetModListPath()
         {
-            return Path.Combine(GetModsDirectory(), "mod-list.json");
+            var modsDir = GetModsDirectory();
+            return Path.Combine(modsDir, "mod-list.json");
+        }
+
+        public static string GetPlayerDataPath()
+        {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                // Windows: %appdata%\Factorio\player-data.json
+                var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                return Path.Combine(appData, "Factorio", "player-data.json");
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                // Linux: ~/.factorio/player-data.json
+                var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                return Path.Combine(home, ".factorio", "player-data.json");
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
+                // macOS: ~/Library/Application Support/factorio/player-data.json
+                var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                return Path.Combine(home, "Library", "Application Support", "factorio", "player-data.json");
+            }
+
+            throw new PlatformNotSupportedException("Unsupported operating system");
         }
     }
 }
