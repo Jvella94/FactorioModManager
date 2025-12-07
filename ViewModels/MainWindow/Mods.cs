@@ -312,8 +312,7 @@ namespace FactorioModManager.ViewModels.MainWindow
 
                                 if (CompareVersions(latestVersion, mod.Version) > 0)
                                 {
-                                    _metadataService.MarkAsUpdated(mod.Name, latestVersion, hasUpdate: true);
-                                    _metadataService.UpdateLatestVersion(mod.Name, latestVersion);
+                                    _metadataService.UpdateLatestVersion(mod.Name, latestVersion, hasUpdate: true);
 
                                     Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                                     {
@@ -326,7 +325,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                                 else
                                 {
                                     // ADDED: Clear update flag if mod is up to date
-                                    _metadataService.MarkAsUpdated(mod.Name, latestVersion, hasUpdate: false);
+                                    _metadataService.UpdateLatestVersion(mod.Name, latestVersion, hasUpdate: false);
                                 }
                             }
                         }

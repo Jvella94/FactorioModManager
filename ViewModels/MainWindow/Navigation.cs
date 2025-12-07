@@ -6,7 +6,7 @@ namespace FactorioModManager.ViewModels.MainWindow
 {
     public partial class MainWindowVM
     {
-        private readonly ObservableCollection<ModViewModel> _navigationHistory = new();
+        private readonly ObservableCollection<ModViewModel> _navigationHistory = [];
         private int _navigationIndex = -1;
 
         public bool CanNavigateBack => _navigationIndex > 0;

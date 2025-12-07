@@ -186,15 +186,6 @@ namespace FactorioModManager.Services
             SaveMetadata();
         }
 
-        public void UpdateLatestVersion(string modName, string? version, bool hasUpdate = false)
-        {
-            var metadata = GetOrCreate(modName);
-            metadata.LatestVersion = version;
-            metadata.HasUpdate = hasUpdate;
-            metadata.LastUpdateCheck = DateTime.UtcNow;
-            SaveMetadata();
-        }
-
         public string? GetLatestVersion(string modName)
         {
             return _cache.TryGetValue(modName, out var metadata) ? metadata.LatestVersion : null;
@@ -219,7 +210,7 @@ namespace FactorioModManager.Services
         }
 
         // ADDED: Mark multiple mods as updated (batch operation)
-        public void MarkAsUpdated(string modName, string version, bool hasUpdate)
+        public void UpdateLatestVersion(string modName, string version, bool hasUpdate)
         {
             var metadata = GetOrCreate(modName);
             metadata.LatestVersion = version;
