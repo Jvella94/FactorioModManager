@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Text.Json;
+using System.Diagnostics;
 
 namespace FactorioModManager.Services
 {
@@ -13,7 +14,9 @@ namespace FactorioModManager.Services
     public class SettingsService
     {
         private readonly string _settingsPath;
-        private AppSettings _settings;
+        // FIXED: Made readonly (IDE0044)
+        private readonly AppSettings _settings;
+        private static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = true };
 
         public SettingsService()
         {
@@ -36,7 +39,7 @@ namespace FactorioModManager.Services
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error loading settings: {ex.Message}");
+                LogService.LogDebug($"Error loading settings: {ex.Message}");
                 return new AppSettings();
             }
         }
@@ -45,15 +48,12 @@ namespace FactorioModManager.Services
         {
             try
             {
-                var json = JsonSerializer.Serialize(_settings, new JsonSerializerOptions
-                {
-                    WriteIndented = true
-                });
+                var json = JsonSerializer.Serialize(_settings, SerializerOptions);
                 File.WriteAllText(_settingsPath, json);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error saving settings: {ex.Message}");
+                LogService.LogDebug($"Error saving settings: {ex.Message}");
             }
         }
 

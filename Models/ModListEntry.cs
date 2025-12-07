@@ -15,6 +15,6 @@ namespace FactorioModManager.Models
     public class ModList
     {
         [JsonPropertyName("mods")]
-        public List<ModListEntry> Mods { get; set; } = new();
+        public List<ModListEntry> Mods { get; set; } = [];
     }
 }

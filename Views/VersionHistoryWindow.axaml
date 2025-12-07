@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="FactorioModManager.Views.VersionHistoryWindow"
+        x:CompileBindings="False"
         Title="Version History"
         Width="800" Height="600"
         MinWidth="600" MinHeight="400">
@@ -10,7 +11,7 @@
             Background="#2B2B2B" Padding="15">
       <TextBlock FontSize="18" FontWeight="Bold" Name="ModTitle"/>
     </Border>
-    
+
     <DataGrid Grid.Row="1"
               Name="VersionGrid"
               AutoGenerateColumns="False"
@@ -19,13 +20,22 @@
               GridLinesVisibility="Horizontal"
               IsReadOnly="True">
       <DataGrid.Columns>
-        <DataGridTextColumn Header="Version" Binding="{Binding Version}" Width="120"/>
-        <DataGridTextColumn Header="Released" Binding="{Binding ReleasedAt, StringFormat=\{0:yyyy-MM-dd\}}" Width="120"/>
-        <DataGridTextColumn Header="Factorio Version" Binding="{Binding InfoJson.FactorioVersion}" Width="120"/>
+        <DataGridTextColumn Header="Version"
+                            Binding="{Binding Version}"
+                            Width="120"/>
+
+        <DataGridTextColumn Header="Released"
+                            Binding="{Binding ReleasedAt, StringFormat='{}{0:yyyy-MM-dd}'}"
+                            Width="120"/>
+
+        <DataGridTextColumn Header="Factorio Version"
+                            Binding="{Binding InfoJson.FactorioVersion}"
+                            Width="120"/>
+
         <DataGridTemplateColumn Header="Download" Width="*">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate>
-              <Button Content="Download Link" 
+              <Button Content="Download Link"
                       Click="OpenDownloadLink"
                       Tag="{Binding DownloadUrl}"
                       HorizontalAlignment="Left"/>

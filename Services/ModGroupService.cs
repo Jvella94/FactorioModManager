@@ -1,5 +1,7 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using FactorioModManager.Models;
 
@@ -8,6 +10,7 @@ namespace FactorioModManager.Services
     public class ModGroupService
     {
         private readonly string _groupsFilePath;
+        private static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = true };
 
         public ModGroupService()
         {
@@ -19,21 +22,19 @@ namespace FactorioModManager.Services
         {
             if (!File.Exists(_groupsFilePath))
             {
-                return new List<ModGroup>();
+               return [];
             }
+
 
             var json = File.ReadAllText(_groupsFilePath);
             var collection = JsonSerializer.Deserialize<ModGroupCollection>(json);
-            return collection?.Groups ?? new List<ModGroup>();
+            return collection?.Groups ?? [];
         }
 
         public void SaveGroups(List<ModGroup> groups)
         {
             var collection = new ModGroupCollection { Groups = groups };
-            var json = JsonSerializer.Serialize(collection, new JsonSerializerOptions
-            {
-                WriteIndented = true
-            });
+            var json = JsonSerializer.Serialize(collection, SerializerOptions);
             File.WriteAllText(_groupsFilePath, json);
         }
 

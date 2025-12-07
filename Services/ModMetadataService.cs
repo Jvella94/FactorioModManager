@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
-using FactorioModManager.Models;
+using System.Diagnostics;
 
 namespace FactorioModManager.Services
 {
@@ -14,17 +14,21 @@ namespace FactorioModManager.Services
         public string? SourceUrl { get; set; }
         public bool SourceUrlChecked { get; set; }
         public DateTime? LastChecked { get; set; }
+        public string? LatestVersion { get; set; }
+        public DateTime? LastUpdateCheck { get; set; }
+        public bool HasUpdate { get; set; }
     }
 
     public class ModMetadataCollection
     {
-        public List<ModMetadata> Metadata { get; set; } = new();
+        public List<ModMetadata> Metadata { get; set; } = [];
     }
 
     public class ModMetadataService
     {
         private readonly string _metadataPath;
-        private Dictionary<string, ModMetadata> _cache = new();
+        private Dictionary<string, ModMetadata> _cache = [];
+        private static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = true };
 
         public ModMetadataService()
         {
@@ -51,39 +55,54 @@ namespace FactorioModManager.Services
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error loading metadata: {ex.Message}");
+                LogService.LogDebug($"Error loading metadata: {ex.Message}");
             }
         }
 
-        public void SaveMetadata()
+        private void SaveMetadata()
         {
             try
             {
                 var collection = new ModMetadataCollection
                 {
-                    Metadata = _cache.Values.ToList()
+                    Metadata = [.. _cache.Values]
                 };
-
-                var json = JsonSerializer.Serialize(collection, new JsonSerializerOptions
-                {
-                    WriteIndented = true
-                });
-
+                var json = JsonSerializer.Serialize(collection, SerializerOptions);
                 File.WriteAllText(_metadataPath, json);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error saving metadata: {ex.Message}");
+                LogService.LogDebug($"Error saving metadata: {ex.Message}");
             }
         }
 
-        public ModMetadata GetOrCreate(string modName)
+        private ModMetadata GetOrCreate(string modName)
         {
-            if (!_cache.ContainsKey(modName))
+            if (!_cache.TryGetValue(modName, out var metadata))
             {
-                _cache[modName] = new ModMetadata { ModName = modName };
+                metadata = new ModMetadata { ModName = modName };
+                _cache[modName] = metadata;
             }
-            return _cache[modName];
+            return metadata;
+        }
+
+        // ADDED: Ensure all loaded mods have metadata entries
+        public void EnsureModsExist(IEnumerable<string> modNames)
+        {
+            bool needsSave = false;
+            foreach (var modName in modNames)
+            {
+                if (!_cache.ContainsKey(modName))
+                {
+                    _cache[modName] = new ModMetadata { ModName = modName };
+                    needsSave = true;
+                }
+            }
+
+            if (needsSave)
+            {
+                SaveMetadata();
+            }
         }
 
         public void UpdateCategory(string modName, string? category)
@@ -101,7 +120,11 @@ namespace FactorioModManager.Services
             metadata.SourceUrlChecked = wasChecked;
             metadata.LastChecked = DateTime.UtcNow;
             SaveMetadata();
+
+            LogService.LogDebug($"Saved source URL for {modName}: {sourceUrl ?? "null"}");
+            LogService.Instance.Log($"Saved source URL for {modName}: {sourceUrl ?? "(none)"}");
         }
+
 
         public string? GetCategory(string modName)
         {
@@ -119,7 +142,19 @@ namespace FactorioModManager.Services
             {
                 return true;
             }
-            return !metadata.SourceUrlChecked;
+
+            if (metadata.SourceUrlChecked)
+            {
+                return false;
+            }
+
+            if (metadata.LastChecked.HasValue &&
+                (DateTime.UtcNow - metadata.LastChecked.Value).TotalDays < 7)
+            {
+                return false;
+            }
+
+            return true;
         }
 
         public bool NeedsCategoryCheck(string modName)
@@ -128,7 +163,81 @@ namespace FactorioModManager.Services
             {
                 return true;
             }
-            return string.IsNullOrEmpty(metadata.Category);
+
+            if (!string.IsNullOrEmpty(metadata.Category))
+            {
+                return false;
+            }
+
+            if (metadata.LastChecked.HasValue &&
+                (DateTime.UtcNow - metadata.LastChecked.Value).TotalDays < 7)
+            {
+                return false;
+            }
+
+            return true;
         }
+
+        public void MarkAsChecked(string modName)
+        {
+            var metadata = GetOrCreate(modName);
+            metadata.LastChecked = DateTime.UtcNow;
+            metadata.SourceUrlChecked = true;
+            SaveMetadata();
+        }
+
+        public void UpdateLatestVersion(string modName, string? version, bool hasUpdate = false)
+        {
+            var metadata = GetOrCreate(modName);
+            metadata.LatestVersion = version;
+            metadata.HasUpdate = hasUpdate;
+            metadata.LastUpdateCheck = DateTime.UtcNow;
+            SaveMetadata();
+        }
+
+        public string? GetLatestVersion(string modName)
+        {
+            return _cache.TryGetValue(modName, out var metadata) ? metadata.LatestVersion : null;
+        }
+
+        // ADDED: Get update status
+        public bool GetHasUpdate(string modName)
+        {
+            return _cache.TryGetValue(modName, out var metadata) && metadata.HasUpdate;
+        }
+
+        // ADDED: Clear update flag (after successful update)
+        public void ClearUpdate(string modName)
+        {
+            if (_cache.TryGetValue(modName, out var metadata))
+            {
+                metadata.HasUpdate = false;
+                metadata.LatestVersion = null;
+                SaveMetadata();
+                LogService.LogDebug($"Cleared update flag for {modName}");
+            }
+        }
+
+        // ADDED: Mark multiple mods as updated (batch operation)
+        public void MarkAsUpdated(string modName, string version, bool hasUpdate)
+        {
+            var metadata = GetOrCreate(modName);
+            metadata.LatestVersion = version;
+            metadata.HasUpdate = hasUpdate;
+            metadata.LastUpdateCheck = DateTime.UtcNow;
+            SaveMetadata();
+        }
+
+        // ADDED: Clear all update flags (useful for forcing fresh update check)
+        public void ClearAllUpdates()
+        {
+            foreach (var metadata in _cache.Values)
+            {
+                metadata.HasUpdate = false;
+            }
+            SaveMetadata();
+            LogService.LogDebug("Cleared all update flags");
+        }
+
     }
 }

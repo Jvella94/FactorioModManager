@@ -5,6 +5,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Text.Json;
 using FactorioModManager.Models;
+using System.Diagnostics;
 
 namespace FactorioModManager.Services
 {
@@ -12,6 +13,7 @@ namespace FactorioModManager.Services
     {
         private readonly string _modsDirectory;
         private readonly string _modListPath;
+        private static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = true };
 
         public ModService()
         {
@@ -39,10 +41,12 @@ namespace FactorioModManager.Services
                     var isEnabled = modList.FirstOrDefault(m => m.Name == modInfo.Name)?.Enabled ?? false;
                     var lastUpdated = Directory.GetLastWriteTime(modDir);
                     var thumbnailPath = Path.Combine(modDir, "thumbnail.png");
+
                     if (!File.Exists(thumbnailPath))
                     {
                         thumbnailPath = string.Empty;
                     }
+
                     mods.Add((modInfo, isEnabled, lastUpdated, thumbnailPath));
                 }
             }
@@ -60,6 +64,7 @@ namespace FactorioModManager.Services
                     {
                         using var stream = infoEntry.Open();
                         var modInfo = JsonSerializer.Deserialize<ModInfo>(stream);
+
                         if (modInfo != null)
                         {
                             var isEnabled = modList.FirstOrDefault(m => m.Name == modInfo.Name)?.Enabled ?? false;
@@ -76,15 +81,15 @@ namespace FactorioModManager.Services
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error loading mod from {zipFile}: {ex.Message}");
+                    LogService.LogDebug($"Error loading mod from {zipFile}: {ex.Message}");
                 }
             }
 
             return mods;
         }
 
-
-        private ModInfo LoadModInfo(string path)
+        // FIXED: Made static (CA1822)
+        private static ModInfo LoadModInfo(string path)
         {
             var json = File.ReadAllText(path);
             return JsonSerializer.Deserialize<ModInfo>(json)
@@ -95,21 +100,18 @@ namespace FactorioModManager.Services
         {
             if (!File.Exists(_modListPath))
             {
-                return new List<ModListEntry>();
+                return [];
             }
 
             var json = File.ReadAllText(_modListPath);
             var modList = JsonSerializer.Deserialize<ModList>(json);
-            return modList?.Mods ?? new List<ModListEntry>();
+            return modList?.Mods ?? [];
         }
 
         public void SaveModList(List<ModListEntry> mods)
         {
             var modList = new ModList { Mods = mods };
-            var json = JsonSerializer.Serialize(modList, new JsonSerializerOptions
-            {
-                WriteIndented = true
-            });
+            var json = JsonSerializer.Serialize(modList, SerializerOptions);
             File.WriteAllText(_modListPath, json);
         }
 
@@ -129,7 +131,5 @@ namespace FactorioModManager.Services
 
             SaveModList(modList);
         }
-
-       
     }
 }

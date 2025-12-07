@@ -12,7 +12,7 @@ namespace FactorioModManager.Models
         public string? Description { get; set; }
 
         [JsonPropertyName("mods")]
-        public List<string> ModNames { get; set; } = new();
+        public List<string> ModNames { get; set; } = [];
 
         [JsonPropertyName("color")]
         public string? Color { get; set; }
@@ -21,6 +21,6 @@ namespace FactorioModManager.Models
     public class ModGroupCollection
     {
         [JsonPropertyName("groups")]
-        public List<ModGroup> Groups { get; set; } = new();
+        public List<ModGroup> Groups { get; set; } = [];
     }
 }

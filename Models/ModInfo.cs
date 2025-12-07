@@ -30,6 +30,6 @@ namespace FactorioModManager.Models
         public string FactorioVersion { get; set; } = "1.1";
 
         [JsonPropertyName("dependencies")]
-        public List<string> Dependencies { get; set; } = new();
+        public List<string> Dependencies { get; set; } = [];
     }
 }

@@ -6,7 +6,7 @@ namespace FactorioModManager.Views
 {
     public partial class SettingsWindow : Window
     {
-        private readonly SettingsService _settingsService;
+        private readonly SettingsService _settingsService = null!;
 
         public SettingsWindow()
         {

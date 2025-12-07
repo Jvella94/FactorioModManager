@@ -8,32 +8,32 @@ namespace FactorioModManager.Services
     {
         public static string GetModsDirectory()
         {
+            string baseDir;
+
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
-                // Windows: %appdata%\Factorio\mods
-                var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-                return Path.Combine(appData, "Factorio", "mods");
+                baseDir = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                return Path.Combine(baseDir, "Factorio", "mods");
             }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             {
-                // Linux: ~/.factorio/mods
-                var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-                return Path.Combine(home, ".factorio", "mods");
+                baseDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                return Path.Combine(baseDir, ".factorio", "mods");
             }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
             {
-                // macOS: ~/Library/Application Support/factorio/mods
-                var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-                return Path.Combine(home, "Library", "Application Support", "factorio", "mods");
+                baseDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                return Path.Combine(baseDir, "Library", "Application Support", "factorio", "mods");
             }
-
-            throw new PlatformNotSupportedException("Unsupported operating system");
+            else
+            {
+                throw new PlatformNotSupportedException("Unsupported operating system");
+            }
         }
 
         public static string GetModListPath()
         {
-            var modsDir = GetModsDirectory();
-            return Path.Combine(modsDir, "mod-list.json");
+            return Path.Combine(GetModsDirectory(), "mod-list.json");
         }
     }
 }

@@ -6,6 +6,7 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
+using System.Diagnostics;
 
 namespace FactorioModManager.Services
 {
@@ -24,7 +25,6 @@ namespace FactorioModManager.Services
             try
             {
                 var url = $"{BaseUrl}/{modName}/full?version=2.0&hide_deprecated=true";
-
                 if (!string.IsNullOrEmpty(apiKey))
                 {
                     _httpClient.DefaultRequestHeaders.Remove("Authorization");
@@ -37,12 +37,12 @@ namespace FactorioModManager.Services
                     return null;
                 }
 
-                var json = await response.ReadAsStringAsync();
+                var json = await response.Content.ReadAsStringAsync();
                 return JsonSerializer.Deserialize<ModPortalResponse>(json);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error fetching mod details: {ex.Message}");
+                LogService.LogDebug($"Error fetching mod details: {ex.Message}");
                 return null;
             }
         }
@@ -59,7 +59,8 @@ namespace FactorioModManager.Services
             return CompareVersions(latestRelease.Version, currentVersion) > 0;
         }
 
-        private int CompareVersions(string v1, string v2)
+        // FIXED: Made static (CA1822)
+        private static int CompareVersions(string v1, string v2)
         {
             var parts1 = v1.Split('.').Select(int.Parse).ToArray();
             var parts2 = v2.Split('.').Select(int.Parse).ToArray();
@@ -74,6 +75,72 @@ namespace FactorioModManager.Services
             }
 
             return 0;
+        }
+
+        public async Task<List<string>> GetRecentlyUpdatedModsAsync(int hoursAgo, string? apiKey = null)
+        {
+            try
+            {
+                var sinceTime = DateTime.UtcNow.AddHours(-hoursAgo);
+
+                // Fetch multiple pages of recently updated mods
+                var recentModNames = new HashSet<string>();
+                var pageSize = 100;
+                var maxPages = 5; // Check up to 500 mods
+
+                for (int page = 1; page <= maxPages; page++)
+                {
+                    var url = $"{BaseUrl}?version=2.0&hide_deprecated=true&sort=updated_at&sort_order=desc&page={page}&page_size={pageSize}";
+
+                    if (!string.IsNullOrEmpty(apiKey))
+                    {
+                        _httpClient.DefaultRequestHeaders.Remove("Authorization");
+                        _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
+                    }
+
+                    var response = await _httpClient.GetAsync(url);
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        LogService.LogDebug($"API request failed: {response.StatusCode}");
+                        break;
+                    }
+
+                    var json = await response.Content.ReadAsStringAsync();
+                    var result = JsonSerializer.Deserialize<ModListResponse>(json);
+
+                    if (result?.Results == null || result.Results.Count == 0)
+                    {
+                        break;
+                    }
+
+                    var foundRecentMod = false;
+                    foreach (var mod in result.Results)
+                    {
+                        // Check if the latest release was within our time window
+                        if (mod.LatestRelease?.ReleasedAt >= sinceTime)
+                        {
+                            recentModNames.Add(mod.Name);
+                            foundRecentMod = true;
+                        }
+                    }
+
+                    // If we didn't find any recent mods on this page, no point checking further pages
+                    if (!foundRecentMod)
+                    {
+                        break;
+                    }
+
+                    await Task.Delay(100); // Rate limiting between pages
+                }
+
+                LogService.LogDebug($"Found {recentModNames.Count} mods updated since {sinceTime:yyyy-MM-dd HH:mm:ss} UTC");
+                return [.. recentModNames];
+            }
+            catch (Exception ex)
+            {
+                LogService.LogDebug($"Error fetching recently updated mods: {ex.Message}");
+                return [];
+            }
         }
     }
 
@@ -104,7 +171,7 @@ namespace FactorioModManager.Services
         public int DownloadsCount { get; set; }
 
         [JsonPropertyName("releases")]
-        public List<ModRelease> Releases { get; set; } = new();
+        public List<ModRelease> Releases { get; set; } = [];
 
         [JsonPropertyName("changelog")]
         public string? Changelog { get; set; }
@@ -126,5 +193,38 @@ namespace FactorioModManager.Services
 
         [JsonPropertyName("info_json")]
         public ModInfo? InfoJson { get; set; }
+    }
+
+    public class ModListResponse
+    {
+        [JsonPropertyName("results")]
+        public List<ModSummary> Results { get; set; } = [];
+
+        [JsonPropertyName("pagination")]
+        public PaginationInfo? Pagination { get; set; }
+    }
+
+    public class ModSummary
+    {
+        [JsonPropertyName("name")]
+        public string Name { get; set; } = string.Empty;
+
+        [JsonPropertyName("latest_release")]
+        public ModRelease? LatestRelease { get; set; }
+    }
+
+    public class PaginationInfo
+    {
+        [JsonPropertyName("count")]
+        public int Count { get; set; }
+
+        [JsonPropertyName("page")]
+        public int Page { get; set; }
+
+        [JsonPropertyName("page_count")]
+        public int PageCount { get; set; }
+
+        [JsonPropertyName("page_size")]
+        public int PageSize { get; set; }
     }
 }
