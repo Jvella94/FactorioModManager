@@ -1,8 +1,9 @@
-﻿using Avalonia.Media;
-using Avalonia.Media.Imaging;
+﻿using Avalonia.Media.Imaging;
+using Avalonia.Media;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 
 namespace FactorioModManager.ViewModels
 {
@@ -14,16 +15,14 @@ namespace FactorioModManager.ViewModels
         private string _author = string.Empty;
         private string _description = string.Empty;
         private bool _isEnabled;
-        private List<string> _dependencies = [];
-        private DateTime? _lastUpdated;
-        private string _thumbnailPath = string.Empty;
+        private bool _hasUpdate;
+        private string? _latestVersion;
         private string? _category;
         private string? _sourceUrl;
-        private string _groupName = "N/A";
-        private bool _hasUpdate;
+        private string? _groupName;
         private bool _isUnusedInternal;
         private Bitmap? _thumbnail;
-        private string? _latestVersion;
+        private string? _selectedVersion; // ADDED
 
         public string Name
         {
@@ -61,24 +60,24 @@ namespace FactorioModManager.ViewModels
             set => this.RaiseAndSetIfChanged(ref _isEnabled, value);
         }
 
-        public List<string> Dependencies
+        public bool HasUpdate
         {
-            get => _dependencies;
-            set => this.RaiseAndSetIfChanged(ref _dependencies, value);
+            get => _hasUpdate;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _hasUpdate, value);
+                this.RaisePropertyChanged(nameof(RowBrush));
+            }
         }
 
-        public DateTime? LastUpdated
+        public string? LatestVersion
         {
-            get => _lastUpdated;
-            set => this.RaiseAndSetIfChanged(ref _lastUpdated, value);
-        }
-
-        public string LastUpdatedText => LastUpdated?.ToString("yyyy-MM-dd") ?? "Unknown";
-
-        public string ThumbnailPath
-        {
-            get => _thumbnailPath;
-            set => this.RaiseAndSetIfChanged(ref _thumbnailPath, value);
+            get => _latestVersion;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _latestVersion, value);
+                this.RaisePropertyChanged(nameof(UpdateText));
+            }
         }
 
         public string? Category
@@ -93,7 +92,7 @@ namespace FactorioModManager.ViewModels
             set => this.RaiseAndSetIfChanged(ref _sourceUrl, value);
         }
 
-        public string GroupName
+        public string? GroupName
         {
             get => _groupName;
             set => this.RaiseAndSetIfChanged(ref _groupName, value);
@@ -109,119 +108,54 @@ namespace FactorioModManager.ViewModels
             }
         }
 
-        public string? LatestVersion
-        {
-            get => _latestVersion;
-            set
-            {
-                this.RaiseAndSetIfChanged(ref _latestVersion, value);
-                this.RaisePropertyChanged(nameof(UpdateText));
-            }
-        }
-
-        public string UpdateText
-        {
-            get
-            {
-                if (HasUpdate && !string.IsNullOrEmpty(LatestVersion))
-                {
-                    return $"Update: {LatestVersion}";
-                }
-                return "";
-            }
-        }
-
-        public IBrush? RowBrush
-        {
-            get
-            {
-                // UPDATED: Softer green for updates, orange for unused internal
-                if (HasUpdate)
-                    return new SolidColorBrush(Color.FromRgb(60, 120, 60)); // Softer, darker green
-                if (IsUnusedInternal)
-                    return new SolidColorBrush(Color.FromRgb(255, 140, 0)); // Orange
-                return null;
-            }
-        }
-
-        public bool HasUpdate
-        {
-            get => _hasUpdate;
-            set
-            {
-                this.RaiseAndSetIfChanged(ref _hasUpdate, value);
-                this.RaisePropertyChanged(nameof(RowBrush));
-                this.RaisePropertyChanged(nameof(UpdateText));
-            }
-        }
-
         public Bitmap? Thumbnail
         {
             get => _thumbnail;
             set => this.RaiseAndSetIfChanged(ref _thumbnail, value);
         }
-    }
 
-    public class ModGroupViewModel : ViewModelBase
-    {
-        private string _name = string.Empty;
-        private string? _description;
-        private List<string> _modNames = [];
-        private int _enabledCount;
-        private int _totalCount;
-        private bool _isEditing;
-        private string _editName = string.Empty;
+        public List<string> Dependencies { get; set; } = [];
+        public DateTime? LastUpdated { get; set; }
+        public string? ThumbnailPath { get; set; }
 
-        public string Name
+        // ADDED: Version management
+        public ObservableCollection<string> AvailableVersions { get; set; } = [];
+        public List<string> VersionFilePaths { get; set; } = []; // Track file paths for each version
+
+        public string? SelectedVersion
         {
-            get => _name;
-            set => this.RaiseAndSetIfChanged(ref _name, value);
-        }
-
-        public string? Description
-        {
-            get => _description;
-            set => this.RaiseAndSetIfChanged(ref _description, value);
-        }
-
-        public List<string> ModNames
-        {
-            get => _modNames;
-            set => this.RaiseAndSetIfChanged(ref _modNames, value);
-        }
-
-        public int EnabledCount
-        {
-            get => _enabledCount;
+            get => _selectedVersion;
             set
             {
-                this.RaiseAndSetIfChanged(ref _enabledCount, value);
-                this.RaisePropertyChanged(nameof(StatusText));
+                this.RaiseAndSetIfChanged(ref _selectedVersion, value);
+                this.RaisePropertyChanged(nameof(IsOldVersionSelected));
             }
         }
 
-        public int TotalCount
+        public bool HasMultipleVersions => AvailableVersions.Count > 1;
+
+        public bool IsOldVersionSelected => SelectedVersion != null && SelectedVersion != Version;
+
+        public string LastUpdatedText => LastUpdated.HasValue
+            ? LastUpdated.Value.ToString("yyyy-MM-dd")
+            : "Unknown";
+
+        public string UpdateText => HasUpdate && !string.IsNullOrEmpty(LatestVersion)
+            ? $"Update available: {LatestVersion}"
+            : string.Empty;
+
+        public string ModPortalUrl => $"https://mods.factorio.com/mod/{Name}";
+
+        public IBrush? RowBrush
         {
-            get => _totalCount;
-            set
+            get
             {
-                this.RaiseAndSetIfChanged(ref _totalCount, value);
-                this.RaisePropertyChanged(nameof(StatusText));
+                if (HasUpdate)
+                    return new SolidColorBrush(Color.FromRgb(60, 120, 60));
+                if (IsUnusedInternal)
+                    return new SolidColorBrush(Color.FromRgb(255, 140, 0));
+                return null;
             }
         }
-
-        public bool IsEditing
-        {
-            get => _isEditing;
-            set => this.RaiseAndSetIfChanged(ref _isEditing, value);
-        }
-
-        public string EditName
-        {
-            get => _editName;
-            set => this.RaiseAndSetIfChanged(ref _editName, value);
-        }
-
-        public string StatusText => $"{EnabledCount}/{TotalCount} enabled";
     }
 }

@@ -1,16 +1,15 @@
 ﻿using Avalonia.Media.Imaging;
 using FactorioModManager.Services;
+using ReactiveUI;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Threading.Tasks;
-using System.Diagnostics;
 
 namespace FactorioModManager.ViewModels.MainWindow
 {
-
     public partial class MainWindowVM
     {
         private bool _isRefreshing = false;
@@ -34,21 +33,17 @@ namespace FactorioModManager.ViewModels.MainWindow
 
                 try
                 {
-                    var modsDirectory = ModPathHelper.GetModsDirectory();
-                    LogService.LogDebug($"Looking for mods in: {modsDirectory}");
-                    LogService.LogDebug($"Directory exists: {Directory.Exists(modsDirectory)}");
-
                     var loadedMods = _modService.LoadAllMods();
-                    LogService.LogDebug($"Loaded {loadedMods.Count} mods from disk");
-
                     var loadedGroups = _groupService.LoadGroups();
                     var apiKey = _settingsService.GetApiKey();
 
-                    var modNames = loadedMods.Select(m => m.Info.Name).ToList();
-                    _metadataService.EnsureModsExist(modNames);
+                    // Group by name and keep only the latest version
+                    var latestMods = loadedMods
+                        .GroupBy(m => m.Info.Name)
+                        .Select(g => g.OrderByDescending(m => m.Info.Version).First())
+                        .ToList();
 
-                    // FIXED: Use InvokeAsync and await to ensure Mods collection is populated before continuing
-                    await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                     {
                         Mods.Clear();
                         Authors.Clear();
@@ -57,9 +52,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                         var authorCounts = new Dictionary<string, int>();
                         var allDependencies = new HashSet<string>();
 
-                        LogService.LogDebug($"Processing {loadedMods.Count} mods...");
-
-                        foreach (var (info, isEnabled, lastUpdated, thumbnailPath) in loadedMods)
+                        foreach (var (info, isEnabled, lastUpdated, thumbnailPath) in latestMods)
                         {
                             var modVm = new ModViewModel
                             {
@@ -74,10 +67,11 @@ namespace FactorioModManager.ViewModels.MainWindow
                                 ThumbnailPath = thumbnailPath,
                                 Category = _metadataService.GetCategory(info.Name),
                                 SourceUrl = _metadataService.GetSourceUrl(info.Name),
-                                HasUpdate = _metadataService.GetHasUpdate(info.Name), // ADDED: Load persisted update status
-                                LatestVersion = _metadataService.GetLatestVersion(info.Name) // ADDED: Load persisted version
+                                HasUpdate = _metadataService.GetHasUpdate(info.Name),
+                                LatestVersion = _metadataService.GetLatestVersion(info.Name)
                             };
 
+                            // Track all dependencies
                             foreach (var dep in info.Dependencies)
                             {
                                 var depName = dep.Split(DependencySeparators, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
@@ -87,6 +81,10 @@ namespace FactorioModManager.ViewModels.MainWindow
                                 }
                             }
 
+                            // Load available versions for this mod
+                            LoadModVersions(modVm);
+
+                            // Determine group
                             var group = loadedGroups.FirstOrDefault(g => g.ModNames.Contains(modVm.Title));
                             if (group != null)
                             {
@@ -105,8 +103,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                             }
                         }
 
-                        LogService.LogDebug($"Added {Mods.Count} mods to collection");
-
+                        // Mark unused internal mods
                         foreach (var mod in Mods)
                         {
                             if (mod.Category?.Equals("internal", StringComparison.OrdinalIgnoreCase) == true)
@@ -115,6 +112,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                             }
                         }
 
+                        // Sort by LastUpdated descending
                         var sortedMods = Mods.OrderByDescending(m => m.LastUpdated ?? DateTime.MinValue).ToList();
                         Mods.Clear();
                         foreach (var mod in sortedMods)
@@ -122,6 +120,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                             Mods.Add(mod);
                         }
 
+                        // Build author list
                         _authorModCounts = authorCounts;
                         var sortedAuthors = authorCounts
                             .OrderByDescending(kvp => kvp.Value)
@@ -139,7 +138,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                             var groupVm = new ModGroupViewModel
                             {
                                 Name = group.Name,
-                                Description = group.Description,
+                                Description = group.Description ?? string.Empty,
                                 ModNames = group.ModNames
                             };
                             UpdateGroupStatus(groupVm);
@@ -151,12 +150,12 @@ namespace FactorioModManager.ViewModels.MainWindow
                         UpdateFilteredAuthors();
                         UpdateFilteredMods();
 
-                        StatusText = $"Loaded {Mods.Count} mods and {Groups.Count} groups";
-                        LogService.LogDebug($"Status: {StatusText}");
-                    });
+                        this.RaisePropertyChanged(nameof(ModCountSummary));
+                        this.RaisePropertyChanged(nameof(HasUnusedInternals));
+                        this.RaisePropertyChanged(nameof(UnusedInternalCount));
 
-                    // NOW the Mods collection is guaranteed to be populated
-                    LogService.LogDebug($"Mods.Count after UI population: {Mods.Count}");
+                        StatusText = $"Loaded {Mods.Count} mods and {Groups.Count} groups";
+                    });
 
                     // Fetch metadata for mods that need it
                     await FetchMissingMetadataAsync(apiKey);
@@ -187,9 +186,7 @@ namespace FactorioModManager.ViewModels.MainWindow
 
         private async Task FetchMissingMetadataAsync(string? apiKey)
         {
-            var modsSnapshot = Mods.ToList();
-
-            var modsNeedingMetadata = modsSnapshot.Where(m =>
+            var modsNeedingMetadata = Mods.Where(m =>
                 _metadataService.NeedsCategoryCheck(m.Name) ||
                 _metadataService.NeedsSourceUrlCheck(m.Name)).ToList();
 
@@ -199,7 +196,6 @@ namespace FactorioModManager.ViewModels.MainWindow
             {
                 StatusText = $"Fetching metadata for {modsNeedingMetadata.Count} mods...";
             });
-
             var currentIndex = 0;
             foreach (var mod in modsNeedingMetadata)
             {
@@ -210,11 +206,9 @@ namespace FactorioModManager.ViewModels.MainWindow
                 {
                     StatusText = $"Fetching metadata ({currentIndex}/{modsNeedingMetadata.Count}): {mod.Title}";
                 });
-
                 try
                 {
                     var details = await _apiService.GetModDetailsAsync(mod.Name, apiKey);
-
                     if (details != null)
                     {
                         if (_metadataService.NeedsCategoryCheck(mod.Name))
@@ -228,7 +222,7 @@ namespace FactorioModManager.ViewModels.MainWindow
 
                         if (_metadataService.NeedsSourceUrlCheck(mod.Name))
                         {
-                            _metadataService.UpdateSourceUrl(mod.Name, details.SourceUrl, wasChecked: true);
+                            _metadataService.UpdateSourceUrl(mod.Name, details.SourceUrl);
                             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                             {
                                 mod.SourceUrl = details.SourceUrl;
@@ -240,7 +234,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                         _metadataService.MarkAsChecked(mod.Name);
                     }
 
-                    await Task.Delay(100);
+                    await Task.Delay(100); // Rate limiting
                 }
                 catch (Exception ex)
                 {
@@ -251,115 +245,8 @@ namespace FactorioModManager.ViewModels.MainWindow
 
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
-                StatusText = $"Metadata update complete - {modsNeedingMetadata.Count} mods processed";
+                StatusText = "Metadata update complete";
             });
-        }
-
-
-        private async Task CheckForUpdatesAsync(string? apiKey, int hoursAgo = 1)
-        {
-            LogService.Instance.Log($"Checking for updates from the last {hoursAgo} hour(s)...");
-
-            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-            {
-                StatusText = "Fetching recently updated mods...";
-            });
-
-            try
-            {
-                var recentlyUpdatedModNames = await _apiService.GetRecentlyUpdatedModsAsync(hoursAgo, apiKey);
-                LogService.Instance.Log($"Found {recentlyUpdatedModNames.Count} recently updated mods on portal");
-
-                if (recentlyUpdatedModNames.Count == 0)
-                {
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                    {
-                        StatusText = "No recently updated mods found";
-                    });
-                    return;
-                }
-
-                var modsSnapshot = Mods.ToList();
-                var installedRecentlyUpdated = modsSnapshot
-                    .Where(m => recentlyUpdatedModNames.Contains(m.Name))
-                    .ToList();
-
-                LogService.Instance.Log($"Checking {installedRecentlyUpdated.Count} of your installed mods for updates");
-
-                var updateCount = 0;
-                var currentIndex = 0;
-
-                foreach (var mod in installedRecentlyUpdated)
-                {
-                    currentIndex++;
-
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                    {
-                        StatusText = $"Checking updates ({currentIndex}/{installedRecentlyUpdated.Count}): {mod.Title}";
-                    });
-
-                    try
-                    {
-                        var details = await _apiService.GetModDetailsAsync(mod.Name, apiKey);
-                        if (details?.Releases != null && details.Releases.Count > 0)
-                        {
-                            var latestRelease = details.Releases
-                                .OrderByDescending(r => r.ReleasedAt)
-                                .FirstOrDefault();
-                            if (latestRelease != null)
-                            {
-                                var latestVersion = latestRelease.Version;
-
-                                if (CompareVersions(latestVersion, mod.Version) > 0)
-                                {
-                                    _metadataService.UpdateLatestVersion(mod.Name, latestVersion, hasUpdate: true);
-
-                                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                                    {
-                                        mod.HasUpdate = true;
-                                        mod.LatestVersion = latestVersion;
-                                    });
-                                    updateCount++;
-                                    LogService.Instance.Log($"Update available for {mod.Title}: {mod.Version} → {latestVersion}");
-                                }
-                                else
-                                {
-                                    // ADDED: Clear update flag if mod is up to date
-                                    _metadataService.UpdateLatestVersion(mod.Name, latestVersion, hasUpdate: false);
-                                }
-                            }
-                        }
-
-                        await Task.Delay(100);
-                    }
-                    catch (Exception ex)
-                    {
-                        LogService.LogDebug($"Error checking updates for {mod.Name}: {ex.Message}");
-                    }
-                }
-
-                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                {
-                    if (updateCount > 0)
-                    {
-                        StatusText = $"Found {updateCount} mod update(s) available";
-                        LogService.Instance.Log($"Update check complete: {updateCount} updates found");
-
-                        // Sort mods to show updates at top
-                        SortModsWithUpdatesFirst();
-                    }
-                    else
-                    {
-                        StatusText = "All mods are up to date";
-                        LogService.Instance.Log("All mods are up to date");
-                    }
-                });
-            }
-            catch (Exception ex)
-            {
-                LogService.Instance.Log($"Error during update check: {ex.Message}");
-                LogService.LogDebug($"Error in CheckForUpdatesAsync: {ex}");
-            }
         }
 
         private static int CompareVersions(string v1, string v2)
@@ -378,24 +265,6 @@ namespace FactorioModManager.ViewModels.MainWindow
 
             return 0;
         }
-
-        private void SortModsWithUpdatesFirst()
-        {
-            var sorted = Mods
-                .OrderByDescending(m => m.HasUpdate)
-                .ThenByDescending(m => m.LastUpdated ?? DateTime.MinValue)
-                .ToList();
-
-            Mods.Clear();
-            foreach (var mod in sorted)
-            {
-                Mods.Add(mod);
-            }
-
-            UpdateFilteredMods();
-        }
-
-
 
         private static async Task LoadThumbnailAsync(ModViewModel mod)
         {
@@ -439,137 +308,6 @@ namespace FactorioModManager.ViewModels.MainWindow
                 {
                     LogService.LogDebug($"Error loading thumbnail: {ex.Message}");
                 }
-            });
-        }
-
-        private void ToggleMod(ModViewModel mod)
-        {
-            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-            {
-                if (mod != null)
-                {
-                    mod.IsEnabled = !mod.IsEnabled;
-                    _modService.ToggleMod(mod.Name, mod.IsEnabled);
-
-                    foreach (var group in Groups)
-                    {
-                        UpdateGroupStatus(group);
-                    }
-
-                    StatusText = $"{mod.Title} {(mod.IsEnabled ? "enabled" : "disabled")}";
-                }
-            });
-        }
-
-        private void RemoveMod(ModViewModel mod)
-        {
-            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-            {
-                if (mod != null)
-                {
-                    Mods.Remove(mod);
-                    UpdateFilteredMods();
-                    StatusText = $"Removed {mod.Title}";
-                }
-            });
-        }
-
-        private async Task OpenChangelogAsync()
-        {
-            if (SelectedMod == null) return;
-
-            await Task.Run(async () =>
-            {
-                try
-                {
-                    var apiKey = _settingsService.GetApiKey();
-                    var details = await _apiService.GetModDetailsAsync(SelectedMod.Name, apiKey);
-
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                    {
-                        if (!string.IsNullOrEmpty(details?.Changelog))
-                        {
-                            var window = new Views.ChangelogWindow(SelectedMod.Title, details.Changelog);
-                            window.Show();
-                            StatusText = "Changelog opened";
-                        }
-                        else
-                        {
-                            StatusText = "No changelog available";
-                        }
-                    });
-                }
-                catch (Exception ex)
-                {
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                    {
-                        StatusText = $"Error fetching changelog: {ex.Message}";
-                    });
-                }
-            });
-        }
-
-        private async Task OpenVersionHistoryAsync()
-        {
-            if (SelectedMod == null) return;
-
-            await Task.Run(async () =>
-            {
-                try
-                {
-                    var apiKey = _settingsService.GetApiKey();
-                    var details = await _apiService.GetModDetailsAsync(SelectedMod.Name, apiKey);
-
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                    {
-                        if (details?.Releases != null && details.Releases.Count > 0)
-                        {
-                            var window = new Views.VersionHistoryWindow(SelectedMod.Title, details.Releases);
-                            window.Show();
-                            StatusText = "Version history opened";
-                        }
-                        else
-                        {
-                            StatusText = "No version history available";
-                        }
-                    });
-                }
-                catch (Exception ex)
-                {
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                    {
-                        StatusText = $"Error fetching version history: {ex.Message}";
-                    });
-                }
-            });
-        }
-
-        private async Task OpenSettingsAsync()
-        {
-            await Task.Run(() =>
-            {
-                Avalonia.Threading.Dispatcher.UIThread.Post(async () =>
-                {
-                    var settingsWindow = new Views.SettingsWindow(_settingsService);
-
-                    var owner = Avalonia.Application.Current?.ApplicationLifetime
-                        is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
-                        ? desktop.MainWindow : null;
-
-                    if (owner != null)
-                    {
-                        var result = await settingsWindow.ShowDialog<bool>(owner);
-                        if (result)
-                        {
-                            StatusText = "Settings saved";
-                        }
-                    }
-                    else
-                    {
-                        settingsWindow.Show();
-                        StatusText = "Settings window opened";
-                    }
-                });
             });
         }
     }

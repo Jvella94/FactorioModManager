@@ -46,7 +46,7 @@
     <!-- Search/Filter Toolbar -->
     <Border Grid.Row="1" BorderBrush="#333" BorderThickness="0,0,0,1"
             Background="#2B2B2B" Padding="10">
-      <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+      <Grid ColumnDefinitions="Auto,*,Auto">
         <TextBlock Grid.Column="0" Text="Search:"
                    VerticalAlignment="Center"
                    Margin="0,0,10,0"/>
@@ -70,11 +70,16 @@
                            VerticalAlignment="Center"/>
         </StackPanel>
 
-        <TextBlock Grid.Column="2"
-                   Text="{Binding ModCountText}"
-                   VerticalAlignment="Center"
-                   Margin="20,0,10,0"
-                   FontWeight="Bold"/>
+        <StackPanel Grid.Column="2"
+                    VerticalAlignment="Center"
+                    Margin="20,0,10,0">
+          <TextBlock Text="{Binding ModCountSummary}"
+                     FontWeight="Bold"/>
+          <TextBlock Text="{Binding UnusedInternalWarning}"
+                     Foreground="Orange"
+                     FontSize="11"
+                     IsVisible="{Binding HasUnusedInternals}"/>
+        </StackPanel>
       </Grid>
     </Border>
 
@@ -219,14 +224,15 @@
       </Border>
 
       <!-- Mod Details Panel -->
+      <!-- Mod Details Panel -->
       <Border Grid.Column="2" Background="#1E1E1E" Padding="15">
         <ScrollViewer>
           <StackPanel Spacing="10" IsVisible="{Binding SelectedMod, Converter={x:Static ObjectConverters.IsNotNull}}">
-            <!-- Navigation buttons at top -->
-            <StackPanel Orientation="Horizontal" Spacing="5">
-              <Button Content="◀ Previous" Command="{Binding NavigateBackCommand}" Width="90"/>
-              <Button Content="Next ▶" Command="{Binding NavigateForwardCommand}" Width="90"/>
-            </StackPanel>
+            <!-- Navigation buttons - Previous wider, Next narrower -->
+            <Grid ColumnDefinitions="*,80">
+              <Button Grid.Column="0" Content="◀ Previous" Command="{Binding NavigateBackCommand}"/>
+              <Button Grid.Column="1" Content="Next ▶" Command="{Binding NavigateForwardCommand}" Margin="5,0,0,0"/>
+            </Grid>
 
             <Separator/>
 
@@ -243,12 +249,28 @@
             <TextBlock Text="{Binding SelectedMod.Version}"
                        Foreground="#888"/>
 
+            <!-- Version selector -->
+            <StackPanel Spacing="5" IsVisible="{Binding SelectedMod.HasMultipleVersions}">
+              <TextBlock Text="Installed Versions:" FontWeight="Bold"/>
+              <ComboBox ItemsSource="{Binding SelectedMod.AvailableVersions}"
+                        SelectedItem="{Binding SelectedMod.SelectedVersion}"
+                        HorizontalAlignment="Stretch"/>
+
+              <!-- Delete old version button (only shown for non-current versions) -->
+              <Button Content="Delete This Version"
+                      Command="{Binding DeleteOldVersionCommand}"
+                      CommandParameter="{Binding SelectedMod}"
+                      HorizontalAlignment="Stretch"
+                      Background="#8B0000"
+                      IsVisible="{Binding SelectedMod.IsOldVersionSelected}"/>
+            </StackPanel>
+
             <TextBlock Text="{Binding SelectedMod.UpdateText}"
                        Foreground="LightGreen"
                        FontWeight="Bold"
                        IsVisible="{Binding SelectedMod.HasUpdate}"/>
 
-            <!-- ADDED: Update button -->
+            <!-- Update button -->
             <Button Content="⬇ Download and Install Update"
                     Command="{Binding DownloadUpdateCommand}"
                     CommandParameter="{Binding SelectedMod}"

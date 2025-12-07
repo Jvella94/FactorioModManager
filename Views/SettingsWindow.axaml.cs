@@ -1,28 +1,106 @@
 ﻿using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Platform.Storage;
 using FactorioModManager.Services;
+using ReactiveUI;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
 
 namespace FactorioModManager.Views
 {
-    public partial class SettingsWindow : Window
+    public partial class SettingsWindow : Window, INotifyPropertyChanged
     {
-        private readonly SettingsService _settingsService = null!;
+        private readonly SettingsService _settingsService;
+        private string? _modsPath;
+        private string? _apiKey;
+        private bool _keepOldModFiles;
 
-        public SettingsWindow()
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        public SettingsWindow() : this(new SettingsService())
         {
-            InitializeComponent();
+            // Parameterless constructor required for XAML designer
         }
 
-        public SettingsWindow(SettingsService settingsService) : this()
+        public SettingsWindow(SettingsService settingsService)
         {
+            InitializeComponent();
             _settingsService = settingsService;
-            this.FindControl<TextBox>("ApiKeyBox")!.Text = _settingsService.GetApiKey();
+
+            // Load settings
+            ModsPath = _settingsService.GetModsPath();
+            ApiKey = _settingsService.GetApiKey();
+            KeepOldModFiles = _settingsService.GetKeepOldModFiles();
+
+            DataContext = this;
+        }
+
+        public string? ModsPath
+        {
+            get => _modsPath;
+            set
+            {
+                _modsPath = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public string? ApiKey
+        {
+            get => _apiKey;
+            set
+            {
+                _apiKey = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public bool KeepOldModFiles
+        {
+            get => _keepOldModFiles;
+            set
+            {
+                _keepOldModFiles = value;
+                OnPropertyChanged();
+            }
+        }
+
+        protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+
+        private async void BrowseModsPath(object? sender, RoutedEventArgs e)
+        {
+            var topLevel = TopLevel.GetTopLevel(this);
+            if (topLevel == null) return;
+
+            var folderPickerOptions = new FolderPickerOpenOptions
+            {
+                Title = "Select Factorio Mods Folder",
+                AllowMultiple = false
+            };
+
+            var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(folderPickerOptions);
+
+            if (folders.Count > 0)
+            {
+                var selectedFolder = folders[0];
+                ModsPath = selectedFolder.Path.LocalPath;
+            }
         }
 
         private void SaveSettings(object? sender, RoutedEventArgs e)
         {
-            var apiKey = this.FindControl<TextBox>("ApiKeyBox")!.Text;
-            _settingsService.SetApiKey(string.IsNullOrWhiteSpace(apiKey) ? null : apiKey);
+            _settingsService.SetApiKey(string.IsNullOrWhiteSpace(ApiKey) ? null : ApiKey);
+
+            if (!string.IsNullOrWhiteSpace(ModsPath))
+            {
+                _settingsService.SetModsPath(ModsPath);
+            }
+
+            _settingsService.SetKeepOldModFiles(KeepOldModFiles);
+
             Close(true);
         }
 

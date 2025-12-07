@@ -57,12 +57,6 @@ namespace FactorioModManager.ViewModels.MainWindow
                     // Download the mod
                     var downloadUrl = $"https://mods.factorio.com{latestRelease.DownloadUrl}";
                     var modsDirectory = ModPathHelper.GetModsDirectory();
-                    var archiveDirectory = Path.Combine(modsDirectory, "_archived");
-
-                    if (!Directory.Exists(archiveDirectory))
-                    {
-                        Directory.CreateDirectory(archiveDirectory);
-                    }
 
                     var newFileName = $"{mod.Name}_{latestRelease.Version}.zip";
                     var newFilePath = Path.Combine(modsDirectory, newFileName);
@@ -99,34 +93,25 @@ namespace FactorioModManager.ViewModels.MainWindow
 
                     LogService.Instance.Log($"Downloaded to {newFilePath}");
 
-                    // Archive old version
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    var keepOldFiles = _settingsService.GetKeepOldModFiles();
+
+                    if (keepOldFiles == false)
                     {
-                        StatusText = $"Archiving old version of {mod.Title}...";
-                    });
-
-                    var oldFiles = Directory.GetFiles(modsDirectory, $"{mod.Name}_*.zip")
-                        .Where(f => !f.Equals(newFilePath, StringComparison.OrdinalIgnoreCase))
-                        .ToList();
-
-                    var oldFolders = Directory.GetDirectories(modsDirectory, $"{mod.Name}_*").ToList();
-
-                    foreach (var oldFile in oldFiles)
-                    {
-                        var archivePath = Path.Combine(archiveDirectory, Path.GetFileName(oldFile));
-                        File.Move(oldFile, archivePath, overwrite: true);
-                        LogService.Instance.Log($"Archived {Path.GetFileName(oldFile)}");
-                    }
-
-                    foreach (var oldFolder in oldFolders)
-                    {
-                        var archivePath = Path.Combine(archiveDirectory, Path.GetFileName(oldFolder));
-                        if (Directory.Exists(archivePath))
+                        // Delete old version
+                        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                         {
-                            Directory.Delete(archivePath, recursive: true);
+                            StatusText = $"Removing old version of {mod.Title}...";
+                        });
+
+                        var oldFiles = Directory.GetFiles(modsDirectory, $"{mod.Name}_*.zip")
+                            .Where(f => !f.Equals(newFilePath, StringComparison.OrdinalIgnoreCase))
+                            .ToList();
+
+                        foreach (var oldFile in oldFiles)
+                        {
+                            File.Delete(oldFile);
+                            LogService.Instance.Log($"Deleted {Path.GetFileName(oldFile)}");
                         }
-                        Directory.Move(oldFolder, archivePath);
-                        LogService.Instance.Log($"Archived folder {Path.GetFileName(oldFolder)}");
                     }
 
                     LogService.Instance.Log($"Successfully updated {mod.Title} to version {latestRelease.Version}");
@@ -154,6 +139,128 @@ namespace FactorioModManager.ViewModels.MainWindow
                     });
                 }
             });
+        }
+
+        private async Task CheckForUpdatesAsync(string? apiKey, int hoursAgo = 1)
+        {
+            LogService.Instance.Log($"Checking for updates from the last {hoursAgo} hour(s)...");
+
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                StatusText = "Fetching recently updated mods...";
+            });
+
+            try
+            {
+                var recentlyUpdatedModNames = await _apiService.GetRecentlyUpdatedModsAsync(hoursAgo, apiKey);
+                LogService.Instance.Log($"Found {recentlyUpdatedModNames.Count} recently updated mods on portal");
+
+                if (recentlyUpdatedModNames.Count == 0)
+                {
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    {
+                        StatusText = "No recently updated mods found";
+                    });
+                    return;
+                }
+
+                var modsSnapshot = Mods.ToList();
+                var installedRecentlyUpdated = modsSnapshot
+                    .Where(m => recentlyUpdatedModNames.Contains(m.Name))
+                    .ToList();
+
+                LogService.Instance.Log($"Checking {installedRecentlyUpdated.Count} of your installed mods for updates");
+
+                var updateCount = 0;
+                var currentIndex = 0;
+
+                foreach (var mod in installedRecentlyUpdated)
+                {
+                    currentIndex++;
+
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    {
+                        StatusText = $"Checking updates ({currentIndex}/{installedRecentlyUpdated.Count}): {mod.Title}";
+                    });
+
+                    try
+                    {
+                        var details = await _apiService.GetModDetailsAsync(mod.Name, apiKey);
+                        if (details?.Releases != null && details.Releases.Count > 0)
+                        {
+                            var latestRelease = details.Releases
+                                .OrderByDescending(r => r.ReleasedAt)
+                                .FirstOrDefault();
+                            if (latestRelease != null)
+                            {
+                                var latestVersion = latestRelease.Version;
+
+                                if (CompareVersions(latestVersion, mod.Version) > 0)
+                                {
+                                    _metadataService.UpdateLatestVersion(mod.Name, latestVersion, hasUpdate: true);
+
+                                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                                    {
+                                        mod.HasUpdate = true;
+                                        mod.LatestVersion = latestVersion;
+                                    });
+                                    updateCount++;
+                                    LogService.Instance.Log($"Update available for {mod.Title}: {mod.Version} → {latestVersion}");
+                                }
+                                else
+                                {
+                                    // ADDED: Clear update flag if mod is up to date
+                                    _metadataService.UpdateLatestVersion(mod.Name, latestVersion, hasUpdate: false);
+                                }
+                            }
+                        }
+
+                        await Task.Delay(100);
+                    }
+                    catch (Exception ex)
+                    {
+                        LogService.LogDebug($"Error checking updates for {mod.Name}: {ex.Message}");
+                    }
+                }
+
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    if (updateCount > 0)
+                    {
+                        StatusText = $"Found {updateCount} mod update(s) available";
+                        LogService.Instance.Log($"Update check complete: {updateCount} updates found");
+
+                        // Sort mods to show updates at top
+                        SortModsWithUpdatesFirst();
+                    }
+                    else
+                    {
+                        StatusText = "All mods are up to date";
+                        LogService.Instance.Log("All mods are up to date");
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                LogService.Instance.Log($"Error during update check: {ex.Message}");
+                LogService.LogDebug($"Error in CheckForUpdatesAsync: {ex}");
+            }
+        }
+
+        private void SortModsWithUpdatesFirst()
+        {
+            var sorted = Mods
+                .OrderByDescending(m => m.HasUpdate)
+                .ThenByDescending(m => m.LastUpdated ?? DateTime.MinValue)
+                .ToList();
+
+            Mods.Clear();
+            foreach (var mod in sorted)
+            {
+                Mods.Add(mod);
+            }
+
+            UpdateFilteredMods();
         }
     }
 }

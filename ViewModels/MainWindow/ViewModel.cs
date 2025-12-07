@@ -1,9 +1,10 @@
-﻿using System;
+﻿using FactorioModManager.Services;
+using ReactiveUI;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Reactive.Linq;
-using ReactiveUI;
-using FactorioModManager.Services;
 
 namespace FactorioModManager.ViewModels.MainWindow
 {
@@ -129,6 +130,24 @@ namespace FactorioModManager.ViewModels.MainWindow
         }
 
         public string ModCountText => $"Mods: {FilteredMods.Count} / {Mods.Count}";
+
+        public string ModCountSummary
+        {
+            get
+            {
+                var enabled = Mods.Count(m => m.IsEnabled);
+                var total = Mods.Count;
+                var updates = Mods.Count(m => m.HasUpdate);
+
+                return $"Enabled: {enabled}/{total} | Updates: {updates}";
+            }
+        }
+
+        public string UnusedInternalWarning => $"⚠ {UnusedInternalCount} unused internal dependencies";
+
+        public int UnusedInternalCount => Mods.Count(m => m.IsUnusedInternal);
+
+        public bool HasUnusedInternals => UnusedInternalCount > 0;
 
         private void SetupObservables()
         {
