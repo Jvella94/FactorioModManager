@@ -6,12 +6,13 @@ using Avalonia.Platform.Storage;
 using FactorioModManager.Infrastructure; // Added
 using FactorioModManager.Services;
 using FactorioModManager.ViewModels.Dialogs;
+using FactorioModManager.Views.Base;
 using System;
 using System.Threading.Tasks;
 
 namespace FactorioModManager.Views
 {
-    public partial class SettingsWindow : Window
+    public partial class SettingsWindow : DialogWindowBase<(bool Success, string? Data, bool IsUrl)>
     {
         private readonly SettingsWindowViewModel _viewModel;
 

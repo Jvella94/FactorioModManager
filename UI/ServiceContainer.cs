@@ -27,10 +27,14 @@ namespace FactorioModManager
 
             // Core Services
             RegisterSingleton<ISettingsService>(new SettingsService());
-            RegisterSingleton<IModService>(new ModService());
+            RegisterSingleton<ILogService>(new LogService());
             RegisterSingleton<IModGroupService>(new ModGroupService());
             RegisterSingleton<IModMetadataService>(new ModMetadataService());
-            RegisterSingleton<ILogService>(new LogService());
+
+            RegisterSingleton<IModService>(new ModService(
+                Resolve<ISettingsService>(),
+                Resolve<ILogService>()
+            ));
 
             // API Services - wrap with caching
             var apiService = new FactorioApiService();

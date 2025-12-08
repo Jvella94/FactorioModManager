@@ -150,9 +150,6 @@ namespace FactorioModManager.Services.Infrastructure
                 {
                     File.WriteAllText(_logFilePath, string.Empty);
                 }
-
-                // Log that logs were cleared (new first entry)
-                Log("Logs cleared by user", LogLevel.Info);
             }
             catch (Exception ex)
             {

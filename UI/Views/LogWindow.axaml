@@ -60,7 +60,7 @@
               Width="120"/>
       <Button Content="🗑️ Clear Logs"
               Click="ClearLogs_Click"
-              Width="100"/>
+              Width="120"/>
       <Button Content="Close"
               Click="Close_Click"
               Width="80"/>

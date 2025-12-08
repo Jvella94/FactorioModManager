@@ -1,14 +1,15 @@
-﻿using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using Avalonia.Controls;
+﻿using Avalonia.Controls;
 using Avalonia.Interactivity;
 using FactorioModManager.Services.API;
 using FactorioModManager.Services.Infrastructure;
+using FactorioModManager.Views.Base;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
 
 namespace FactorioModManager.Views
 {
-    public partial class VersionHistoryWindow : Window
+    public partial class VersionHistoryWindow : DialogWindowBase<(bool Success, string? Data, bool IsUrl)>
     {
         public VersionHistoryWindow()
         {

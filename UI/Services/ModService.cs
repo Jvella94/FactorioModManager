@@ -9,20 +9,28 @@ using System.Text.Json;
 
 namespace FactorioModManager.Services
 {
-    public class ModService : IModService
+    public class ModService(ISettingsService settingsService, ILogService logService) : IModService
     {
         private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
+        private readonly ISettingsService _settingsService = settingsService;
+        private readonly ILogService _logService = logService;
+
+        public string GetModsDirectory()
+        {
+            return _settingsService.GetModsPath(); // ✅ Uses injected settings
+        }
+
         public List<(ModInfo Info, bool IsEnabled, DateTime? LastUpdated, string? ThumbnailPath, string FilePath)> LoadAllMods()
         {
-            var modsDirectory = ModPathHelper.GetModsDirectory();
+            var modsDirectory = _settingsService.GetModsPath();
             var modListPath = Path.Combine(modsDirectory, Constants.FileSystem.ModListFileName);
 
             var enabledMods = new Dictionary<string, bool>();
             if (File.Exists(modListPath))
             {
                 var jsonString = File.ReadAllText(modListPath);
-                var modListData = JsonSerializer.Deserialize<ModListData>(jsonString);
+                var modListData = JsonSerializer.Deserialize<ModList>(jsonString);
                 if (modListData?.Mods != null)
                 {
                     enabledMods = modListData.Mods.ToDictionary(m => m.Name, m => m.Enabled);
@@ -59,7 +67,7 @@ namespace FactorioModManager.Services
                 }
                 catch (Exception ex)
                 {
-                    LogService.Instance.Log($"Error loading mod {Path.GetFileName(modFile)}: {ex.Message}",
+                    _logService.Log($"Error loading mod {Path.GetFileName(modFile)}: {ex.Message}",
                         LogLevel.Error);
                 }
             }
@@ -82,18 +90,18 @@ namespace FactorioModManager.Services
 
         public void ToggleMod(string modName, bool enabled)
         {
-            var modsDirectory = ModPathHelper.GetModsDirectory();
+            var modsDirectory = _settingsService.GetModsPath();
             var modListPath = Path.Combine(modsDirectory, Constants.FileSystem.ModListFileName);
 
-            ModListData modListData;
+            ModList modListData;
             if (File.Exists(modListPath))
             {
                 var jsonString = File.ReadAllText(modListPath);
-                modListData = JsonSerializer.Deserialize<ModListData>(jsonString) ?? new ModListData();
+                modListData = JsonSerializer.Deserialize<ModList>(jsonString) ?? new ModList();
             }
             else
             {
-                modListData = new ModListData();
+                modListData = new ModList();
             }
 
             var existingMod = modListData.Mods.FirstOrDefault(m => m.Name == modName);
@@ -109,24 +117,19 @@ namespace FactorioModManager.Services
             var updatedJson = JsonSerializer.Serialize(modListData, JsonOptions);
             File.WriteAllText(modListPath, updatedJson);
 
-            LogService.Instance.Log($"Mod '{modName}' {(enabled ? "enabled" : "disabled")}");
+            _logService.Log($"Mod '{modName}' {(enabled ? "enabled" : "disabled")}");
         }
 
         public void RemoveMod(string modName)
         {
-            var modsDirectory = ModPathHelper.GetModsDirectory();
+            var modsDirectory = _settingsService.GetModsPath();
             var modFiles = Directory.GetFiles(modsDirectory, $"{modName}_*.zip");
 
             foreach (var file in modFiles)
             {
                 File.Delete(file);
-                LogService.Instance.Log($"Removed mod file: {Path.GetFileName(file)}");
+                _logService.Log($"Removed mod file: {Path.GetFileName(file)}");
             }
-        }
-
-        private class ModListData
-        {
-            public List<ModListEntry> Mods { get; set; } = [];
         }
     }
 }

@@ -3,7 +3,7 @@
         x:Class="FactorioModManager.Views.InstallModDialog"
         Classes="dialog"
         Title="Install Mod"
-        Width="500" Height="250">
+        Width="500" Height="300">
 
   <StackPanel Classes="dialog-content">
     <TextBlock Classes="dialog-title"
@@ -12,6 +12,7 @@
     <Button Content="📁 Install from ZIP file"
             Click="InstallFromFile_Click"
             HorizontalAlignment="Stretch"
+            HorizontalContentAlignment="Center"
             Height="50"
             FontSize="14"
             Margin="0,0,0,10"/>
@@ -19,6 +20,7 @@
     <Button Content="🌐 Install from Mod Portal URL"
             Click="InstallFromUrl_Click"
             HorizontalAlignment="Stretch"
+            HorizontalContentAlignment="Center"
             Height="50"
             FontSize="14"
             Margin="0,0,0,10"/>
@@ -26,6 +28,7 @@
     <Button Content="Cancel"
             Click="Cancel_Click"
             HorizontalAlignment="Stretch"
+            HorizontalContentAlignment="Center"
             Height="40"
             IsCancel="True"/>
   </StackPanel>

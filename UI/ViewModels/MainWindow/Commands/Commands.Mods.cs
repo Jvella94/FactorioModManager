@@ -14,7 +14,8 @@ namespace FactorioModManager.ViewModels.MainWindow
         public ReactiveCommand<Unit, Unit> InstallModCommand { get; private set; } = null!;
         public ReactiveCommand<Unit, Unit> OpenModFolderCommand { get; private set; } = null!;
         public ReactiveCommand<ModViewModel, Unit> ToggleModCommand { get; private set; } = null!;
-        public ReactiveCommand<ModViewModel, Unit> RemoveModCommand { get; private set; } = null!; public ReactiveCommand<Unit, Unit> OpenModPortalCommand { get; private set; } = null!;
+        public ReactiveCommand<ModViewModel, Unit> RemoveModCommand { get; private set; } = null!; 
+        public ReactiveCommand<Unit, Unit> OpenModPortalCommand { get; private set; } = null!;
         public ReactiveCommand<Unit, Unit> OpenSourceUrlCommand { get; private set; } = null!;
         public ReactiveCommand<Unit, Unit> OpenChangelogCommand { get; private set; } = null!;
         public ReactiveCommand<Unit, Unit> OpenVersionHistoryCommand { get; private set; } = null!;

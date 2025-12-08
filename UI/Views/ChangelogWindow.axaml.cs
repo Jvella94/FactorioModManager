@@ -1,8 +1,9 @@
 ﻿using Avalonia.Controls;
+using FactorioModManager.Views.Base;
 
 namespace FactorioModManager.Views
 {
-    public partial class ChangelogWindow : Window
+    public partial class ChangelogWindow : DialogWindowBase<(bool Success, string? Data, bool IsUrl)>
     {
         public ChangelogWindow()
         {
