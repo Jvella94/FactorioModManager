@@ -1,5 +1,4 @@
 ﻿using Avalonia.Media.Imaging;
-using FactorioModManager.Services.Infrastructure;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
@@ -188,7 +187,6 @@ namespace FactorioModManager.ViewModels.MainWindow
                 }
             });
         }
-
 
         private async Task FetchMissingMetadataAsync()
         {

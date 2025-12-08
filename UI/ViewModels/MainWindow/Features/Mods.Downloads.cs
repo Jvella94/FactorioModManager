@@ -1,6 +1,5 @@
 ﻿using FactorioModManager.Models;
 using FactorioModManager.Services;
-using FactorioModManager.Services.Infrastructure;
 using System;
 using System.IO;
 using System.Linq;

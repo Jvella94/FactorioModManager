@@ -1,12 +1,10 @@
 ﻿using FactorioModManager.Models;
 using FactorioModManager.Services;
-using FactorioModManager.Services.Infrastructure;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Net.Http;
 using System.Threading.Tasks;
 
 namespace FactorioModManager.ViewModels.MainWindow
@@ -112,7 +110,6 @@ namespace FactorioModManager.ViewModels.MainWindow
 
             return true;
         }
-
 
         private async Task DownloadUpdateAsync(ModViewModel? mod)
         {
@@ -428,6 +425,5 @@ namespace FactorioModManager.ViewModels.MainWindow
                 }
             });
         }
-
     }
 }

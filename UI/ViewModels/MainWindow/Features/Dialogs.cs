@@ -1,5 +1,4 @@
 ﻿using System.Threading.Tasks;
-using FactorioModManager.Services;
 
 namespace FactorioModManager.ViewModels.MainWindow
 {
@@ -83,6 +82,6 @@ namespace FactorioModManager.ViewModels.MainWindow
                     });
                 }
             });
-        }        
+        }
     }
 }

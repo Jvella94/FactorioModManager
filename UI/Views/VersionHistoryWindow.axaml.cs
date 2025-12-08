@@ -1,11 +1,9 @@
-﻿using Avalonia.Controls;
-using FactorioModManager.Models.API;
+﻿using FactorioModManager.Models.API;
 using FactorioModManager.Services;
 using FactorioModManager.Services.API;
 using FactorioModManager.ViewModels;
 using FactorioModManager.Views.Base;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace FactorioModManager.Views
 {

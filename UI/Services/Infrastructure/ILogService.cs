@@ -6,13 +6,21 @@ namespace FactorioModManager.Services.Infrastructure
     public interface ILogService
     {
         void Log(string message, LogLevel level = LogLevel.Info);
+
         void LogDebug(string message);
+
         void LogWarning(string message);
+
         void LogError(string message);
+
         IEnumerable<LogEntry> GetLogs();
+
         string GetLogFilePath();
+
         void ClearLogs();
+
         void ArchiveLogs();
+
         void PruneOldLogs(int daysToKeep = 30);
     }
 }

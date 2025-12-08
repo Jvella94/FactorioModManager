@@ -1,5 +1,4 @@
-﻿using Avalonia;
-using Avalonia.Controls;
+﻿using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Interactivity;
 using Avalonia.Media;
@@ -170,6 +169,5 @@ namespace FactorioModManager.Views
                 await successDialog.ShowDialog(this);
             }
         }
-
     }
 }

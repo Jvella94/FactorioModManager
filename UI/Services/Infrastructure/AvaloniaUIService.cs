@@ -29,7 +29,7 @@ namespace FactorioModManager.Services.Infrastructure
         public async Task InvokeAsync(Func<Task> asyncAction)
         {
             ArgumentNullException.ThrowIfNull(asyncAction);
-            await Dispatcher.UIThread.InvokeAsync(asyncAction); 
+            await Dispatcher.UIThread.InvokeAsync(asyncAction);
         }
     }
 }

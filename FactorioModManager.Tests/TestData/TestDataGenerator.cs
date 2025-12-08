@@ -1,9 +1,10 @@
 ﻿using System.IO.Compression;
+
 namespace FactorioModManager.Tests.TestData
 {
-    class TestDataGenerator
+    internal class TestDataGenerator
     {
-        static void GenerateTestData()
+        private static void GenerateTestData()
         {
             var testDir = Path.Combine("TestData", "test-mods");
             Directory.CreateDirectory(testDir);
@@ -14,7 +15,7 @@ namespace FactorioModManager.Tests.TestData
             Console.WriteLine("✅ Test data generated!");
         }
 
-        async static void CreateTestMod(string name, string version, string author)
+        private static async void CreateTestMod(string name, string version, string author)
         {
             var zipPath = Path.Combine("TestData", "test-mods", $"{name}.zip");
             using var archive = ZipFile.Open(zipPath, ZipArchiveMode.Create);
@@ -36,5 +37,4 @@ namespace FactorioModManager.Tests.TestData
             await streamWriter.WriteAsync(infoJson);
         }
     }
-
 }

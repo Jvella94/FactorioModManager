@@ -1,5 +1,5 @@
-﻿using Avalonia.Media.Imaging;
-using Avalonia.Media;
+﻿using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
@@ -128,6 +128,7 @@ namespace FactorioModManager.ViewModels
 
         // ADDED: Version management
         public ObservableCollection<string> AvailableVersions { get; set; } = [];
+
         public List<string> VersionFilePaths { get; set; } = []; // Track file paths for each version
 
         public string? SelectedVersion
@@ -167,6 +168,7 @@ namespace FactorioModManager.ViewModels
         }
 
         private bool _isDownloading;
+
         public bool IsDownloading
         {
             get => _isDownloading;
@@ -174,6 +176,7 @@ namespace FactorioModManager.ViewModels
         }
 
         private double _downloadProgress;
+
         public double DownloadProgress
         {
             get => _downloadProgress;
@@ -181,6 +184,7 @@ namespace FactorioModManager.ViewModels
         }
 
         private bool _hasDownloadProgress;
+
         public bool HasDownloadProgress
         {
             get => _hasDownloadProgress;
@@ -188,16 +192,17 @@ namespace FactorioModManager.ViewModels
         }
 
         private string _downloadStatusText = "";
+
         public string DownloadStatusText
         {
             get => _downloadStatusText;
             set => this.RaiseAndSetIfChanged(ref _downloadStatusText, value);
         }
+
         public string? FilePath
         {
             get => _filePath;
             set => this.RaiseAndSetIfChanged(ref _filePath, value);
         }
-
     }
 }

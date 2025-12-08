@@ -1,6 +1,5 @@
 ﻿using FactorioModManager.Services;
 using ReactiveUI;
-using System;
 using System.Reactive;
 
 namespace FactorioModManager.ViewModels.Dialogs
@@ -10,6 +9,7 @@ namespace FactorioModManager.ViewModels.Dialogs
         private readonly ISettingsService _settingsService;
 
         private string? _modsPath;
+
         public string? ModsPath
         {
             get => _modsPath;
@@ -17,6 +17,7 @@ namespace FactorioModManager.ViewModels.Dialogs
         }
 
         private string? _apiKey;
+
         public string? ApiKey
         {
             get => _apiKey;
@@ -24,6 +25,7 @@ namespace FactorioModManager.ViewModels.Dialogs
         }
 
         private string? _username;
+
         public string? Username
         {
             get => _username;
@@ -31,6 +33,7 @@ namespace FactorioModManager.ViewModels.Dialogs
         }
 
         private string? _token;
+
         public string? Token
         {
             get => _token;
@@ -38,6 +41,7 @@ namespace FactorioModManager.ViewModels.Dialogs
         }
 
         private bool _keepOldModFiles;
+
         public bool KeepOldModFiles
         {
             get => _keepOldModFiles;

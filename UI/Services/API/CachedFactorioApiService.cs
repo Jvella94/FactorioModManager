@@ -53,7 +53,7 @@ namespace FactorioModManager.Services.API
             return result;
         }
 
-           public async Task<ModDetailsFull?> GetModDetailsFullAsync(string modName)
+        public async Task<ModDetailsFull?> GetModDetailsFullAsync(string modName)
         {
             lock (_lock)
             {

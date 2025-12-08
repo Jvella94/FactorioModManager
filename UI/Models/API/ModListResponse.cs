@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
-namespace FactorioModManager.Models.API  
+namespace FactorioModManager.Models.API
 {
     public class ModListResponse
     {
@@ -35,5 +35,4 @@ namespace FactorioModManager.Models.API
         [JsonPropertyName("page_size")]
         public int PageSize { get; set; }
     }
-
 }

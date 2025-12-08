@@ -1,5 +1,4 @@
-﻿using FactorioModManager.Services.Infrastructure;
-using ReactiveUI;
+﻿using ReactiveUI;
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;

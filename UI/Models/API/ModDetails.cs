@@ -67,7 +67,7 @@ namespace FactorioModManager.Models.API
         public List<Tag> Tags { get; set; } = [];
 
         [JsonPropertyName("license")]
-        public License? License { get; set; }  
+        public License? License { get; set; }
 
         [JsonPropertyName("deprecated")]
         public bool? Deprecated { get; set; }

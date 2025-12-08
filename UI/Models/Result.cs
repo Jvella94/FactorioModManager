@@ -19,9 +19,11 @@ namespace FactorioModManager.Models
         }
 
         public static Result Ok() => new(true);
+
         public static Result Fail(string error, ErrorCode? code = null) => new(false, error, code);
 
         public static Result<T> Ok<T>(T value) => Result<T>.Ok(value);
+
         public static Result<T> Fail<T>(string error, ErrorCode? code = null) => Result<T>.Fail(error, code);
     }
 
@@ -39,7 +41,8 @@ namespace FactorioModManager.Models
         }
 
         public static Result<T> Ok(T value) => new(true, value, null, null);
-        public static new Result<T> Fail(string error, ErrorCode? code = null) => new(false, default, error, code);
+
+        public new static Result<T> Fail(string error, ErrorCode? code = null) => new(false, default, error, code);
 
         /// <summary>
         /// Maps the result value if successful

@@ -24,11 +24,13 @@ namespace FactorioModManager.ViewModels
 
         public string Version => Release.Version;
         public DateTime ReleasedAt => Release.ReleasedAt;
+
         public ModInfo? InfoJson
         {
             get => _infoJson;
             set => this.RaiseAndSetIfChanged(ref _infoJson, value);
         }
+
         public string? FactorioVersion => InfoJson?.FactorioVersion;
         public string? DownloadUrl => Release.DownloadUrl;
 
@@ -60,10 +62,8 @@ namespace FactorioModManager.ViewModels
             IsInstalled = _modService.GetInstalledVersions(modName).Contains(release.Version);
         }
 
-
-
-
 #pragma warning disable CA1822 // Mark members as static
+
         public ModInfo? ExtractInfoJsonFromZip(string zipPath)
 #pragma warning restore CA1822 // Mark members as static
         {

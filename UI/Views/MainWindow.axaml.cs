@@ -129,7 +129,6 @@ namespace FactorioModManager.Views
             }
         }
 
-
         private async void ShowError(string message)
         {
             var dialog = new Dialogs.MessageBoxDialog("Error", message);

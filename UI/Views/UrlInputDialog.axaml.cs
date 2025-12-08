@@ -1,5 +1,4 @@
-﻿using Avalonia.Controls;
-using Avalonia.Interactivity;
+﻿using Avalonia.Interactivity;
 using FactorioModManager.Views.Base;
 using System;
 

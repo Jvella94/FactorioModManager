@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
 namespace FactorioModManager.Models.API
@@ -20,12 +19,12 @@ namespace FactorioModManager.Models.API
         public string DownloadUrl { get; set; } = string.Empty;
 
         [JsonPropertyName("file_name")]
-        public string FileName { get; set; } = string.Empty;  
+        public string FileName { get; set; } = string.Empty;
 
         [JsonPropertyName("sha1")]
         public string? Sha1 { get; set; }
 
         [JsonPropertyName("info_json")]
-        public ModInfo? InfoJson { get; set; } 
+        public ModInfo? InfoJson { get; set; }
     }
 }

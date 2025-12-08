@@ -1,9 +1,6 @@
-﻿using Avalonia;
-using Avalonia.Controls;
+﻿using Avalonia.Controls;
 using Avalonia.Interactivity;
-using Avalonia.Media;
 using Avalonia.Platform.Storage;
-using FactorioModManager.Infrastructure; // Added
 using FactorioModManager.Services;
 using FactorioModManager.ViewModels.Dialogs;
 using FactorioModManager.Views.Base;
@@ -64,6 +61,7 @@ namespace FactorioModManager.Views
         }
 
 #pragma warning disable CA1859 // Use concrete types when possible for improved performance
+
         private Task ShowValidationError(string message)
 #pragma warning restore CA1859 // Use concrete types when possible for improved performance
         {

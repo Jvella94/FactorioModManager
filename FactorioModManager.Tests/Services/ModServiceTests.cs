@@ -2,7 +2,6 @@
 using FactorioModManager.Services.Infrastructure;
 using FluentAssertions;
 using Moq;
-using System.IO;
 using System.IO.Compression;
 using Xunit;
 

@@ -8,7 +8,6 @@ using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
-using System.Xml.Linq;
 
 namespace FactorioModManager.Services
 {
@@ -60,7 +59,7 @@ namespace FactorioModManager.Services
                         {
                             var isEnabled = enabledMods.GetValueOrDefault(modInfo.Name, true);
                             var lastModified = File.GetLastWriteTime(modFile);
-                            var thumbnailPath = FindThumbnail(archive,modFile);
+                            var thumbnailPath = FindThumbnail(archive, modFile);
 
                             mods.Add((modInfo, isEnabled, lastModified, thumbnailPath, modFile));
                         }
@@ -76,7 +75,7 @@ namespace FactorioModManager.Services
             return mods;
         }
 
-        private static string? FindThumbnail(ZipArchive archive,string modFile)
+        private static string? FindThumbnail(ZipArchive archive, string modFile)
         {
             var thumbnailEntry = archive.Entries.FirstOrDefault(e =>
                 e.FullName.EndsWith("thumbnail.png", StringComparison.OrdinalIgnoreCase));
@@ -114,7 +113,7 @@ namespace FactorioModManager.Services
             {
                 modListData.Mods.Add(new ModListEntry { Name = modName, Enabled = enabled });
             }
-            
+
             var updatedJson = JsonSerializer.Serialize(modListData, JsonOptions);
             File.WriteAllText(modListPath, updatedJson);
 
@@ -209,6 +208,5 @@ namespace FactorioModManager.Services
             _installedVersions[modName] = versions;
             _logService.LogDebug($"Refreshed {versions.Count} versions for {modName}");
         }
-
     }
 }

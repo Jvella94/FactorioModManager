@@ -1,10 +1,10 @@
-﻿using System;
+﻿using FactorioModManager.Models;
+using FactorioModManager.Services.Infrastructure;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
-using FactorioModManager.Models;
-using FactorioModManager.Services.Infrastructure;
 
 namespace FactorioModManager.Services
 {
@@ -42,7 +42,6 @@ namespace FactorioModManager.Services
         {
             try
             {
-
                 var collection = new ModGroupCollection { Groups = groups };
                 var json = JsonSerializer.Serialize(collection, JsonOptions);
                 File.WriteAllText(_groupsFilePath, json);

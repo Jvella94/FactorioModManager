@@ -1,5 +1,4 @@
 ﻿using FactorioModManager.Services;
-using FactorioModManager.Services.Infrastructure;
 using ReactiveUI;
 using System;
 using System.IO;

@@ -2,8 +2,6 @@
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using FactorioModManager.Views.Base;
-using System;
-using System.Linq;
 
 namespace FactorioModManager.Views
 {

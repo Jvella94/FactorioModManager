@@ -1,10 +1,9 @@
-﻿using System;
+﻿using FactorioModManager.Services.Infrastructure;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
-using System.Diagnostics;
-using FactorioModManager.Services.Infrastructure;
 
 namespace FactorioModManager.Services
 {
@@ -126,7 +125,6 @@ namespace FactorioModManager.Services
             LogService.Instance.Log($"Saved source URL for {modName}: {sourceUrl ?? "(none)"}");
         }
 
-
         public string? GetCategory(string modName)
         {
             return _cache.TryGetValue(modName, out var metadata) ? metadata.Category : null;
@@ -230,6 +228,5 @@ namespace FactorioModManager.Services
             SaveMetadata();
             LogService.Instance.LogDebug("Cleared all update flags");
         }
-
     }
 }

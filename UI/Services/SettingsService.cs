@@ -130,7 +130,7 @@ namespace FactorioModManager.Services
             }
         }
 
-        public string GetModsPath() 
+        public string GetModsPath()
         {
             return _settings.FactorioModsPath ?? ModPathHelper.GetModsDirectory();
         }

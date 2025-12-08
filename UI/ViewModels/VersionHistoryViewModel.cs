@@ -24,7 +24,7 @@ namespace FactorioModManager.ViewModels
 
         public ObservableCollection<VersionHistoryReleaseViewModel> Releases { get; }
 
-        public ReactiveCommand<VersionHistoryReleaseViewModel, Unit> ActionCommand {  get; }
+        public ReactiveCommand<VersionHistoryReleaseViewModel, Unit> ActionCommand { get; }
 
         public VersionHistoryViewModel(IModService modService, IFactorioApiService apiService,
                                      string modTitle, string modName, List<ModReleaseDto> releases)
@@ -110,6 +110,7 @@ namespace FactorioModManager.ViewModels
                 release.IsInstalling = false;
             }
         }
+
         private void NotifyParentModInstalledCountChanged()
         {
             var installedVersions = ServiceContainer.Instance
@@ -125,6 +126,5 @@ namespace FactorioModManager.ViewModels
             // Option 2: Refresh via ModService
             ServiceContainer.Instance.Resolve<IModService>().RefreshInstalledCounts(ModName);
         }
-
     }
 }

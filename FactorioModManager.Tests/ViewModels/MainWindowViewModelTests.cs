@@ -34,14 +34,13 @@ namespace FactorioModManager.Tests.ViewModels
 
             _viewModel = new MainWindowViewModel(
              _mockModService.Object,        // 0: IModService
-             _mockGroupService.Object,      // 1: IModGroupService  
+             _mockGroupService.Object,      // 1: IModGroupService
              _mockApiService.Object,        // 2: IFactorioApiService
              _mockMetadataService.Object,   // 3: IModMetadataService
              _mockSettingsService.Object,   // 4: ISettingsService
              _mockUiService.Object,         // 5: IUIService
              _mockLogService.Object         // 6: ILogService
          );
-
         }
 
         [Fact]
@@ -78,8 +77,6 @@ namespace FactorioModManager.Tests.ViewModels
             // Assert
             testMod.IsEnabled.Should().BeTrue();
         }
-
-
 
         private static List<(ModInfo Info, bool IsEnabled, DateTime? LastUpdated, string? ThumbnailPath, string FilePath)> GetTestMods()
         {
@@ -121,9 +118,6 @@ namespace FactorioModManager.Tests.ViewModels
             testMod.IsEnabled.Should().BeTrue();
         }
 
-
-
-
         [Fact]
         public void ToggleModCommand_TogglesSelectedMod()
         {
@@ -157,6 +151,5 @@ namespace FactorioModManager.Tests.ViewModels
 
             Assert.True(testMod.IsEnabled);
         }
-
     }
 }

@@ -1,7 +1,6 @@
 ﻿using Avalonia.Controls;
 using Avalonia.Input;
 using FactorioModManager.ViewModels.MainWindow;
-using ReactiveUI;
 using System;
 using System.Reactive;
 

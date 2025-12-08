@@ -1,7 +1,6 @@
 ﻿using FactorioModManager.Models;
 using FactorioModManager.Services.Infrastructure;
 using FluentAssertions;
-using System.IO;
 using Xunit;
 
 namespace FactorioModManager.Tests.Services
@@ -49,7 +48,7 @@ namespace FactorioModManager.Tests.Services
 
             // Assert
             var logs = _logService.GetLogs().ToList();
-            logs.Should().HaveCount(0); 
+            logs.Should().HaveCount(0);
 
             var logFile = _logService.GetLogFilePath();
             File.ReadAllLines(logFile).Should().HaveCount(0);

@@ -68,7 +68,7 @@ namespace FactorioModManager.ViewModels.MainWindow
         }
 
         public ObservableCollection<ModViewModel> FilteredMods { get; } = [];
-        
+
         public ObservableCollection<ModGroupViewModel> Groups
         {
             get => _groups;
@@ -143,7 +143,7 @@ namespace FactorioModManager.ViewModels.MainWindow
         }
 
         public string ModCountText => $"Mods: {FilteredMods.Count} / {Mods.Count}";
-        
+
         public string ModCountSummary
         {
             get

@@ -1,5 +1,4 @@
-﻿using Avalonia.Controls;
-using Avalonia.Interactivity;
+﻿using Avalonia.Interactivity;
 using FactorioModManager.Views.Base;
 using System;
 
@@ -40,6 +39,5 @@ namespace FactorioModManager.Views
             var dialog = new Dialogs.MessageBoxDialog("Invalid Input", message);
             await dialog.ShowDialog(this);
         }
-
     }
 }

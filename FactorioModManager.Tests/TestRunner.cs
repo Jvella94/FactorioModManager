@@ -6,9 +6,9 @@ using Moq;
 using System.Diagnostics;
 using System.IO.Compression;
 
-class Program
+internal class Program
 {
-    static async Task Main(string[] args)
+    private static async Task Main(string[] args)
     {
         Console.WriteLine("🧪 Factorio Mod Manager - .NET 9 Test Suite");
         Console.WriteLine("==========================================\n");
@@ -20,7 +20,7 @@ class Program
         Console.WriteLine("\n✅ All tests completed successfully! 🎉");
     }
 
-    static async Task RunUnitTests()
+    private static async Task RunUnitTests()
     {
         Console.WriteLine("📋 Running unit tests with .NET 9...");
 
@@ -28,8 +28,8 @@ class Program
         {
             FileName = "dotnet",
             Arguments = """
-                test --logger "console;verbosity=detailed" 
-                     --collect:"XPlat Code Coverage" 
+                test --logger "console;verbosity=detailed"
+                     --collect:"XPlat Code Coverage"
                      --results-directory ./coverage
                 """,
             UseShellExecute = false,
@@ -45,14 +45,14 @@ class Program
         Console.WriteLine();
     }
 
-    static async Task TestCoreServices()
+    private static async Task TestCoreServices()
     {
         await TestModService();
         await TestLogService();
         await TestSettingsService();
     }
 
-    static async Task TestModService()
+    private static async Task TestModService()
     {
         Console.WriteLine("🔍 Testing ModService...");
 
@@ -77,7 +77,7 @@ class Program
         Console.WriteLine($"✅ Found {mods.Count} test mods");
     }
 
-    static async Task TestLogService()
+    private static async Task TestLogService()
     {
         Console.WriteLine("📝 Testing LogService...");
 
@@ -93,7 +93,7 @@ class Program
         Console.WriteLine("✅ LogService tests passed");
     }
 
-    static async Task TestSettingsService()
+    private static async Task TestSettingsService()
     {
         Console.WriteLine("⚙️ Testing SettingsService...");
 
@@ -106,7 +106,7 @@ class Program
         Console.WriteLine("✅ SettingsService tests passed");
     }
 
-    static void CreateTestModZip(string zipPath)
+    private static void CreateTestModZip(string zipPath)
     {
         using var archive = ZipFile.Open(zipPath, ZipArchiveMode.Create);
         var infoJson = """
