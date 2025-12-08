@@ -1,4 +1,5 @@
-﻿using System;
+﻿using FactorioModManager.Services.Infrastructure;
+using System;
 using System.IO;
 using System.Text.Json;
 
@@ -14,7 +15,7 @@ namespace FactorioModManager.Services
         public bool KeepOldModFiles { get; set; } = false;
     }
 
-    public class SettingsService
+    public class SettingsService : ISettingsService
     {
         private readonly string _settingsPath;
         private readonly Settings _settings;
@@ -99,18 +100,18 @@ namespace FactorioModManager.Services
                         ? tokenElement.GetString()
                         : null;
 
-                    LogService.LogDebug($"Loaded Factorio credentials from player-data.json: Username={username}, Token={(token != null ? "***" : "null")}");
+                    LogService.Instance.LogDebug($"Loaded Factorio credentials from player-data.json: Username={username}, Token={(token != null ? "***" : "null")}");
 
                     return (username, token);
                 }
                 else
                 {
-                    LogService.LogDebug($"player-data.json not found at {playerDataPath}");
+                    LogService.Instance.LogDebug($"player-data.json not found at {playerDataPath}");
                 }
             }
             catch (Exception ex)
             {
-                LogService.LogDebug($"Error loading Factorio player-data.json: {ex.Message}");
+                LogService.Instance.LogDebug($"Error loading Factorio player-data.json: {ex.Message}");
             }
 
             return (null, null);
@@ -129,7 +130,7 @@ namespace FactorioModManager.Services
             }
         }
 
-        public string? GetModsPath()
+        public string GetModsPath() 
         {
             return _settings.FactorioModsPath ?? ModPathHelper.GetModsDirectory();
         }

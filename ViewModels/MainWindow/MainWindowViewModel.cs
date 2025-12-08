@@ -1,4 +1,6 @@
 ﻿using FactorioModManager.Services;
+using FactorioModManager.Services.API;
+using FactorioModManager.Services.Infrastructure;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
@@ -8,7 +10,7 @@ using System.Reactive.Linq;
 
 namespace FactorioModManager.ViewModels.MainWindow
 {
-    public partial class MainWindowVM : ViewModelBase
+    public partial class MainWindowViewModel : ViewModelBase
     {
         private ObservableCollection<ModViewModel> _mods;
         private ObservableCollection<ModGroupViewModel> _groups;
@@ -22,31 +24,41 @@ namespace FactorioModManager.ViewModels.MainWindow
         private string? _selectedAuthorFilter;
         private string _authorSearchText = string.Empty;
 
-        private readonly ModService _modService;
-        private readonly ModGroupService _groupService;
-        private readonly FactorioApiService _apiService;
-        private readonly ModMetadataService _metadataService;
-        private readonly SettingsService _settingsService;
+        private readonly IModService _modService;
+        private readonly IModGroupService _groupService;
+        private readonly IFactorioApiService _apiService;
+        private readonly IModMetadataService _metadataService;
+        private readonly ISettingsService _settingsService;
+        private readonly IUIService _uiService;
+        private readonly ILogService _logService;
 
-        private static readonly char[] DependencySeparators = [' ', '>', '<', '=', '!', '?', '('];
-
-        public MainWindowVM()
+        public MainWindowViewModel(
+            IModService modService,
+            IModGroupService groupService,
+            IFactorioApiService apiService,
+            IModMetadataService metadataService,
+            ISettingsService settingsService,
+            IUIService uiService,
+            ILogService logService)
         {
             _mods = [];
             _groups = [];
             _selectedMods = [];
 
-            _modService = new ModService();
-            _groupService = new ModGroupService();
-            _apiService = new FactorioApiService();
-            _metadataService = new ModMetadataService();
-            _settingsService = new SettingsService();
+            _modService = modService;
+            _groupService = groupService;
+            _apiService = apiService;
+            _metadataService = metadataService;
+            _settingsService = settingsService;
+            _uiService = uiService;
+            _logService = logService;
 
             InitializeCommands();
             SetupObservables();
         }
 
-        // Properties
+        // ... rest of the properties remain the same
+
         public ObservableCollection<ModViewModel> Mods
         {
             get => _mods;
@@ -54,7 +66,7 @@ namespace FactorioModManager.ViewModels.MainWindow
         }
 
         public ObservableCollection<ModViewModel> FilteredMods { get; } = [];
-
+        
         public ObservableCollection<ModGroupViewModel> Groups
         {
             get => _groups;
@@ -78,10 +90,9 @@ namespace FactorioModManager.ViewModels.MainWindow
             {
                 var oldMod = _selectedMod;
                 this.RaiseAndSetIfChanged(ref _selectedMod, value);
-
                 if (value != null && oldMod != value)
                 {
-                    OnModSelected(value); // Call navigation tracking
+                    OnModSelected(value);
                     _ = LoadThumbnailAsync(value);
                 }
             }
@@ -130,7 +141,7 @@ namespace FactorioModManager.ViewModels.MainWindow
         }
 
         public string ModCountText => $"Mods: {FilteredMods.Count} / {Mods.Count}";
-
+        
         public string ModCountSummary
         {
             get
@@ -138,37 +149,31 @@ namespace FactorioModManager.ViewModels.MainWindow
                 var enabled = Mods.Count(m => m.IsEnabled);
                 var total = Mods.Count;
                 var updates = Mods.Count(m => m.HasUpdate);
-
                 return $"Enabled: {enabled}/{total} | Updates: {updates}";
             }
         }
 
         public string UnusedInternalWarning => $"⚠ {UnusedInternalCount} unused internal dependencies";
-
         public int UnusedInternalCount => Mods.Count(m => m.IsUnusedInternal);
-
         public bool HasUnusedInternals => UnusedInternalCount > 0;
 
         private void SetupObservables()
         {
-            // Set up filtering
             this.WhenAnyValue(
                 x => x.SearchText,
                 x => x.ShowDisabled,
                 x => x.SelectedAuthorFilter,
                 x => x.SelectedGroup,
                 x => x.FilterBySelectedGroup)
-                .Throttle(TimeSpan.FromMilliseconds(300))
+                .Throttle(TimeSpan.FromMilliseconds(Constants.Throttle.SearchMs))
                 .ObserveOn(RxApp.MainThreadScheduler)
                 .Subscribe(_ => UpdateFilteredMods());
 
-            // Filter authors when search text changes
             this.WhenAnyValue(x => x.AuthorSearchText)
-                .Throttle(TimeSpan.FromMilliseconds(200))
+                .Throttle(TimeSpan.FromMilliseconds(Constants.Throttle.AuthorSearchMs))
                 .ObserveOn(RxApp.MainThreadScheduler)
                 .Subscribe(_ => UpdateFilteredAuthors());
 
-            // Sync AuthorSearchText when SelectedAuthorFilter changes
             this.WhenAnyValue(x => x.SelectedAuthorFilter)
                 .Subscribe(author =>
                 {

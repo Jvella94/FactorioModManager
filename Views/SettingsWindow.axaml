@@ -1,36 +1,74 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:views="using:FactorioModManager.Views"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:FactorioModManager.ViewModels.Dialogs"
+        mc:Ignorable="d" d:DesignWidth="600" d:DesignHeight="450"
         x:Class="FactorioModManager.Views.SettingsWindow"
-        x:DataType="views:SettingsWindow"
+        x:DataType="vm:SettingsWindowViewModel"
         Title="Settings"
         Width="600" Height="450"
+        Background="#1E1E1E"
         WindowStartupLocation="CenterOwner">
+
+  <Window.KeyBindings>
+    <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}"/>
+    <KeyBinding Gesture="Escape" Command="{Binding CancelCommand}"/>
+  </Window.KeyBindings>
+
   <Grid Margin="20" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,*,Auto">
 
     <!-- Mods Directory -->
-    <TextBlock Grid.Row="0" Text="Factorio Mods Directory:" Margin="0,0,0,5"/>
+    <TextBlock Grid.Row="0"
+               Text="Factorio Mods Directory:"
+               Foreground="White"
+               Margin="0,0,0,5"/>
     <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,0,0,15">
-      <TextBox Grid.Column="0" Text="{Binding ModsPath}" IsReadOnly="True" Margin="0,0,10,0"/>
-      <Button Grid.Column="1" Content="Browse..." Click="BrowseModsPath"/>
+      <TextBox Grid.Column="0"
+               Text="{Binding ModsPath}"
+               IsReadOnly="True"
+               Margin="0,0,10,0"/>
+      <Button Grid.Column="1"
+              Content="Browse..."
+              Click="BrowseModsPath"/>
     </Grid>
 
-    <!-- API Key (for browsing mods) -->
-    <TextBlock Grid.Row="2" Text="Mod Portal API Key (optional - for browsing):" Margin="0,0,0,5"/>
-    <TextBox Grid.Row="3" Text="{Binding ApiKey}" Watermark="Enter your API key" Margin="0,0,0,15"/>
+    <!-- API Key -->
+    <TextBlock Grid.Row="2"
+               Text="Mod Portal API Key (optional - for browsing):"
+               Foreground="White"
+               Margin="0,0,0,5"/>
+    <TextBox Grid.Row="3"
+             Text="{Binding ApiKey}"
+             Watermark="Enter your API key"
+             Margin="0,0,0,15"/>
 
-    <!-- Username (for downloading mods) -->
-    <TextBlock Grid.Row="4" Text="Factorio Username (for downloads):" Margin="0,0,0,5"/>
-    <TextBox Grid.Row="5" Text="{Binding Username}" Watermark="Auto-detected from Factorio" Margin="0,0,0,15"/>
+    <!-- Username -->
+    <TextBlock Grid.Row="4"
+               Text="Factorio Username (for downloads):"
+               Foreground="White"
+               Margin="0,0,0,5"/>
+    <TextBox Grid.Row="5"
+             Text="{Binding Username}"
+             Watermark="Auto-detected from Factorio"
+             Margin="0,0,0,15"/>
 
-    <!-- Token (for downloading mods) -->
-    <TextBlock Grid.Row="6" Text="Factorio Token (for downloads):" Margin="0,0,0,5"/>
-    <TextBox Grid.Row="7" Text="{Binding Token}" Watermark="Auto-detected from Factorio" PasswordChar="•" Margin="0,0,0,15"/>
+    <!-- Token -->
+    <TextBlock Grid.Row="6"
+               Text="Factorio Token (for downloads):"
+               Foreground="White"
+               Margin="0,0,0,5"/>
+    <TextBox Grid.Row="7"
+             Text="{Binding Token}"
+             Watermark="Auto-detected from Factorio"
+             PasswordChar="•"
+             Margin="0,0,0,15"/>
 
-    <!-- Keep old mod files checkbox -->
+    <!-- Keep old mod files -->
     <CheckBox Grid.Row="8"
               Content="Keep old mod files when updating"
               IsChecked="{Binding KeepOldModFiles}"
+              Foreground="White"
               VerticalAlignment="Top"
               Margin="0,0,0,15"/>
 
@@ -43,9 +81,19 @@
                Text="Username and Token are automatically loaded from Factorio's player-data.json file. You only need to enter them manually if auto-detection fails."/>
 
     <!-- Buttons -->
-    <StackPanel Grid.Row="10" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10" Margin="0,10,0,0">
-      <Button Content="Save" Click="SaveSettings" Width="80"/>
-      <Button Content="Cancel" Click="CancelSettings" Width="80"/>
+    <StackPanel Grid.Row="10"
+                Orientation="Horizontal"
+                HorizontalAlignment="Right"
+                Spacing="10"
+                Margin="0,10,0,0">
+      <Button Content="Save"
+              Click="SaveSettings"
+              Width="80"
+              IsDefault="True"/>
+      <Button Content="Cancel"
+              Click="CancelSettings"
+              Width="80"
+              IsCancel="True"/>
     </StackPanel>
   </Grid>
 </Window>

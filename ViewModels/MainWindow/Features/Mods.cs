@@ -1,5 +1,5 @@
 ﻿using Avalonia.Media.Imaging;
-using FactorioModManager.Services;
+using FactorioModManager.Services.Infrastructure;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
@@ -7,10 +7,11 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Threading.Tasks;
+using static FactorioModManager.Constants;
 
 namespace FactorioModManager.ViewModels.MainWindow
 {
-    public partial class MainWindowVM
+    public partial class MainWindowViewModel
     {
         private bool _isRefreshing = false;
 
@@ -18,7 +19,7 @@ namespace FactorioModManager.ViewModels.MainWindow
         {
             if (_isRefreshing)
             {
-                LogService.LogDebug("RefreshModsAsync already running, skipping duplicate call");
+                _logService.LogDebug("RefreshModsAsync already running, skipping duplicate call");
                 return;
             }
 
@@ -26,7 +27,7 @@ namespace FactorioModManager.ViewModels.MainWindow
 
             await Task.Run(async () =>
             {
-                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                _uiService.Post(() =>
                 {
                     StatusText = "Refreshing mods...";
                 });
@@ -44,7 +45,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                         .ToList();
 
                     // Use InvokeAsync to WAIT for the UI thread to complete loading mods
-                    await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                    await _uiService.InvokeAsync(() =>
                     {
                         Mods.Clear();
                         Authors.Clear();
@@ -53,29 +54,30 @@ namespace FactorioModManager.ViewModels.MainWindow
                         var authorCounts = new Dictionary<string, int>();
                         var allDependencies = new HashSet<string>();
 
-                        foreach (var (Info, isEnabled, lastUpdated, thumbnailPath) in latestMods)
+                        foreach (var (info, isEnabled, lastUpdated, thumbnailPath, filePath) in latestMods)
                         {
                             var modVm = new ModViewModel
                             {
-                                Name = Info.Name,
-                                Title = Info.Title ?? Info.Name,
-                                Version = Info.Version,
-                                Author = Info.Author,
-                                Description = Info.Description ?? "",
+                                Name = info.Name,
+                                Title = info.Title ?? info.Name,
+                                Version = info.Version,
+                                Author = info.Author,
+                                Description = info.Description ?? "",
                                 IsEnabled = isEnabled,
-                                Dependencies = Info.Dependencies,
+                                Dependencies = info.Dependencies,
                                 LastUpdated = lastUpdated,
                                 ThumbnailPath = thumbnailPath,
-                                Category = _metadataService.GetCategory(Info.Name),
-                                SourceUrl = _metadataService.GetSourceUrl(Info.Name),
-                                HasUpdate = _metadataService.GetHasUpdate(Info.Name),
-                                LatestVersion = _metadataService.GetLatestVersion(Info.Name)
+                                Category = _metadataService.GetCategory(info.Name),
+                                SourceUrl = _metadataService.GetSourceUrl(info.Name),
+                                HasUpdate = _metadataService.GetHasUpdate(info.Name),
+                                LatestVersion = _metadataService.GetLatestVersion(info.Name),
+                                FilePath = filePath
                             };
 
                             // Track all dependencies
-                            foreach (var dep in Info.Dependencies)
+                            foreach (var dep in info.Dependencies)
                             {
-                                var depName = dep.Split(DependencySeparators, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+                                var depName = dep.Split(Separators.Dependency, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
                                 if (!string.IsNullOrEmpty(depName))
                                 {
                                     allDependencies.Add(depName);
@@ -94,13 +96,13 @@ namespace FactorioModManager.ViewModels.MainWindow
 
                             Mods.Add(modVm);
 
-                            if (!string.IsNullOrEmpty(Info.Author))
+                            if (!string.IsNullOrEmpty(info.Author))
                             {
-                                if (!authorCounts.TryGetValue(Info.Author, out var count))
+                                if (!authorCounts.TryGetValue(info.Author, out var count))
                                 {
                                     count = 0;
                                 }
-                                authorCounts[Info.Author] = count + 1;
+                                authorCounts[info.Author] = count + 1;
                             }
                         }
 
@@ -173,8 +175,8 @@ namespace FactorioModManager.ViewModels.MainWindow
                 }
                 catch (Exception ex)
                 {
-                    LogService.LogDebug($"ERROR in RefreshModsAsync: {ex}");
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    _logService.LogDebug($"ERROR in RefreshModsAsync: {ex}");
+                    _uiService.Post(() =>
                     {
                         StatusText = $"Error: {ex.Message}";
                     });
@@ -182,7 +184,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                 finally
                 {
                     _isRefreshing = false;
-                    LogService.LogDebug("=== RefreshModsAsync completed ===");
+                    _logService.LogDebug("=== RefreshModsAsync completed ===");
                 }
             });
         }
@@ -199,7 +201,7 @@ namespace FactorioModManager.ViewModels.MainWindow
 
             if (modsNeedingMetadata.Count == 0) return;
 
-            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            _uiService.Post(() =>
             {
                 StatusText = $"Fetching metadata for {modsNeedingMetadata.Count} mods...";
             });
@@ -209,7 +211,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                 currentIndex++;
 
                 // ADDED: Update progress
-                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                _uiService.Post(() =>
                 {
                     StatusText = $"Fetching metadata ({currentIndex}/{modsNeedingMetadata.Count}): {mod.Title}";
                 });
@@ -221,7 +223,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                         if (_metadataService.NeedsCategoryCheck(mod.Name))
                         {
                             _metadataService.UpdateCategory(mod.Name, details.Category);
-                            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                            _uiService.Post(() =>
                             {
                                 mod.Category = details.Category;
                             });
@@ -230,7 +232,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                         if (_metadataService.NeedsSourceUrlCheck(mod.Name))
                         {
                             _metadataService.UpdateSourceUrl(mod.Name, details.SourceUrl);
-                            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                            _uiService.Post(() =>
                             {
                                 mod.SourceUrl = details.SourceUrl;
                             });
@@ -245,12 +247,12 @@ namespace FactorioModManager.ViewModels.MainWindow
                 }
                 catch (Exception ex)
                 {
-                    LogService.LogDebug($"Error fetching metadata for {mod.Name}: {ex.Message}");
+                    _logService.LogDebug($"Error fetching metadata for {mod.Name}: {ex.Message}");
                     _metadataService.MarkAsChecked(mod.Name);
                 }
             }
 
-            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            _uiService.Post(() =>
             {
                 StatusText = "Metadata update complete";
             });
@@ -273,7 +275,7 @@ namespace FactorioModManager.ViewModels.MainWindow
             return 0;
         }
 
-        private static async Task LoadThumbnailAsync(ModViewModel mod)
+        private async Task LoadThumbnailAsync(ModViewModel mod)
         {
             if (string.IsNullOrEmpty(mod.ThumbnailPath))
             {
@@ -306,14 +308,14 @@ namespace FactorioModManager.ViewModels.MainWindow
                         thumbnail = new Bitmap(mod.ThumbnailPath);
                     }
 
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    _uiService.Post(() =>
                     {
                         mod.Thumbnail = thumbnail;
                     });
                 }
                 catch (Exception ex)
                 {
-                    LogService.LogDebug($"Error loading thumbnail: {ex.Message}");
+                    _logService.LogDebug($"Error loading thumbnail: {ex.Message}");
                 }
             });
         }

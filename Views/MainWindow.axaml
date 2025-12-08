@@ -2,15 +2,21 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:FactorioModManager.ViewModels"
         xmlns:vmmw="using:FactorioModManager.ViewModels.MainWindow"
+        xmlns:converter="using:FactorioModManager.Views.Converters"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="700"
         x:Class="FactorioModManager.Views.MainWindow"
-        x:DataType="vmmw:MainWindowVM"
+        x:DataType="vmmw:MainWindowViewModel"
         Title="Factorio Mod Manager"
         Width="1500" Height="850"
         MinWidth="1000" MinHeight="700"
         Loaded="Window_Loaded">
+
+  <Window.Resources>
+    <converter:IsNotGameDependencyConverter x:Key="IsNotGameDependencyConverter"/>
+  </Window.Resources>
+
 
   <Design.DataContext>
     <vmmw:MainWindowVM/>
@@ -21,20 +27,20 @@
     <!-- Menu Bar -->
     <Menu Grid.Row="0">
       <MenuItem Header="_File">
-        <MenuItem Header="_Refresh" Command="{Binding RefreshModsCommand}"/>
+        <MenuItem Header="_Refresh Mods List" Command="{Binding RefreshModsCommand}"/>
         <MenuItem Header="_Install Mod" Command="{Binding InstallModCommand}"/>
-        <MenuItem Header="_Open Mod Folder" Command="{Binding OpenModFolderCommand}"/>
-        <Separator/>
-        <MenuItem Header="Check _Updates" Command="{Binding CheckUpdatesCustomCommand}"/>
+        <MenuItem Header="_Open Mods Folder" Command="{Binding OpenModFolderCommand}"/>
         <Separator/>
         <MenuItem Header="_Settings" Command="{Binding OpenSettingsCommand}"/>
-        <MenuItem Header="_Logs" Click="OpenLogs"/>
+        <MenuItem Header="_View Logs" Click="OpenLogs"/>
       </MenuItem>
 
       <MenuItem Header="_View">
         <MenuItem Header="Show _Disabled Mods" IsChecked="{Binding ShowDisabled}"/>
         <MenuItem Header="Filter by Selected _Group" IsChecked="{Binding FilterBySelectedGroup}"/>
       </MenuItem>
+
+      <MenuItem Header="Check for Mod _Updates" Command="{Binding CheckUpdatesCustomCommand}"/>
 
       <MenuItem Header="_Help">
         <MenuItem Header="_About" Click="ShowAbout_Click"/>
@@ -118,15 +124,15 @@
                                FontSize="11" Foreground="#888"/>
                     <StackPanel Orientation="Horizontal" Spacing="5" Margin="0,3,0,0">
                       <Button Content="Toggle"
-                              Command="{Binding $parent[Window].((vmmw:MainWindowVM)DataContext).ToggleGroupCommand}"
+                              Command="{Binding $parent[Window].((vmmw:MainWindowViewModel)DataContext).ToggleGroupCommand}"
                               CommandParameter="{Binding}"
                               FontSize="10" Padding="5,2"/>
                       <Button Content="Rename"
-                              Command="{Binding $parent[Window].((vmmw:MainWindowVM)DataContext).RenameGroupCommand}"
+                              Command="{Binding $parent[Window].((vmmw:MainWindowViewModel)DataContext).RenameGroupCommand}"
                               CommandParameter="{Binding}"
                               FontSize="10" Padding="5,2"/>
                       <Button Content="Delete"
-                              Command="{Binding $parent[Window].((vmmw:MainWindowVM)DataContext).DeleteGroupCommand}"
+                              Command="{Binding $parent[Window].((vmmw:MainWindowViewModel)DataContext).DeleteGroupCommand}"
                               CommandParameter="{Binding}"
                               FontSize="10" Padding="5,2"/>
                     </StackPanel>
@@ -137,7 +143,7 @@
                     <TextBox Text="{Binding EditName}" Watermark="Group name"/>
                     <StackPanel Orientation="Horizontal" Spacing="5">
                       <Button Content="Save"
-                              Command="{Binding $parent[Window].((vmmw:MainWindowVM)DataContext).ConfirmRenameGroupCommand}"
+                              Command="{Binding $parent[Window].((vmmw:MainWindowViewModel)DataContext).ConfirmRenameGroupCommand}"
                               CommandParameter="{Binding}"
                               FontSize="10" Padding="5,2"/>
                       <Button Content="Cancel"
@@ -319,13 +325,20 @@
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
                   <Button Content="{Binding}"
-                          Command="{Binding $parent[Window].((vmmw:MainWindowVM)DataContext).NavigateToDependencyCommand}"
+                          Command="{Binding $parent[Window].((vmmw:MainWindowViewModel)DataContext).NavigateToDependencyCommand}"
                           CommandParameter="{Binding}"
                           Margin="5,2,0,2"
-                          HorizontalAlignment="Left"/>
+                          HorizontalAlignment="Left">
+                    <Button.IsEnabled>
+                      <MultiBinding Converter="{x:Static BoolConverters.And}">
+                        <Binding Path="." Converter="{StaticResource IsNotGameDependencyConverter}"/>
+                      </MultiBinding>
+                    </Button.IsEnabled>
+                  </Button>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
+
 
             <StackPanel Orientation="Vertical" Spacing="10" Margin="0,20,15,0">
               <Button Content="Open Mod File"

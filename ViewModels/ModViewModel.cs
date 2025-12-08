@@ -22,7 +22,8 @@ namespace FactorioModManager.ViewModels
         private string? _groupName;
         private bool _isUnusedInternal;
         private Bitmap? _thumbnail;
-        private string? _selectedVersion; // ADDED
+        private string? _selectedVersion;
+        private string? _filePath;
 
         public string Name
         {
@@ -185,6 +186,10 @@ namespace FactorioModManager.ViewModels
             get => _downloadStatusText;
             set => this.RaiseAndSetIfChanged(ref _downloadStatusText, value);
         }
-
+        public string? FilePath
+        {
+            get => _filePath;
+            set => this.RaiseAndSetIfChanged(ref _filePath, value);
+        }
     }
 }

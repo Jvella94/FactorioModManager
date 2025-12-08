@@ -4,11 +4,11 @@ using System.Linq;
 
 namespace FactorioModManager.ViewModels.MainWindow
 {
-    public partial class MainWindowVM
+    public partial class MainWindowViewModel
     {
         private void UpdateFilteredMods()
         {
-            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            _uiService.Post(() =>
             {
                 FilteredMods.Clear();
                 var filtered = Mods.Where(ModMatchesFilters);
@@ -47,7 +47,7 @@ namespace FactorioModManager.ViewModels.MainWindow
 
         private void UpdateFilteredAuthors()
         {
-            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            _uiService.Post(() =>
             {
                 FilteredAuthors.Clear();
                 var searchLower = AuthorSearchText?.ToLower() ?? "";

@@ -1,12 +1,12 @@
 ﻿namespace FactorioModManager.ViewModels.MainWindow
 {
-    public partial class MainWindowVM
+    public partial class MainWindowViewModel
     {
         private void ToggleMod(ModViewModel? mod)
         {
             if (mod == null) return;
 
-            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            _uiService.Post(() =>
             {
                 // Toggle the enabled state
                 mod.IsEnabled = !mod.IsEnabled;
@@ -37,7 +37,7 @@
         {
             if (mod == null) return;
 
-            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            _uiService.Post(() =>
             {
                 Mods.Remove(mod);
                 UpdateFilteredMods();

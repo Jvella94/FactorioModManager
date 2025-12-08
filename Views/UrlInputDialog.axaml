@@ -1,0 +1,27 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="FactorioModManager.Views.UrlInputDialog"
+        Classes="dialog"
+        Title="Enter Mod Portal URL"
+        Width="500" Height="180">
+
+  <StackPanel Classes="dialog-content">
+    <TextBlock Classes="dialog-label"
+               Text="Enter Factorio Mod Portal URL:"/>
+
+    <TextBox Name="UrlTextBox"
+             Classes="dialog-input"
+             Watermark="https://mods.factorio.com/mod/ModName"/>
+
+    <StackPanel Classes="dialog-buttons">
+      <Button Classes="dialog-button"
+              Content="OK"
+              Click="Ok_Click"
+              IsDefault="True"/>
+      <Button Classes="dialog-button"
+              Content="Cancel"
+              Click="Cancel_Click"
+              IsCancel="True"/>
+    </StackPanel>
+  </StackPanel>
+</Window>

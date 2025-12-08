@@ -3,7 +3,8 @@ using System.Diagnostics;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using FactorioModManager.Services;
+using FactorioModManager.Services.API;
+using FactorioModManager.Services.Infrastructure;
 
 namespace FactorioModManager.Views
 {

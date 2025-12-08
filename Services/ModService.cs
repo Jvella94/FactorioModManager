@@ -1,189 +1,132 @@
-﻿using System;
+﻿using FactorioModManager.Models;
+using FactorioModManager.Services.Infrastructure;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Text.Json;
-using FactorioModManager.Models;
 
 namespace FactorioModManager.Services
 {
-    public class ModService
+    public class ModService : IModService
     {
-        private readonly string _modsDirectory;
-        private readonly string _modListPath;
         private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
-        public ModService()
+        public List<(ModInfo Info, bool IsEnabled, DateTime? LastUpdated, string? ThumbnailPath, string FilePath)> LoadAllMods()
         {
-            _modsDirectory = ModPathHelper.GetModsDirectory();
-            _modListPath = ModPathHelper.GetModListPath();
-        }
+            var modsDirectory = ModPathHelper.GetModsDirectory();
+            var modListPath = Path.Combine(modsDirectory, Constants.FileSystem.ModListFileName);
 
-        public List<(ModInfo Info, bool IsEnabled, DateTime? LastUpdated, string? ThumbnailPath)> LoadAllMods()
-        {
-            if (!Directory.Exists(_modsDirectory))
+            var enabledMods = new Dictionary<string, bool>();
+            if (File.Exists(modListPath))
             {
-                LogService.LogDebug($"Mods directory not found: {_modsDirectory}");
-                return [];
-            }
-
-            var modList = LoadModList();
-            var mods = new List<(ModInfo Info, bool IsEnabled, DateTime? LastUpdated, string? ThumbnailPath)>();
-
-            // Load mods from folders
-            foreach (var modDir in Directory.GetDirectories(_modsDirectory))
-            {
-                var infoPath = Path.Combine(modDir, "info.json");
-                if (File.Exists(infoPath))
+                var jsonString = File.ReadAllText(modListPath);
+                var modListData = JsonSerializer.Deserialize<ModListData>(jsonString);
+                if (modListData?.Mods != null)
                 {
-                    try
-                    {
-                        var modInfo = LoadModInfo(infoPath);
-                        var isEnabled = modList.FirstOrDefault(m => m.Name == modInfo.Name)?.Enabled ?? false;
-                        var lastUpdated = Directory.GetLastWriteTime(modDir);
-                        var thumbnailPath = Path.Combine(modDir, "thumbnail.png");
-
-                        if (!File.Exists(thumbnailPath))
-                        {
-                            thumbnailPath = null;
-                        }
-
-                        mods.Add((modInfo, isEnabled, lastUpdated, thumbnailPath));
-                    }
-                    catch (Exception ex)
-                    {
-                        LogService.LogDebug($"Error loading mod from folder {modDir}: {ex.Message}");
-                    }
+                    enabledMods = modListData.Mods.ToDictionary(m => m.Name, m => m.Enabled);
                 }
             }
 
-            // Load mods from zip files
-            foreach (var zipFile in Directory.GetFiles(_modsDirectory, "*.zip"))
+            var modFiles = Directory.GetFiles(modsDirectory, Constants.FileSystem.ModFilePattern);
+            var mods = new List<(ModInfo, bool, DateTime?, string?, string)>();
+
+            foreach (var modFile in modFiles)
             {
                 try
                 {
-                    using var archive = ZipFile.OpenRead(zipFile);
+                    using var archive = ZipFile.OpenRead(modFile);
                     var infoEntry = archive.Entries.FirstOrDefault(e =>
-                        e.FullName.EndsWith("info.json", StringComparison.OrdinalIgnoreCase));
+                        e.FullName.EndsWith(Constants.FileSystem.InfoJsonFileName, StringComparison.OrdinalIgnoreCase));
 
                     if (infoEntry != null)
                     {
                         using var stream = infoEntry.Open();
-                        var modInfo = JsonSerializer.Deserialize<ModInfo>(stream);
+                        using var reader = new StreamReader(stream);
+                        var json = reader.ReadToEnd();
+                        var modInfo = JsonSerializer.Deserialize<ModInfo>(json);
 
                         if (modInfo != null)
                         {
-                            var isEnabled = modList.FirstOrDefault(m => m.Name == modInfo.Name)?.Enabled ?? false;
-                            var lastUpdated = File.GetLastWriteTime(zipFile);
+                            var isEnabled = enabledMods.GetValueOrDefault(modInfo.Name, true);
+                            var lastModified = File.GetLastWriteTime(modFile);
+                            var thumbnailPath = FindThumbnail(archive,modFile);
 
-                            // Extract thumbnail to temp folder for performance
-                            var thumbnailPath = ExtractThumbnail(zipFile, archive);
-
-                            mods.Add((modInfo, isEnabled, lastUpdated, thumbnailPath));
+                            mods.Add((modInfo, isEnabled, lastModified, thumbnailPath, modFile));
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    LogService.LogDebug($"Error loading mod from zip {zipFile}: {ex.Message}");
+                    LogService.Instance.Log($"Error loading mod {Path.GetFileName(modFile)}: {ex.Message}",
+                        LogLevel.Error);
                 }
             }
 
             return mods;
         }
 
-        private static ModInfo LoadModInfo(string path)
+        private static string? FindThumbnail(ZipArchive archive,string modFile)
         {
-            var json = File.ReadAllText(path);
-            return JsonSerializer.Deserialize<ModInfo>(json)
-                ?? throw new InvalidDataException($"Failed to parse mod info: {path}");
-        }
+            var thumbnailEntry = archive.Entries.FirstOrDefault(e =>
+                e.FullName.EndsWith("thumbnail.png", StringComparison.OrdinalIgnoreCase));
 
-        private static string? ExtractThumbnail(string zipFilePath, ZipArchive archive)
-        {
-            try
+            if (thumbnailEntry != null)
             {
-                var thumbnailEntry = archive.Entries.FirstOrDefault(e =>
-                    e.Name.Equals("thumbnail.png", StringComparison.OrdinalIgnoreCase));
-
-                if (thumbnailEntry != null)
-                {
-                    var tempPath = Path.Combine(Path.GetTempPath(), "FactorioModManager", "Thumbnails");
-                    Directory.CreateDirectory(tempPath);
-
-                    var thumbnailFile = Path.Combine(tempPath, $"{Path.GetFileNameWithoutExtension(zipFilePath)}_thumbnail.png");
-
-                    // Only extract if not already cached
-                    if (!File.Exists(thumbnailFile))
-                    {
-                        thumbnailEntry.ExtractToFile(thumbnailFile, overwrite: true);
-                    }
-
-                    return thumbnailFile;
-                }
-            }
-            catch (Exception ex)
-            {
-                LogService.LogDebug($"Error extracting thumbnail from {zipFilePath}: {ex.Message}");
+                return $"{modFile}|{thumbnailEntry.FullName}";
             }
 
             return null;
         }
 
-        private List<ModListEntry> LoadModList()
-        {
-            if (!File.Exists(_modListPath))
-            {
-                LogService.LogDebug($"mod-list.json not found at {_modListPath}");
-                return [];
-            }
-
-            try
-            {
-                var json = File.ReadAllText(_modListPath);
-                var modList = JsonSerializer.Deserialize<ModList>(json);
-                return modList?.Mods ?? [];
-            }
-            catch (Exception ex)
-            {
-                LogService.LogDebug($"Error reading mod-list.json: {ex.Message}");
-                return [];
-            }
-        }
-
-        private void SaveModList(List<ModListEntry> mods)
-        {
-            try
-            {
-                var modList = new ModList { Mods = mods };
-                var json = JsonSerializer.Serialize(modList, JsonOptions);
-                File.WriteAllText(_modListPath, json);
-            }
-            catch (Exception ex)
-            {
-                LogService.LogDebug($"Error saving mod-list.json: {ex.Message}");
-            }
-        }
-
         public void ToggleMod(string modName, bool enabled)
         {
-            var modList = LoadModList();
-            var entry = modList.FirstOrDefault(m => m.Name == modName);
+            var modsDirectory = ModPathHelper.GetModsDirectory();
+            var modListPath = Path.Combine(modsDirectory, Constants.FileSystem.ModListFileName);
 
-            if (entry != null)
+            ModListData modListData;
+            if (File.Exists(modListPath))
             {
-                entry.Enabled = enabled;
-                LogService.LogDebug($"Toggled {modName} to {(enabled ? "enabled" : "disabled")}");
+                var jsonString = File.ReadAllText(modListPath);
+                modListData = JsonSerializer.Deserialize<ModListData>(jsonString) ?? new ModListData();
             }
             else
             {
-                // Add new entry if mod not in list
-                modList.Add(new ModListEntry { Name = modName, Enabled = enabled });
-                LogService.LogDebug($"Added {modName} to mod-list.json with enabled={enabled}");
+                modListData = new ModListData();
             }
 
-            SaveModList(modList);
+            var existingMod = modListData.Mods.FirstOrDefault(m => m.Name == modName);
+            if (existingMod != null)
+            {
+                existingMod.Enabled = enabled;
+            }
+            else
+            {
+                modListData.Mods.Add(new ModListEntry { Name = modName, Enabled = enabled });
+            }
+            
+            var updatedJson = JsonSerializer.Serialize(modListData, JsonOptions);
+            File.WriteAllText(modListPath, updatedJson);
+
+            LogService.Instance.Log($"Mod '{modName}' {(enabled ? "enabled" : "disabled")}");
+        }
+
+        public void RemoveMod(string modName)
+        {
+            var modsDirectory = ModPathHelper.GetModsDirectory();
+            var modFiles = Directory.GetFiles(modsDirectory, $"{modName}_*.zip");
+
+            foreach (var file in modFiles)
+            {
+                File.Delete(file);
+                LogService.Instance.Log($"Removed mod file: {Path.GetFileName(file)}");
+            }
+        }
+
+        private class ModListData
+        {
+            public List<ModListEntry> Mods { get; set; } = [];
         }
     }
 }

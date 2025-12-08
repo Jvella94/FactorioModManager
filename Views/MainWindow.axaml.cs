@@ -1,83 +1,34 @@
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using FactorioModManager.Services;
+using FactorioModManager.Infrastructure;
 using FactorioModManager.ViewModels;
 using FactorioModManager.ViewModels.MainWindow;
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
+using System.IO;
 using System.Reactive.Linq;
 
 namespace FactorioModManager.Views
 {
     public partial class MainWindow : Window
     {
-        private MainWindowVM? ViewModel => DataContext as MainWindowVM;
+        private readonly MouseNavigationHandler _mouseNavHandler;
 
         public MainWindow()
         {
             InitializeComponent();
+            _mouseNavHandler = new MouseNavigationHandler(this);
 
-            // Add keyboard handler for DataGrid
-            var modGrid = this.FindControl<DataGrid>("ModGrid");
-            if (modGrid != null)
-            {
-                modGrid.KeyDown += ModGrid_KeyDown;
-            }
+            // Set DataContext from DI
+            DataContext = ServiceContainer.Instance.Resolve<MainWindowViewModel>();
         }
 
-        private void ModGrid_KeyDown(object? sender, KeyEventArgs e)
+        private async void Window_Loaded(object? sender, RoutedEventArgs e)
         {
-            if (e.Key == Key.Space && DataContext is MainWindowVM viewModel)
+            if (DataContext is MainWindowViewModel vm)
             {
-                if (viewModel.SelectedMod != null)
-                {
-                    viewModel.ToggleModCommand.Execute(viewModel.SelectedMod).Subscribe();
-                }
-            }
-        }
-
-        private void Window_Loaded(object? sender, RoutedEventArgs e)
-        {
-            if (ViewModel != null)
-            {
-                _ = ViewModel.RefreshModsAsync();
-            }
-        }
-
-        private void CancelRename(object sender, RoutedEventArgs e)
-        {
-            if (sender is Button button && button.DataContext is ModGroupViewModel group)
-            {
-                group.IsEditing = false;
-            }
-        }
-
-        private void DataGrid_OnSelectionChanged(object? sender, SelectionChangedEventArgs e)
-        {
-            if (sender is DataGrid dataGrid && DataContext is MainWindowVM viewModel)
-            {
-                viewModel.SelectedMods.Clear();
-
-                if (dataGrid.SelectedItems != null)
-                {
-                    foreach (var item in dataGrid.SelectedItems.OfType<ModViewModel>())
-                    {
-                        viewModel.SelectedMods.Add(item);
-                    }
-                }
-            }
-        }
-
-        private void AuthorBox_OnGotFocus(object? sender, GotFocusEventArgs e)
-        {
-            if (sender is AutoCompleteBox autoCompleteBox &&
-                string.IsNullOrEmpty(autoCompleteBox.Text))
-            {
-                // Open dropdown when focused and empty
-                autoCompleteBox.IsDropDownOpen = true;
+                await vm.RefreshModsCommand.Execute();
             }
         }
 
@@ -87,67 +38,108 @@ namespace FactorioModManager.Views
             logWindow.Show();
         }
 
+        private async void ShowAbout_Click(object? sender, RoutedEventArgs e)
+        {
+            var aboutMessage = "Factorio Mod Manager\nVersion 1.0.0\n\n" +
+                             "A modern mod manager for Factorio.\n\n" +
+                             "Features:\n" +
+                             "• Manage and organize mods\n" +
+                             "• Check for updates\n" +
+                             "• Group management\n" +
+                             "• Download from Mod Portal";
+
+            var dialog = new Dialogs.MessageBoxDialog("About", aboutMessage);
+            await dialog.ShowDialog(this);
+        }
+
+        private void AuthorBox_OnGotFocus(object? sender, GotFocusEventArgs e)
+        {
+            if (sender is AutoCompleteBox autoCompleteBox)
+            {
+                autoCompleteBox.IsDropDownOpen = true;
+            }
+        }
+
+        private void DataGrid_OnSelectionChanged(object? sender, SelectionChangedEventArgs e)
+        {
+            // Navigation history is handled in the ViewModel
+            // This event handler exists for potential future use
+        }
+
+        private void CancelRename(object? sender, RoutedEventArgs e)
+        {
+            if (sender is Button button && button.DataContext is ModGroupViewModel group)
+            {
+                group.IsEditing = false;
+            }
+        }
+
         private void OpenModFile(object? sender, RoutedEventArgs e)
         {
-            if (ViewModel?.SelectedMod == null) return;
-
-            var modPath = ModPathHelper.GetModsDirectory();
-            var modName = ViewModel.SelectedMod.Name;
-
-            // Try to find the mod file (zip or folder)
-            var zipFile = System.IO.Directory.GetFiles(modPath, $"{modName}*.zip").FirstOrDefault();
-            var folder = System.IO.Directory.GetDirectories(modPath, $"{modName}*").FirstOrDefault();
-
-            var targetPath = zipFile ?? folder;
-
-            if (!string.IsNullOrEmpty(targetPath))
+            if (DataContext is MainWindowViewModel vm && vm.SelectedMod?.FilePath is string filePath)
             {
                 try
                 {
-                    Process.Start(new ProcessStartInfo
+                    if (!File.Exists(filePath))
                     {
-                        FileName = targetPath,
-                        UseShellExecute = true
-                    });
-                    LogService.Instance.Log($"Opened mod file: {targetPath}");
+                        ShowError($"File not found: {filePath}");
+                        return;
+                    }
+
+                    if (OperatingSystem.IsWindows())
+                    {
+                        // Open Explorer and select the file
+                        Process.Start(new ProcessStartInfo
+                        {
+                            FileName = "explorer.exe",
+                            Arguments = $"/select,\"{filePath}\"",
+                            UseShellExecute = false
+                        });
+                    }
+                    else if (OperatingSystem.IsMacOS())
+                    {
+                        // Reveal in Finder
+                        Process.Start(new ProcessStartInfo
+                        {
+                            FileName = "open",
+                            Arguments = $"-R \"{filePath}\"",
+                            UseShellExecute = false
+                        });
+                    }
+                    else if (OperatingSystem.IsLinux())
+                    {
+                        // Best-effort: open containing folder with default file manager
+                        var directory = Path.GetDirectoryName(filePath) ?? ".";
+                        Process.Start(new ProcessStartInfo
+                        {
+                            FileName = "xdg-open",
+                            Arguments = $"\"{directory}\"",
+                            UseShellExecute = false
+                        });
+                    }
+                    else
+                    {
+                        ShowError("Opening files is not supported on this OS.");
+                    }
                 }
-                catch (System.Exception ex)
+                catch (Exception ex)
                 {
-                    LogService.Instance.Log($"Error opening mod file: {ex.Message}");
+                    ShowError($"Failed to open mod file: {ex.Message}");
                 }
             }
         }
 
-        private async void ShowAbout_Click(object? sender, RoutedEventArgs e)
+
+        private async void ShowError(string message)
         {
-            var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "Unknown";
-            var messageBox = new Window
-            {
-                Title = "About Factorio Mod Manager",
-                Width = 400,
-                Height = 200,
-                CanResize = false,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Content = new StackPanel
-                {
-                    Margin = new Avalonia.Thickness(20),
-                    Spacing = 10,
-                    Children =
-            {
-                new TextBlock { Text = "Factorio Mod Manager", FontSize = 18, FontWeight = Avalonia.Media.FontWeight.Bold },
-                new TextBlock { Text = $"Version {version}" },
-                new TextBlock { Text = "A modern mod manager for Factorio", TextWrapping = Avalonia.Media.TextWrapping.Wrap },
-                new Button { Content = "Close", HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center, Margin = new Avalonia.Thickness(0, 20, 0, 0) }
-            }
-                }
-            };
-
-            var closeButton = (Button)((StackPanel)messageBox.Content).Children[3];
-            closeButton.Click += (s, e) => messageBox.Close();
-
-            await messageBox.ShowDialog(this);
+            var dialog = new Dialogs.MessageBoxDialog("Error", message);
+            await dialog.ShowDialog(this);
         }
 
-
+        protected override void OnClosed(EventArgs e)
+        {
+            _mouseNavHandler?.Dispose();
+            base.OnClosed(e);
+        }
     }
 }

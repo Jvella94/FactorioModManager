@@ -1,51 +1,43 @@
 using Avalonia;
-using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
-using Avalonia.Data.Core.Plugins;
 using Avalonia.Markup.Xaml;
-using FactorioModManager.ViewModels.MainWindow;
+using FactorioModManager.Services.Infrastructure;
 using FactorioModManager.Views;
-using System.Linq;
+using System;
 
-namespace FactorioModManager;
-
-public partial class App : Application
+namespace FactorioModManager
 {
-    public override void Initialize()
+    public partial class App : Application
     {
-        AvaloniaXamlLoader.Load(this);
-    }
-
-    public override void OnFrameworkInitializationCompleted()
-    {
-        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        public override void Initialize()
         {
-            // Avoid duplicate validations from both Avalonia and the CommunityToolkit. 
-            // More info: https://docs.avaloniaui.net/docs/guides/development-guides/data-validation#manage-validationplugins
-            DisableAvaloniaDataAnnotationValidation();
-
-            desktop.MainWindow = new MainWindow
-            {
-                DataContext = new MainWindowVM(),
-            };
-
-            // ADDED: Close app when main window closes, regardless of other windows
-            desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
+            AvaloniaXamlLoader.Load(this);
         }
 
-        base.OnFrameworkInitializationCompleted();
-    }
-
-    private static void DisableAvaloniaDataAnnotationValidation()
-    {
-        // Get an array of plugins to remove
-        var dataValidationPluginsToRemove =
-            BindingPlugins.DataValidators.OfType<DataAnnotationsValidationPlugin>().ToArray();
-
-        // remove each entry found
-        foreach (var plugin in dataValidationPluginsToRemove)
+        public override void OnFrameworkInitializationCompleted()
         {
-            BindingPlugins.DataValidators.Remove(plugin);
+            if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+            {
+                try
+                {
+                    // Initialize service container
+                    var container = ServiceContainer.Instance;
+
+                    // Auto-prune logs older than 30 days on startup
+                    LogService.Instance.PruneOldLogs(30);
+                    // Log startup
+                    LogService.Instance.Log("Application starting...");
+
+                    desktop.MainWindow = new MainWindow();
+                }
+                catch (Exception ex)
+                {
+                    LogService.Instance.LogError($"Error during initialization: {ex.Message}");
+                    throw;
+                }
+            }
+
+            base.OnFrameworkInitializationCompleted();
         }
     }
 }

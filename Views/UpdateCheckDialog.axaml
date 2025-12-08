@@ -1,27 +1,42 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="FactorioModManager.Views.UpdateCheckDialog"
+        Classes="dialog"
         Title="Check for Updates"
-        Width="400" Height="200"
-        CanResize="False"
-        WindowStartupLocation="CenterOwner">
+        Width="450" Height="180">
 
-  <StackPanel Margin="20" Spacing="15">
-    <TextBlock Text="Check for mods updated in the last:" FontSize="14"/>
-    
-    <NumericUpDown Name="HoursInput"
-                   Value="1"
-                   Minimum="1"
-                   Maximum="168"
-                   Width="200"
-                   HorizontalAlignment="Left"/>
-    
-    <TextBlock Text="hour(s)" Margin="0,-10,0,0"/>
-    
-    <StackPanel Orientation="Horizontal" Spacing="10" 
-                HorizontalAlignment="Right" Margin="0,20,0,0">
-      <Button Content="Check" Click="CheckUpdates" Width="100"/>
-      <Button Content="Cancel" Click="Cancel" Width="100"/>
+  <StackPanel Classes="dialog-content">
+    <TextBlock Classes="dialog-label"
+               Text="Check for mods updated in the last:"/>
+
+    <StackPanel Orientation="Horizontal" Spacing="10">
+      <NumericUpDown Name="HoursInput"
+                     Classes="dialog-input"
+                     Value="1"
+                     Minimum="1"
+                     Maximum="168"
+                     Increment="1"
+                     FormatString="0"
+                     Width="120"
+                     Height="32"
+                     VerticalAlignment="Center"
+                     HorizontalContentAlignment="Center"/>
+
+      <TextBlock Text="hour(s)"
+                 VerticalAlignment="Center"
+                 Foreground="White"
+                 FontSize="14"/>
+    </StackPanel>
+
+    <StackPanel Classes="dialog-buttons">
+      <Button Classes="dialog-button"
+              Content="Check"
+              Click="CheckUpdates"
+              IsDefault="True"/>
+      <Button Classes="dialog-button"
+              Content="Cancel"
+              Click="Cancel"
+              IsCancel="True"/>
     </StackPanel>
   </StackPanel>
 </Window>

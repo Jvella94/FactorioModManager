@@ -4,10 +4,11 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using FactorioModManager.Models;
+using FactorioModManager.Services.Infrastructure;
 
 namespace FactorioModManager.Services
 {
-    public class ModGroupService
+    public class ModGroupService : IModGroupService
     {
         private readonly string _groupsFilePath;
         private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
@@ -48,7 +49,7 @@ namespace FactorioModManager.Services
             }
             catch (Exception ex)
             {
-                LogService.LogDebug($"Error saving groups: {ex.Message}");
+                LogService.Instance.LogDebug($"Error saving groups: {ex.Message}");
             }
         }
 

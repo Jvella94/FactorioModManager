@@ -3,7 +3,7 @@ using FactorioModManager.Services;
 
 namespace FactorioModManager.ViewModels.MainWindow
 {
-    public partial class MainWindowVM
+    public partial class MainWindowViewModel
     {
         private async Task OpenChangelogAsync()
         {
@@ -11,7 +11,7 @@ namespace FactorioModManager.ViewModels.MainWindow
 
             await Task.Run(async () =>
             {
-                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                _uiService.Post(() =>
                 {
                     StatusText = "Fetching changelog...";
                 });
@@ -21,7 +21,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                     var apiKey = _settingsService.GetApiKey();
                     var details = await _apiService.GetModDetailsAsync(SelectedMod.Name, apiKey);
 
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    _uiService.Post(() =>
                     {
                         if (details?.Changelog != null)
                         {
@@ -37,7 +37,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                 }
                 catch (System.Exception ex)
                 {
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    _uiService.Post(() =>
                     {
                         StatusText = $"Error fetching changelog: {ex.Message}";
                     });
@@ -51,7 +51,7 @@ namespace FactorioModManager.ViewModels.MainWindow
 
             await Task.Run(async () =>
             {
-                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                _uiService.Post(() =>
                 {
                     StatusText = "Fetching version history...";
                 });
@@ -61,7 +61,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                     var apiKey = _settingsService.GetApiKey();
                     var details = await _apiService.GetModDetailsAsync(SelectedMod.Name, apiKey);
 
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    _uiService.Post(() =>
                     {
                         if (details?.Releases != null && details.Releases.Count > 0)
                         {
@@ -77,42 +77,12 @@ namespace FactorioModManager.ViewModels.MainWindow
                 }
                 catch (System.Exception ex)
                 {
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    _uiService.Post(() =>
                     {
                         StatusText = $"Error fetching version history: {ex.Message}";
                     });
                 }
             });
-        }
-
-        private async Task OpenSettingsAsync()
-        {
-            await Task.Run(() =>
-            {
-                Avalonia.Threading.Dispatcher.UIThread.Post(async () =>
-                {
-                    var settingsWindow = new Views.SettingsWindow(_settingsService);
-
-                    var owner = Avalonia.Application.Current?.ApplicationLifetime
-                        is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
-                        ? desktop.MainWindow : null;
-
-                    if (owner != null)
-                    {
-                        var result = await settingsWindow.ShowDialog<bool>(owner);
-
-                        if (result)
-                        {
-                            StatusText = "Settings saved";
-                        }
-                    }
-                    else
-                    {
-                        StatusText = "Unable to open settings window";
-                    }
-                });
-            });
-        }
-
+        }        
     }
 }

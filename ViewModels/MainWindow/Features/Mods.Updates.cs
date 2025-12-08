@@ -1,6 +1,9 @@
-﻿using FactorioModManager.Services;
+﻿using FactorioModManager.Models;
+using FactorioModManager.Services;
+using FactorioModManager.Services.Infrastructure;
 using ReactiveUI;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
@@ -8,7 +11,7 @@ using System.Threading.Tasks;
 
 namespace FactorioModManager.ViewModels.MainWindow
 {
-    public partial class MainWindowVM
+    public partial class MainWindowViewModel
     {
         /// <summary>
         /// Checks if mods marked as having updates already have the latest version downloaded
@@ -19,7 +22,7 @@ namespace FactorioModManager.ViewModels.MainWindow
             {
                 try
                 {
-                    LogService.Instance.Log("Checking for already-downloaded updates...");
+                    _logService.Log("Checking for already-downloaded updates...");
 
                     var modsDirectory = ModPathHelper.GetModsDirectory();
                     var modsWithUpdates = Mods.Where(m => m.HasUpdate && !string.IsNullOrEmpty(m.LatestVersion)).ToList();
@@ -40,12 +43,12 @@ namespace FactorioModManager.ViewModels.MainWindow
                         if (File.Exists(latestVersionPath))
                         {
                             // Update was already downloaded externally
-                            LogService.Instance.Log($"Found already-downloaded update for {mod.Title}: {mod.LatestVersion}");
+                            _logService.Log($"Found already-downloaded update for {mod.Title}: {mod.LatestVersion}");
 
                             // Clear the update flag
                             _metadataService.ClearUpdate(mod.Name);
 
-                            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                            _uiService.Post(() =>
                             {
                                 mod.HasUpdate = false;
                                 mod.LatestVersion = null;
@@ -57,9 +60,9 @@ namespace FactorioModManager.ViewModels.MainWindow
 
                     if (clearedCount > 0)
                     {
-                        LogService.Instance.Log($"Cleared update flags for {clearedCount} already-downloaded mod(s)");
+                        _logService.Log($"Cleared update flags for {clearedCount} already-downloaded mod(s)");
 
-                        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                        _uiService.Post(() =>
                         {
                             this.RaisePropertyChanged(nameof(ModCountSummary));
                             StatusText = $"Found {clearedCount} already-downloaded update(s)";
@@ -68,10 +71,48 @@ namespace FactorioModManager.ViewModels.MainWindow
                 }
                 catch (Exception ex)
                 {
-                    LogService.LogDebug($"Error checking for already-downloaded updates: {ex.Message}");
+                    _logService.LogDebug($"Error checking for already-downloaded updates: {ex.Message}");
                 }
             });
         }
+
+        private bool CheckMandatoryDependencies(ModViewModel mod)
+        {
+            var missingDeps = new List<string>();
+
+            foreach (var dep in mod.Dependencies)
+            {
+                // Skip optional dependencies (start with ?)
+                if (dep.TrimStart().StartsWith('?') || dep.Contains("(?)"))
+                    continue;
+
+                // Skip game dependencies
+                var gameDeps = new[] { "base", "space-age", "quality", "elevated-rails" };
+                var depName = dep.Split([' ', '>', '<', '=', '!', '(', ')'], StringSplitOptions.RemoveEmptyEntries)[0];
+
+                if (gameDeps.Contains(depName, StringComparer.OrdinalIgnoreCase))
+                    continue;
+
+                // Check if dependency is installed
+                if (!Mods.Any(m => m.Name.Equals(depName, StringComparison.OrdinalIgnoreCase)))
+                {
+                    missingDeps.Add(depName);
+                }
+            }
+
+            if (missingDeps.Count > 0)
+            {
+                _uiService.Post(() =>
+                {
+                    StatusText = $"Missing dependencies for {mod.Title}: {string.Join(", ", missingDeps)}";
+                });
+                _logService.LogWarning($"Cannot update {mod.Title}: Missing mandatory dependencies: {string.Join(", ", missingDeps)}");
+                return false;
+            }
+
+            return true;
+        }
+
 
         private async Task DownloadUpdateAsync(ModViewModel? mod)
         {
@@ -80,17 +121,22 @@ namespace FactorioModManager.ViewModels.MainWindow
                 return;
             }
 
-            // Store the mod name to reselect after refresh
+            // Check dependencies first
+            if (!CheckMandatoryDependencies(mod))
+            {
+                return;
+            }
+
             var modName = mod.Name;
 
             await Task.Run(async () =>
             {
                 try
                 {
-                    LogService.Instance.Log($"Starting update for {mod.Title} from {mod.Version} to {mod.LatestVersion}");
+                    _logService.Log($"Starting update for {mod.Title} from {mod.Version} to {mod.LatestVersion}");
 
                     // Set downloading state
-                    await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                    await _uiService.InvokeAsync(() =>
                     {
                         mod.IsDownloading = true;
                         mod.HasDownloadProgress = false;
@@ -103,8 +149,8 @@ namespace FactorioModManager.ViewModels.MainWindow
 
                     if (modDetails?.Releases == null)
                     {
-                        LogService.Instance.Log($"Failed to fetch release details for {mod.Name}");
-                        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                        _logService.Log($"Failed to fetch release details for {mod.Name}", LogLevel.Error);
+                        _uiService.Post(() =>
                         {
                             mod.IsDownloading = false;
                             StatusText = $"Failed to fetch update details for {mod.Title}";
@@ -118,8 +164,8 @@ namespace FactorioModManager.ViewModels.MainWindow
 
                     if (latestRelease == null || string.IsNullOrEmpty(latestRelease.DownloadUrl))
                     {
-                        LogService.Instance.Log($"No download URL found for {mod.Name}");
-                        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                        _logService.Log($"No download URL found for {mod.Name}", LogLevel.Error);
+                        _uiService.Post(() =>
                         {
                             mod.IsDownloading = false;
                             StatusText = $"No download URL available for {mod.Title}";
@@ -127,166 +173,35 @@ namespace FactorioModManager.ViewModels.MainWindow
                         return;
                     }
 
-                    // Get username and token for download authentication
-                    var username = _settingsService.GetUsername();
-                    var token = _settingsService.GetToken();
+                    // Use the common download method with progress reporting
+                    var result = await DownloadModFromPortalAsync(
+                        mod.Name,
+                        mod.Title,
+                        latestRelease.Version,
+                        latestRelease.DownloadUrl,
+                        mod  // Pass mod for progress reporting
+                    );
 
-                    if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(token))
+                    if (!result.Success || !result.Value)
                     {
-                        LogService.Instance.Log("Download requires username and token from Factorio");
-                        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                        _uiService.Post(() =>
                         {
                             mod.IsDownloading = false;
-                            StatusText = $"Cannot download {mod.Title}: Missing Factorio credentials. Please check Settings.";
                         });
                         return;
                     }
 
-                    // Build download URL with authentication
-                    var downloadUrl = $"https://mods.factorio.com{latestRelease.DownloadUrl}?username={Uri.EscapeDataString(username)}&token={Uri.EscapeDataString(token)}";
+                    // Delete old versions if setting is enabled
                     var modsDirectory = ModPathHelper.GetModsDirectory();
-                    var newFileName = $"{mod.Name}_{latestRelease.Version}.zip";
-                    var newFilePath = Path.Combine(modsDirectory, newFileName);
+                    var newFilePath = Path.Combine(modsDirectory, $"{mod.Name}_{latestRelease.Version}.zip");
+                    DeleteOldModVersions(mod.Name, newFilePath);
 
-                    // Download file with progress reporting
-                    using (var httpClient = new HttpClient())
-                    {
-                        LogService.Instance.Log($"Downloading from {downloadUrl.Replace(token, "***")}");
-
-                        using var response = await httpClient.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead);
-
-                        if (!response.IsSuccessStatusCode)
-                        {
-                            LogService.Instance.Log($"Download failed: {response.StatusCode}");
-                            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                            {
-                                mod.IsDownloading = false;
-                                StatusText = $"Download failed for {mod.Title}: {response.StatusCode}";
-                            });
-                            return;
-                        }
-
-                        var totalBytes = response.Content.Headers.ContentLength ?? -1;
-
-                        using var contentStream = await response.Content.ReadAsStreamAsync();
-                        using var fileStream = new FileStream(newFilePath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true);
-
-                        var buffer = new byte[8192];
-                        long totalRead = 0;
-                        int bytesRead;
-
-                        while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
-                        {
-                            await fileStream.WriteAsync(buffer, 0, bytesRead);
-                            totalRead += bytesRead;
-
-                            if (totalBytes > 0)
-                            {
-                                var progressPercent = (double)totalRead / totalBytes * 100;
-                                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                                {
-                                    mod.HasDownloadProgress = true;
-                                    mod.DownloadProgress = progressPercent;
-                                    mod.DownloadStatusText = $"Downloading... {progressPercent:F0}%";
-                                });
-                            }
-                            else
-                            {
-                                // Indeterminate progress
-                                var mbDownloaded = totalRead / 1024.0 / 1024.0;
-                                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                                {
-                                    mod.DownloadStatusText = $"Downloading... {mbDownloaded:F2} MB";
-                                });
-                            }
-                        }
-                    }
-
-                    // Update UI after download completes
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                    {
-                        mod.DownloadStatusText = "Verifying download...";
-                        StatusText = $"Verifying download for {mod.Title}...";
-                    });
-
-                    // Verify the ZIP file is valid
-                    try
-                    {
-                        using var archive = System.IO.Compression.ZipFile.OpenRead(newFilePath);
-
-                        if (archive.Entries.Count == 0)
-                        {
-                            LogService.Instance.Log($"Downloaded ZIP file is empty for {mod.Name}");
-                            File.Delete(newFilePath);
-                            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                            {
-                                mod.IsDownloading = false;
-                                StatusText = $"Downloaded file is corrupted for {mod.Title}";
-                            });
-                            return;
-                        }
-
-                        var infoEntry = archive.Entries.FirstOrDefault(e =>
-                            e.FullName.EndsWith("info.json", StringComparison.OrdinalIgnoreCase));
-
-                        if (infoEntry == null)
-                        {
-                            LogService.Instance.Log($"Downloaded ZIP is missing info.json for {mod.Name}");
-                            File.Delete(newFilePath);
-                            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                            {
-                                mod.IsDownloading = false;
-                                StatusText = $"Downloaded file is invalid for {mod.Title}";
-                            });
-                            return;
-                        }
-
-                        LogService.Instance.Log($"ZIP file verified: {archive.Entries.Count} entries found");
-                    }
-                    catch (InvalidDataException ex)
-                    {
-                        LogService.Instance.Log($"Downloaded file is not a valid ZIP: {ex.Message}");
-                        if (File.Exists(newFilePath))
-                        {
-                            File.Delete(newFilePath);
-                        }
-                        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                        {
-                            mod.IsDownloading = false;
-                            StatusText = $"Downloaded file is corrupted for {mod.Title}";
-                        });
-                        return;
-                    }
-
-                    LogService.Instance.Log($"Successfully downloaded and verified {newFilePath}");
-
-                    var keepOldFiles = _settingsService.GetKeepOldModFiles();
-                    if (keepOldFiles == false)
-                    {
-                        // Delete old version
-                        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                        {
-                            mod.DownloadStatusText = "Removing old version...";
-                            StatusText = $"Removing old version of {mod.Title}...";
-                        });
-
-                        var oldFiles = Directory.GetFiles(modsDirectory, $"{mod.Name}_*.zip")
-                            .Where(f => !f.Equals(newFilePath, StringComparison.OrdinalIgnoreCase))
-                            .ToList();
-
-                        foreach (var oldFile in oldFiles)
-                        {
-                            File.Delete(oldFile);
-                            LogService.Instance.Log($"Deleted {Path.GetFileName(oldFile)}");
-                        }
-                    }
-
-                    LogService.Instance.Log($"Successfully updated {mod.Title} to version {latestRelease.Version}");
+                    _logService.Log($"Successfully updated {mod.Title} to version {latestRelease.Version}");
 
                     // Clear the update flag
                     _metadataService.UpdateLatestVersion(mod.Name, latestRelease.Version, hasUpdate: false);
 
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    _uiService.Post(() =>
                     {
                         mod.IsDownloading = false;
                         mod.DownloadStatusText = "Update complete!";
@@ -298,7 +213,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                     await RefreshModsAsync();
 
                     // Reselect the updated mod
-                    await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                    await _uiService.InvokeAsync(() =>
                     {
                         var updatedMod = Mods.FirstOrDefault(m => m.Name == modName);
                         if (updatedMod != null)
@@ -312,20 +227,20 @@ namespace FactorioModManager.ViewModels.MainWindow
                             }
 
                             StatusText = $"Successfully updated {updatedMod.Title} to {updatedMod.Version}";
-                            LogService.Instance.Log($"Reselected updated mod: {updatedMod.Title}");
+                            _logService.Log($"Reselected updated mod: {updatedMod.Title}");
                         }
                         else
                         {
                             StatusText = $"Update complete but could not find mod {modName}";
-                            LogService.Instance.Log($"Warning: Could not find mod {modName} after refresh");
+                            _logService.Log($"Warning: Could not find mod {modName} after refresh", LogLevel.Warning);
                         }
                     });
                 }
                 catch (Exception ex)
                 {
-                    LogService.Instance.Log($"Error updating {mod?.Title}: {ex.Message}");
-                    LogService.LogDebug($"Update error details: {ex}");
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    _logService.Log($"Error updating {mod?.Title}: {ex.Message}", LogLevel.Error);
+                    _logService.LogDebug($"Update error details: {ex}");
+                    _uiService.Post(() =>
                     {
                         if (mod != null)
                         {
@@ -340,9 +255,9 @@ namespace FactorioModManager.ViewModels.MainWindow
 
         internal async Task CheckForUpdatesAsync(string? apiKey, int hoursAgo = 1)
         {
-            LogService.Instance.Log($"Checking for updates from the last {hoursAgo} hour(s)...");
+            _logService.Log($"Checking for updates from the last {hoursAgo} hour(s)...");
 
-            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            _uiService.Post(() =>
             {
                 StatusText = "Fetching recently updated mods...";
             });
@@ -350,11 +265,11 @@ namespace FactorioModManager.ViewModels.MainWindow
             try
             {
                 var recentlyUpdatedModNames = await _apiService.GetRecentlyUpdatedModsAsync(hoursAgo, apiKey);
-                LogService.LogDebug($"Found {recentlyUpdatedModNames.Count} recently updated mods on portal");
+                _logService.LogDebug($"Found {recentlyUpdatedModNames.Count} recently updated mods on portal");
 
                 if (recentlyUpdatedModNames.Count == 0)
                 {
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    _uiService.Post(() =>
                     {
                         StatusText = "No recently updated mods found";
                     });
@@ -366,7 +281,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                     .Where(m => recentlyUpdatedModNames.Contains(m.Name))
                     .ToList();
 
-                LogService.Instance.Log($"Checking {installedRecentlyUpdated.Count} of your installed mods for updates");
+                _logService.Log($"Checking {installedRecentlyUpdated.Count} of your installed mods for updates");
 
                 var updateCount = 0;
                 var currentIndex = 0;
@@ -375,7 +290,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                 {
                     currentIndex++;
 
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    _uiService.Post(() =>
                     {
                         StatusText = $"Checking updates ({currentIndex}/{installedRecentlyUpdated.Count}): {mod.Title}";
                     });
@@ -397,13 +312,13 @@ namespace FactorioModManager.ViewModels.MainWindow
                                 {
                                     _metadataService.UpdateLatestVersion(mod.Name, latestVersion, hasUpdate: true);
 
-                                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                                    _uiService.Post(() =>
                                     {
                                         mod.HasUpdate = true;
                                         mod.LatestVersion = latestVersion;
                                     });
                                     updateCount++;
-                                    LogService.Instance.Log($"Update available for {mod.Title}: {mod.Version} → {latestVersion}");
+                                    _logService.Log($"Update available for {mod.Title}: {mod.Version} → {latestVersion}");
                                 }
                                 else
                                 {
@@ -416,16 +331,16 @@ namespace FactorioModManager.ViewModels.MainWindow
                     }
                     catch (Exception ex)
                     {
-                        LogService.LogDebug($"Error checking updates for {mod.Name}: {ex.Message}");
+                        _logService.LogDebug($"Error checking updates for {mod.Name}: {ex.Message}");
                     }
                 }
 
-                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                _uiService.Post(() =>
                 {
                     if (updateCount > 0)
                     {
                         StatusText = $"Found {updateCount} mod update(s) available";
-                        LogService.Instance.Log($"Update check complete: {updateCount} updates found");
+                        _logService.Log($"Update check complete: {updateCount} updates found");
 
                         // Update summary
                         this.RaisePropertyChanged(nameof(ModCountSummary));
@@ -433,14 +348,14 @@ namespace FactorioModManager.ViewModels.MainWindow
                     else
                     {
                         StatusText = "All mods are up to date";
-                        LogService.Instance.Log("All mods are up to date");
+                        _logService.Log("All mods are up to date");
                     }
                 });
             }
             catch (Exception ex)
             {
-                LogService.Instance.Log($"Error during update check: {ex.Message}");
-                LogService.LogDebug($"Error in CheckForUpdatesAsync: {ex}");
+                _logService.Log($"Error during update check: {ex.Message}");
+                _logService.LogDebug($"Error in CheckForUpdatesAsync: {ex}");
             }
         }
 
@@ -450,7 +365,7 @@ namespace FactorioModManager.ViewModels.MainWindow
 
             await Task.Run(async () =>
             {
-                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                _uiService.Post(() =>
                 {
                     StatusText = $"Checking for update: {SelectedMod.Title}...";
                 });
@@ -474,7 +389,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                             {
                                 _metadataService.UpdateLatestVersion(SelectedMod.Name, latestVersion, hasUpdate: true);
 
-                                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                                _uiService.Post(() =>
                                 {
                                     SelectedMod.HasUpdate = true;
                                     SelectedMod.LatestVersion = latestVersion;
@@ -485,7 +400,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                             else
                             {
                                 _metadataService.UpdateLatestVersion(SelectedMod.Name, latestVersion, hasUpdate: false);
-                                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                                _uiService.Post(() =>
                                 {
                                     SelectedMod.HasUpdate = false;
                                     SelectedMod.LatestVersion = null;
@@ -497,7 +412,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                     }
                     else
                     {
-                        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                        _uiService.Post(() =>
                         {
                             StatusText = $"No release information found for {SelectedMod.Title}";
                         });
@@ -505,8 +420,8 @@ namespace FactorioModManager.ViewModels.MainWindow
                 }
                 catch (Exception ex)
                 {
-                    LogService.LogDebug($"Error checking update for {SelectedMod.Name}: {ex.Message}");
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    _logService.LogDebug($"Error checking update for {SelectedMod.Name}: {ex.Message}");
+                    _uiService.Post(() =>
                     {
                         StatusText = $"Error checking update for {SelectedMod.Title}";
                     });

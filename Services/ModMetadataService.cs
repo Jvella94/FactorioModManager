@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Diagnostics;
+using FactorioModManager.Services.Infrastructure;
 
 namespace FactorioModManager.Services
 {
@@ -24,7 +25,7 @@ namespace FactorioModManager.Services
         public List<ModMetadata> Metadata { get; set; } = [];
     }
 
-    public class ModMetadataService
+    public class ModMetadataService : IModMetadataService
     {
         private readonly string _metadataPath;
         private Dictionary<string, ModMetadata> _cache = [];
@@ -55,7 +56,7 @@ namespace FactorioModManager.Services
             }
             catch (Exception ex)
             {
-                LogService.LogDebug($"Error loading metadata: {ex.Message}");
+                LogService.Instance.LogDebug($"Error loading metadata: {ex.Message}");
             }
         }
 
@@ -72,7 +73,7 @@ namespace FactorioModManager.Services
             }
             catch (Exception ex)
             {
-                LogService.LogDebug($"Error saving metadata: {ex.Message}");
+                LogService.Instance.LogDebug($"Error saving metadata: {ex.Message}");
             }
         }
 
@@ -121,7 +122,7 @@ namespace FactorioModManager.Services
             metadata.LastChecked = DateTime.UtcNow;
             SaveMetadata();
 
-            LogService.LogDebug($"Saved source URL for {modName}: {sourceUrl ?? "null"}");
+            LogService.Instance.LogDebug($"Saved source URL for {modName}: {sourceUrl ?? "null"}");
             LogService.Instance.Log($"Saved source URL for {modName}: {sourceUrl ?? "(none)"}");
         }
 
@@ -205,7 +206,7 @@ namespace FactorioModManager.Services
                 metadata.HasUpdate = false;
                 metadata.LatestVersion = null;
                 SaveMetadata();
-                LogService.LogDebug($"Cleared update flag for {modName}");
+                LogService.Instance.LogDebug($"Cleared update flag for {modName}");
             }
         }
 
@@ -227,7 +228,7 @@ namespace FactorioModManager.Services
                 metadata.HasUpdate = false;
             }
             SaveMetadata();
-            LogService.LogDebug("Cleared all update flags");
+            LogService.Instance.LogDebug("Cleared all update flags");
         }
 
     }

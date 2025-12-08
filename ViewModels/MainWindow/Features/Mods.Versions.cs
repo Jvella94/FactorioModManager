@@ -1,4 +1,5 @@
 ﻿using FactorioModManager.Services;
+using FactorioModManager.Services.Infrastructure;
 using ReactiveUI;
 using System;
 using System.IO;
@@ -6,11 +7,9 @@ using System.Linq;
 
 namespace FactorioModManager.ViewModels.MainWindow
 {
-    public partial class MainWindowVM
+    public partial class MainWindowViewModel
     {
-#pragma warning disable CA1822 // Mark members as static
         private void LoadModVersions(ModViewModel mod)
-#pragma warning restore CA1822 // Mark members as static
         {
             try
             {
@@ -41,7 +40,7 @@ namespace FactorioModManager.ViewModels.MainWindow
             }
             catch (Exception ex)
             {
-                LogService.LogDebug($"Error loading versions for {mod.Name}: {ex.Message}");
+                _logService.LogDebug($"Error loading versions for {mod.Name}: {ex.Message}");
             }
         }
 
@@ -56,7 +55,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                 return;
             }
 
-            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            _uiService.Post(() =>
             {
                 try
                 {
@@ -68,7 +67,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                         if (File.Exists(filePath))
                         {
                             File.Delete(filePath);
-                            LogService.Instance.Log($"Deleted old version: {Path.GetFileName(filePath)}");
+                            _logService.Log($"Deleted old version: {Path.GetFileName(filePath)}");
 
                             // Reload versions
                             LoadModVersions(mod);
@@ -80,7 +79,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                 catch (Exception ex)
                 {
                     StatusText = $"Error deleting old version: {ex.Message}";
-                    LogService.Instance.Log($"Error: {ex.Message}");
+                    _logService.Log($"Error: {ex.Message}");
                 }
             });
         }

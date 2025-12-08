@@ -1,0 +1,147 @@
+﻿using System;
+using System.Collections.Generic;
+
+namespace FactorioModManager
+{
+    /// <summary>
+    /// Application-wide constants for Factorio Mod Manager
+    /// </summary>
+    public static class Constants
+    {
+        /// <summary>
+        /// Official Factorio game dependencies
+        /// </summary>
+        public static class GameDependencies
+        {
+            /// <summary>
+            /// List of all official game dependencies that come with Factorio
+            /// </summary>
+            public static readonly HashSet<string> All = new(StringComparer.OrdinalIgnoreCase)
+            {
+                "base",
+                "space-age",
+                "quality",
+                "elevated-rails"
+            };
+
+            /// <summary>
+            /// Checks if a dependency name is an official game dependency
+            /// </summary>
+            /// <param name="dependencyName">The dependency name to check</param>
+            /// <returns>True if it's a game dependency, false otherwise</returns>
+            public static bool IsGameDependency(string dependencyName)
+            {
+                return All.Contains(dependencyName);
+            }
+        }
+
+        /// <summary>
+        /// Character separators used for parsing strings
+        /// </summary>
+        public static class Separators
+        {
+            /// <summary>
+            /// Characters used to separate dependency names from version constraints
+            /// Example: "base >= 2.0" splits into ["base", "2.0"]
+            /// </summary>
+            public static readonly char[] Dependency = [' ', '>', '<', '=', '!', '?', '(', ')'];
+        }
+
+        /// <summary>
+        /// URLs for Factorio mod portal and API
+        /// </summary>
+        public static class Urls
+        {
+            /// <summary>
+            /// Base URL for the Factorio mod portal
+            /// </summary>
+            public const string ModPortalBase = "https://mods.factorio.com";
+
+            /// <summary>
+            /// Gets the mod portal URL for a specific mod
+            /// </summary>
+            /// <param name="modName">The internal name of the mod</param>
+            /// <returns>Full URL to the mod's portal page</returns>
+            public static string GetModUrl(string modName) => $"{ModPortalBase}/mod/{modName}";
+
+            /// <summary>
+            /// Gets the authenticated download URL for a mod
+            /// </summary>
+            /// <param name="downloadPath">The download path from the API</param>
+            /// <param name="username">Factorio username</param>
+            /// <param name="token">Authentication token</param>
+            /// <returns>Full download URL with authentication parameters</returns>
+            public static string GetModDownloadUrl(string downloadPath, string username, string token)
+                => $"{ModPortalBase}{downloadPath}?username={Uri.EscapeDataString(username)}&token={Uri.EscapeDataString(token)}";
+        }
+
+        /// <summary>
+        /// Throttle delays for UI operations (in milliseconds)
+        /// </summary>
+        public static class Throttle
+        {
+            /// <summary>
+            /// Delay for mod search text input (300ms)
+            /// </summary>
+            public const int SearchMs = 300;
+
+            /// <summary>
+            /// Delay for author search text input (200ms)
+            /// </summary>
+            public const int AuthorSearchMs = 200;
+        }
+
+        /// <summary>
+        /// File system related constants
+        /// </summary>
+        public static class FileSystem
+        {
+            /// <summary>
+            /// File pattern for mod files (*.zip)
+            /// </summary>
+            public const string ModFilePattern = "*.zip";
+
+            /// <summary>
+            /// Name of the mod info file (info.json)
+            /// </summary>
+            public const string InfoJsonFileName = "info.json";
+
+            /// <summary>
+            /// Name of the mod list file (mod-list.json)
+            /// </summary>
+            public const string ModListFileName = "mod-list.json";
+        }
+
+        /// <summary>
+        /// UI-related constants
+        /// </summary>
+        public static class UI
+        {
+            /// <summary>
+            /// Default group name for mods without a group
+            /// </summary>
+            public const string DefaultGroupName = "N/A";
+
+            /// <summary>
+            /// Buffer size for file operations (8KB)
+            /// </summary>
+            public const int BufferSize = 8192;
+        }
+
+        /// <summary>
+        /// Cache lifetime settings
+        /// </summary>
+        public static class Cache
+        {
+            /// <summary>
+            /// How long to cache API responses (5 minutes)
+            /// </summary>
+            public static readonly TimeSpan ApiCacheLifetime = TimeSpan.FromMinutes(5);
+
+            /// <summary>
+            /// How long to cache mod metadata (24 hours)
+            /// </summary>
+            public static readonly TimeSpan MetadataCacheLifetime = TimeSpan.FromDays(90);
+        }
+    }
+}
