@@ -1,4 +1,5 @@
 ﻿using FactorioModManager.Models.API;
+using FactorioModManager.Models.DTO;
 using FactorioModManager.Services;
 using FactorioModManager.Services.API;
 using FactorioModManager.ViewModels;
@@ -14,11 +15,10 @@ namespace FactorioModManager.Views
             InitializeComponent();
         }
 
-        public VersionHistoryWindow(string modTitle, string modName, List<ModReleaseDto> releases) : this()
+        public VersionHistoryWindow(string modTitle, string modName, List<ReleaseDTO> releases) : this()
         {
             var vm = new VersionHistoryViewModel(
                ServiceContainer.Instance.Resolve<IModService>(),
-               ServiceContainer.Instance.Resolve<IFactorioApiService>(),
                modTitle, modName, releases);  // ✅ Pass modName
             DataContext = vm;
 

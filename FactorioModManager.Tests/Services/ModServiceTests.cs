@@ -28,7 +28,8 @@ namespace FactorioModManager.Tests.Services
             // ✅ EXACT ModService constructor call
             _modService = new ModService(
                 _mockSettingsService.Object,    // ISettingsService
-                _mockLogService.Object          // ILogService
+                _mockLogService.Object,          // ILogService
+                new HttpClient()
             );
         }
 
@@ -75,7 +76,7 @@ namespace FactorioModManager.Tests.Services
             modsPath.Should().Be(_testModsDir);
         }
 
-        private void CreateTestModZip(string zipPath)
+        private static void CreateTestModZip(string zipPath)
         {
             using var archive = ZipFile.Open(zipPath, ZipArchiveMode.Create);
             var infoJson = """
@@ -102,6 +103,7 @@ namespace FactorioModManager.Tests.Services
             {
                 Directory.Delete(_testModsDir, true);
             }
+            GC.SuppressFinalize(this);
         }
     }
 }

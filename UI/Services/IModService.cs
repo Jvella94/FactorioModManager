@@ -1,6 +1,7 @@
 ﻿using FactorioModManager.Models;
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace FactorioModManager.Services
@@ -15,11 +16,9 @@ namespace FactorioModManager.Services
 
         string GetModsDirectory();
 
-        Task DownloadVersionAsync(string modName, string version, string v);
+        Task DownloadVersionAsync(string modName, string version, string downloadUrl, CancellationToken cancellationToken = default);
 
         void DeleteVersion(string modName, string version);
-
-        void RefreshInstalledCounts(string modName);
 
         HashSet<string> GetInstalledVersions(string modName);
 

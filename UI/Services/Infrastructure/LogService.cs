@@ -38,13 +38,13 @@ namespace FactorioModManager.Services.Infrastructure
 
         public void LogWarning(string message) => LogInternal(message, LogLevel.Warning);
 
-        public void LogError(string message) => LogInternal(message, LogLevel.Error);
+        public void LogError(string message, Exception exception) => LogInternal(message, LogLevel.Error);
 
         private void LogInternal(string message, LogLevel level)
         {
             var entry = new LogEntry
             {
-                Timestamp = DateTime.Now,
+                Timestamp = DateTime.UtcNow,
                 Level = level,
                 Message = message
             };
@@ -169,7 +169,7 @@ namespace FactorioModManager.Services.Infrastructure
 
                     var archivePath = Path.Combine(
                         Path.GetDirectoryName(_logFilePath)!,
-                        $"application_{DateTime.Now:yyyyMMdd_HHmmss}.log");
+                        $"application_{DateTime.UtcNow:yyyyMMdd_HHmmss}.log");
 
                     File.Move(_logFilePath, archivePath);
                 }
@@ -186,7 +186,7 @@ namespace FactorioModManager.Services.Infrastructure
         {
             try
             {
-                var cutoff = DateTime.Now.AddDays(-daysToKeep);
+                var cutoff = DateTime.UtcNow.AddDays(-daysToKeep);
 
                 // Rebuild file from recent logs
                 lock (_fileLock)

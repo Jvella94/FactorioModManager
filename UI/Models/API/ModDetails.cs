@@ -28,7 +28,7 @@ namespace FactorioModManager.Models.API
         public int DownloadsCount { get; set; }
 
         [JsonPropertyName("releases")]
-        public List<ModReleaseDto> Releases { get; set; } = [];
+        public List<ModRelease> Releases { get; set; } = [];
 
         [JsonPropertyName("thumbnail")]
         public string? Thumbnail { get; set; }

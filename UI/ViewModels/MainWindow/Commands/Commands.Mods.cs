@@ -24,7 +24,6 @@ namespace FactorioModManager.ViewModels.MainWindow
         public ReactiveCommand<Unit, Unit> CheckSingleModUpdateCommand { get; private set; } = null!;
         public ReactiveCommand<ModViewModel, Unit> ViewDependentsCommand { get; private set; } = null!;
 
-
         private void InitializeModCommands()
         {
             RefreshModsCommand = ReactiveCommand.CreateFromTask(RefreshModsAsync);
@@ -40,8 +39,7 @@ namespace FactorioModManager.ViewModels.MainWindow
             DownloadUpdateCommand = ReactiveCommand.CreateFromTask<ModViewModel>(mod => DownloadUpdateAsync(mod));
             DeleteOldVersionCommand = ReactiveCommand.Create<ModViewModel>(mod => DeleteOldVersion(mod));
             CheckSingleModUpdateCommand = ReactiveCommand.CreateFromTask(CheckSingleModUpdateAsync);
-            ViewDependentsCommand = ReactiveCommand.CreateFromTask<ModViewModel?>(ViewDependentsAsync);
-
+            ViewDependentsCommand = ReactiveCommand.CreateFromTask<ModViewModel>(ViewDependentsAsync);
         }
 
         private void OpenModFolder()
@@ -194,7 +192,7 @@ namespace FactorioModManager.ViewModels.MainWindow
 
                     if (modDetails?.Releases == null || modDetails.Releases.Count == 0)
                     {
-                        _logService.LogError($"Failed to fetch release details for {modName}");
+                        _logService.LogWarning($"Failed to fetch release details for {modName}");
                         _uiService.Post(() =>
                         {
                             StatusText = $"Failed to fetch mod details for {modName}";
@@ -209,7 +207,7 @@ namespace FactorioModManager.ViewModels.MainWindow
 
                     if (latestRelease == null || string.IsNullOrEmpty(latestRelease.DownloadUrl))
                     {
-                        _logService.LogError($"No download URL found for {modName}");
+                        _logService.LogWarning($"No download URL found for {modName}");
                         _uiService.Post(() =>
                         {
                             StatusText = $"No download URL available for {modName}";
@@ -243,7 +241,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                 }
                 catch (Exception ex)
                 {
-                    _logService.LogError($"Error installing mod from URL: {ex.Message}");
+                    _logService.LogError($"Error installing mod from URL: {ex.Message}", ex);
                     _uiService.Post(() =>
                     {
                         StatusText = $"Error installing mod: {ex.Message}";

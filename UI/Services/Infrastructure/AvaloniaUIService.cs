@@ -55,14 +55,15 @@ namespace FactorioModManager.Services.Infrastructure
             await window.ShowDialog(GetMainWindow());
         }
 
-#pragma warning disable CA1822 // Mark members as static
-        private Window GetMainWindow()
-#pragma warning restore CA1822 // Mark members as static
+        private static Window GetMainWindow()
         {
-            return Avalonia.Application.Current?.ApplicationLifetime
+            if (Avalonia.Application.Current?.ApplicationLifetime
                 is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
-                ? desktop.MainWindow!
-                : null!;
+                && desktop.MainWindow is { } window)
+            {
+                return window;
+            }
+            throw new InvalidOperationException("Main window not available");
         }
     }
 }

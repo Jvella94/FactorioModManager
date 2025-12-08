@@ -1,4 +1,5 @@
 ﻿using FactorioModManager.Models.API;
+using FactorioModManager.Models.DTO;
 using FactorioModManager.Services;
 using FactorioModManager.Services.API;
 using FactorioModManager.Services.Infrastructure;
@@ -17,7 +18,6 @@ namespace FactorioModManager.ViewModels
     public class VersionHistoryViewModel : ReactiveObject
     {
         private readonly IModService _modService;
-        private readonly IFactorioApiService _apiService;
 
         public string ModTitle { get; }
         public string ModName { get; }  // ✅ Store mod name
@@ -26,11 +26,10 @@ namespace FactorioModManager.ViewModels
 
         public ReactiveCommand<VersionHistoryReleaseViewModel, Unit> ActionCommand { get; }
 
-        public VersionHistoryViewModel(IModService modService, IFactorioApiService apiService,
-                                     string modTitle, string modName, List<ModReleaseDto> releases)
+        public VersionHistoryViewModel(IModService modService,
+                                     string modTitle, string modName, List<ReleaseDTO> releases)
         {
             _modService = modService;
-            _apiService = apiService;
             ModTitle = modTitle;
             ModName = modName;
 
@@ -63,7 +62,6 @@ namespace FactorioModManager.ViewModels
             {
                 _modService.DeleteVersion(ModName, release.Version);
                 release.IsInstalled = false;
-                release.InfoJson = null;
 
                 // ✅ Notify parent mod to refresh count
                 NotifyParentModInstalledCountChanged();
@@ -72,7 +70,7 @@ namespace FactorioModManager.ViewModels
             }
             catch (Exception ex)
             {
-                LogService.Instance.LogError($"Delete failed: {ex.Message}");
+                LogService.Instance.LogError($"Delete failed: {ex.Message}", ex);
             }
             finally
             {
@@ -95,7 +93,6 @@ namespace FactorioModManager.ViewModels
                 if (File.Exists(expectedFile))
                 {
                     release.IsInstalled = true;
-                    release.InfoJson = release.ExtractInfoJsonFromZip(expectedFile);
                 }
                 NotifyParentModInstalledCountChanged();
 
@@ -103,7 +100,7 @@ namespace FactorioModManager.ViewModels
             }
             catch (Exception ex)
             {
-                LogService.Instance.LogError($"Download failed: {ex.Message}");
+                LogService.Instance.LogError($"Download failed: {ex.Message}", ex);
             }
             finally
             {
@@ -124,7 +121,7 @@ namespace FactorioModManager.ViewModels
             LogService.Instance.Log($"Updated {Releases.Count} releases for {ModName}");
             // Option 1: Raise event or use messenger service
             // Option 2: Refresh via ModService
-            ServiceContainer.Instance.Resolve<IModService>().RefreshInstalledCounts(ModName);
+            ServiceContainer.Instance.Resolve<IModService>().RefreshInstalledVersions(ModName);
         }
     }
 }

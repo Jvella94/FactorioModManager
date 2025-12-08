@@ -24,7 +24,7 @@ namespace FactorioModManager.ViewModels.MainWindow
 
                 if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(token))
                 {
-                    _logService.LogError("Download requires username and token from Factorio");
+                    _logService.LogWarning("Download requires username and token from Factorio");
                     await _uiService.InvokeAsync(() =>
                     {
                         StatusText = $"Cannot download {modTitle}: Missing Factorio credentials. Please check Settings.";
@@ -52,7 +52,7 @@ namespace FactorioModManager.ViewModels.MainWindow
             }
             catch (Exception ex)
             {
-                _logService.LogError($"Error downloading {modTitle}: {ex.Message}");
+                _logService.LogError($"Error downloading {modTitle}: {ex.Message}", ex);
                 await _uiService.InvokeAsync(() =>
                 {
                     StatusText = $"Error downloading {modTitle}: {ex.Message}";
@@ -77,7 +77,7 @@ namespace FactorioModManager.ViewModels.MainWindow
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    _logService.LogError($"Download failed: {response.StatusCode}");
+                    _logService.LogWarning($"Download failed: {response.StatusCode}");
                     await _uiService.InvokeAsync(() =>
                     {
                         StatusText = $"Download failed for {displayName}: {response.StatusCode}";
@@ -133,7 +133,7 @@ namespace FactorioModManager.ViewModels.MainWindow
             }
             catch (Exception ex)
             {
-                _logService.LogError($"Error during file download: {ex.Message}");
+                _logService.LogError($"Error during file download: {ex.Message}", ex);
 
                 if (modForProgress != null)
                 {
@@ -162,14 +162,14 @@ namespace FactorioModManager.ViewModels.MainWindow
             {
                 if (!File.Exists(filePath))
                 {
-                    _logService.LogError($"Downloaded file does not exist: {filePath}");
+                    _logService.LogWarning($"Downloaded file does not exist: {filePath}");
                     return Result<bool>.Fail("File not found", ErrorCode.FileNotFound);
                 }
 
                 var fileInfo = new FileInfo(filePath);
                 if (fileInfo.Length == 0)
                 {
-                    _logService.LogError($"Downloaded file is empty: {filePath}");
+                    _logService.LogWarning($"Downloaded file is empty: {filePath}");
                     await _uiService.InvokeAsync(() =>
                     {
                         StatusText = $"Downloaded file is empty for {displayName}";
@@ -188,7 +188,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                 if (contentPreview.Contains("<!DOCTYPE", StringComparison.OrdinalIgnoreCase) ||
                     contentPreview.Contains("<html", StringComparison.OrdinalIgnoreCase))
                 {
-                    _logService.LogError($"Downloaded file is HTML (invalid credentials?)");
+                    _logService.LogWarning($"Downloaded file is HTML (invalid credentials?)");
                     await _uiService.InvokeAsync(() =>
                     {
                         StatusText = $"Download failed for {displayName} - Invalid credentials. Please check Settings.";
@@ -201,7 +201,7 @@ namespace FactorioModManager.ViewModels.MainWindow
 
                 if (archive.Entries.Count == 0)
                 {
-                    _logService.LogError($"Downloaded ZIP file is empty: {filePath}");
+                    _logService.LogWarning($"Downloaded ZIP file is empty: {filePath}");
                     File.Delete(filePath);
                     await _uiService.InvokeAsync(() =>
                     {
@@ -215,7 +215,7 @@ namespace FactorioModManager.ViewModels.MainWindow
 
                 if (infoEntry == null)
                 {
-                    _logService.LogError($"Downloaded ZIP is missing info.json: {filePath}");
+                    _logService.LogWarning($"Downloaded ZIP is missing info.json: {filePath}");
                     File.Delete(filePath);
                     await _uiService.InvokeAsync(() =>
                     {
@@ -229,7 +229,7 @@ namespace FactorioModManager.ViewModels.MainWindow
             }
             catch (InvalidDataException ex)
             {
-                _logService.LogError($"Downloaded file is not a valid ZIP: {ex.Message}");
+                _logService.LogError($"Downloaded file is not a valid ZIP: {ex.Message}", ex);
                 if (File.Exists(filePath))
                 {
                     File.Delete(filePath);
@@ -242,7 +242,7 @@ namespace FactorioModManager.ViewModels.MainWindow
             }
             catch (Exception ex)
             {
-                _logService.LogError($"Error verifying downloaded file: {ex.Message}");
+                _logService.LogError($"Error verifying downloaded file: {ex.Message}", ex);
                 return Result<bool>.Fail(ex.Message, ErrorCode.UnexpectedError);
             }
         }
@@ -277,7 +277,7 @@ namespace FactorioModManager.ViewModels.MainWindow
             }
             catch (Exception ex)
             {
-                _logService.LogError($"Error installing mod from file: {ex.Message}");
+                _logService.LogError($"Error installing mod from file: {ex.Message}", ex);
                 await _uiService.InvokeAsync(() =>
                 {
                     StatusText = $"Error installing mod: {ex.Message}";

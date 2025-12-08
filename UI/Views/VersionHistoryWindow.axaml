@@ -32,7 +32,7 @@
 
         <DataGridTextColumn Header="Factorio Version"
                             Binding="{Binding FactorioVersion}"
-                            Width="130"/>
+                            Width="150"/>
 
         <DataGridTemplateColumn Header="Action" Width="140">
           <DataGridTemplateColumn.CellTemplate>

@@ -10,7 +10,7 @@ namespace FactorioModManager.Tests.Services
 
         public FactorioApiServiceTests()
         {
-            _factorioApiService = new FactorioApiService();
+            _factorioApiService = new FactorioApiService(new HttpClient());
         }
 
         [Fact]

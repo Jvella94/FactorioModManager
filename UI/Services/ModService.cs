@@ -7,14 +7,16 @@ using System.IO.Compression;
 using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace FactorioModManager.Services
 {
-    public class ModService(ISettingsService _settingsService, ILogService _logService) : IModService
+    public class ModService(ISettingsService _settingsService, ILogService _logService, HttpClient httpClient) : IModService
     {
         private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
-        private readonly Dictionary<string, HashSet<string>> _installedVersions = new();  // modName → versions
+        private readonly Dictionary<string, HashSet<string>> _installedVersions = [];  // modName → versions
+        private readonly HttpClient _httpClient = httpClient;
 
         public string GetModsDirectory()
         {
@@ -39,7 +41,7 @@ namespace FactorioModManager.Services
 
             var mods = new List<(ModInfo, bool, DateTime?, string?, string)>();
 
-            // 1) ZIP mods 
+            // 1) ZIP mods
             var modFiles = Directory.GetFiles(modsDirectory, Constants.FileSystem.ModFilePattern);
             foreach (var modFile in modFiles)
             {
@@ -164,42 +166,27 @@ namespace FactorioModManager.Services
             }
         }
 
-        public async Task DownloadVersionAsync(string modName, string version, string downloadUrl)
+        public async Task DownloadVersionAsync(string modName, string version, string downloadUrl, CancellationToken cancellationToken = default)
         {
             var modsDir = _settingsService.GetModsPath();
-            var exactFileName = $"{modName}_{version}.zip";
             var zipPath = Path.Combine(modsDir, $"{modName}_{version}.zip");
 
             using var httpClient = new HttpClient();
-            using var downloadStream = await httpClient.GetStreamAsync(downloadUrl);
+            using var downloadStream = await _httpClient.GetStreamAsync(downloadUrl, cancellationToken);
             using var fileStream = new FileStream(zipPath, FileMode.Create);
 
             var buffer = new byte[8192];
             int bytesRead;
             long totalBytes = 0;
 
-            while ((bytesRead = await downloadStream.ReadAsync(buffer)) > 0)
+            while ((bytesRead = await downloadStream.ReadAsync(buffer, cancellationToken)) > 0)
             {
-                await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead));
+                await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken);
                 totalBytes += bytesRead;
                 // Report progress to caller if needed
             }
             RefreshInstalledVersions(modName);
             _logService.Log($"Downloaded {modName} v{version} to {zipPath}");
-        }
-
-        public async Task<int> RefreshInstalledCount(string modName)
-        {
-            var modsDir = GetModsDirectory();
-            var modFiles = Directory.GetFiles(modsDir, $"{modName}_*.zip");  // modname_*.zip
-            return modFiles.Length;
-        }
-
-        public void RefreshInstalledCounts(string modName)
-        {
-            // Notify all ModViewModels to refresh their counts
-            // Or broadcast via messenger/event aggregator
-            LogService.Instance.Log($"Refresh count for {modName}");
         }
 
         public void DeleteVersion(string modName, string version)
@@ -221,7 +208,7 @@ namespace FactorioModManager.Services
             {
                 RefreshInstalledVersions(modName);
             }
-            return _installedVersions.GetValueOrDefault(modName, new HashSet<string>());
+            return _installedVersions.GetValueOrDefault(modName, []);
         }
 
         public void RefreshInstalledVersions(string modName)

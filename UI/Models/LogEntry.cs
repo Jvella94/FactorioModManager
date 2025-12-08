@@ -10,7 +10,7 @@ namespace FactorioModManager.Models
         Debug
     }
 
-    public class LogEntry
+    public record LogEntry
     {
         public DateTime Timestamp { get; set; }
         public string Message { get; set; } = string.Empty;

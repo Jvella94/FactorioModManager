@@ -1,5 +1,6 @@
 ﻿using FactorioModManager.Models;
 using FactorioModManager.Models.API;
+using FactorioModManager.Models.DTO;
 using FactorioModManager.Services;
 using FactorioModManager.Services.Infrastructure;
 using ReactiveUI;
@@ -14,24 +15,16 @@ namespace FactorioModManager.ViewModels
     public class VersionHistoryReleaseViewModel : ReactiveObject
     {
         private readonly IModService _modService;
-        private readonly string _modName;
         private bool _isInstalling;
         private double _downloadProgress;
         private bool _isInstalled;
-        private ModInfo? _infoJson;
 
-        public ModReleaseDto Release { get; }
+        public ReleaseDTO Release { get; }
 
         public string Version => Release.Version;
         public DateTime ReleasedAt => Release.ReleasedAt;
 
-        public ModInfo? InfoJson
-        {
-            get => _infoJson;
-            set => this.RaiseAndSetIfChanged(ref _infoJson, value);
-        }
-
-        public string? FactorioVersion => InfoJson?.FactorioVersion;
+        public string? FactorioVersion => Release.FactorioVersion ?? string.Empty;
         public string? DownloadUrl => Release.DownloadUrl;
 
         public bool IsInstalling
@@ -54,11 +47,10 @@ namespace FactorioModManager.ViewModels
 
         public bool CanDeleteOrDownload => !IsInstalling;
 
-        public VersionHistoryReleaseViewModel(ModReleaseDto release, IModService modService, string modName)
+        public VersionHistoryReleaseViewModel(ReleaseDTO release, IModService modService, string modName)
         {
             Release = release;
             _modService = modService;
-            _modName = modName;  // ✅ Use passed modName
             IsInstalled = _modService.GetInstalledVersions(modName).Contains(release.Version);
         }
 
@@ -83,7 +75,7 @@ namespace FactorioModManager.ViewModels
             }
             catch (Exception ex)
             {
-                LogService.Instance.LogError($"Failed to extract info.json from {Path.GetFileName(zipPath)}: {ex.Message}");
+                LogService.Instance.LogError($"Failed to extract info.json from {Path.GetFileName(zipPath)}: {ex.Message}", ex);
             }
             return null;
         }

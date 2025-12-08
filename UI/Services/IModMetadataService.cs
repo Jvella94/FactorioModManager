@@ -1,4 +1,6 @@
-﻿namespace FactorioModManager.Services
+﻿using System.Collections.Generic;
+
+namespace FactorioModManager.Services
 {
     public interface IModMetadataService
     {
@@ -23,5 +25,9 @@
         bool NeedsSourceUrlCheck(string modName);
 
         void MarkAsChecked(string modName);
+
+        void EnsureModsExist(IEnumerable<string> modNames);
+
+        void ClearAllUpdates();
     }
 }

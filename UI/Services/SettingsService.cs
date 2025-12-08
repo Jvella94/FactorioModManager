@@ -20,15 +20,16 @@ namespace FactorioModManager.Services
         private readonly string _settingsPath;
         private readonly Settings _settings;
         private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+        private readonly ILogService _logService;
 
-        public SettingsService()
+        public SettingsService(ILogService logService)
         {
             var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
             var appFolder = Path.Combine(appDataPath, "FactorioModManager");
             Directory.CreateDirectory(appFolder);
             _settingsPath = Path.Combine(appFolder, "settings.json");
-
             _settings = LoadSettings();
+            _logService = logService;
         }
 
         private Settings LoadSettings()
@@ -126,7 +127,7 @@ namespace FactorioModManager.Services
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error saving settings: {ex.Message}");
+                _logService.LogError($"Error saving settings: {ex.Message}", ex);
             }
         }
 

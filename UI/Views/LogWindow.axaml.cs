@@ -122,7 +122,7 @@ namespace FactorioModManager.Views
             }
             catch (Exception ex)
             {
-                LogService.Instance.LogError($"Error opening log file: {ex.Message}");
+                LogService.Instance.LogError($"Error opening log file: {ex.Message}", ex);
             }
         }
 

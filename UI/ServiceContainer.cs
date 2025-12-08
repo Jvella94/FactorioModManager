@@ -4,6 +4,7 @@ using FactorioModManager.Services.Infrastructure;
 using FactorioModManager.ViewModels.MainWindow;
 using System;
 using System.Collections.Generic;
+using System.Net.Http;
 
 namespace FactorioModManager
 {
@@ -25,19 +26,26 @@ namespace FactorioModManager
             // Infrastructure
             RegisterSingleton<IUIService>(new AvaloniaUIService());
 
+            var httpClient = new HttpClient
+            {
+                Timeout = TimeSpan.FromSeconds(30)
+            };
+            RegisterSingleton(httpClient);
+
             // Core Services
-            RegisterSingleton<ISettingsService>(new SettingsService());
             RegisterSingleton<ILogService>(new LogService());
-            RegisterSingleton<IModGroupService>(new ModGroupService());
+            RegisterSingleton<ISettingsService>(new SettingsService(Resolve<ILogService>()));
+            RegisterSingleton<IModGroupService>(new ModGroupService(Resolve<ILogService>()));
             RegisterSingleton<IModMetadataService>(new ModMetadataService());
 
             RegisterSingleton<IModService>(new ModService(
                 Resolve<ISettingsService>(),
-                Resolve<ILogService>()
+                Resolve<ILogService>(),
+                Resolve<HttpClient>()
             ));
 
             // API Services - wrap with caching
-            var apiService = new FactorioApiService();
+            var apiService = new FactorioApiService(Resolve<HttpClient>());
             var cachedApiService = new CachedFactorioApiService(apiService);
             RegisterSingleton<IFactorioApiService>(cachedApiService);
 
@@ -87,6 +95,19 @@ namespace FactorioModManager
         {
             var type = typeof(T);
             return _singletons.ContainsKey(type) || _factories.ContainsKey(type);
+        }
+
+        public void Dispose()
+        {
+            foreach (var singleton in _singletons.Values)
+            {
+                if (singleton is IDisposable disposable)
+                {
+                    disposable.Dispose();
+                }
+            }
+            _singletons.Clear();
+            _factories.Clear();
         }
     }
 }

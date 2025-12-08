@@ -12,11 +12,13 @@ namespace FactorioModManager.Services
     {
         private readonly string _groupsFilePath;
         private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+        private readonly ILogService _logService;
 
-        public ModGroupService()
+        public ModGroupService(ILogService logService)
         {
             var modsDir = ModPathHelper.GetModsDirectory();
             _groupsFilePath = Path.Combine(modsDir, "mod-groups.json");
+            _logService = logService;
         }
 
         public List<ModGroup> LoadGroups()
@@ -48,7 +50,7 @@ namespace FactorioModManager.Services
             }
             catch (Exception ex)
             {
-                LogService.Instance.LogDebug($"Error saving groups: {ex.Message}");
+                _logService.LogError($"Error saving groups: {ex.Message}", ex);
             }
         }
 

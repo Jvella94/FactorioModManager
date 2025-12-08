@@ -1,4 +1,5 @@
 ﻿using FactorioModManager.Models.API;
+using FactorioModManager.Models.DTO;
 using FactorioModManager.Services.Infrastructure;
 using System;
 using System.Collections.Generic;
@@ -9,17 +10,12 @@ using System.Threading.Tasks;
 
 namespace FactorioModManager.Services.API
 {
-    public class FactorioApiService : IFactorioApiService
+    public class FactorioApiService(HttpClient httpClient) : IFactorioApiService
     {
-        private readonly HttpClient _httpClient;
+        private readonly HttpClient _httpClient = httpClient;
         private const string BaseUrl = "https://mods.factorio.com/api/mods";
 
-        public FactorioApiService()
-        {
-            _httpClient = new HttpClient();
-        }
-
-        public async Task<ModDetailsShort?> GetModDetailsAsync(string modName)
+        public async Task<ModDetailsShortDTO?> GetModDetailsAsync(string modName)
         {
             try
             {
@@ -34,22 +30,9 @@ namespace FactorioModManager.Services.API
                 var json = await response.Content.ReadAsStringAsync();
                 var portalResponse = JsonSerializer.Deserialize<ModDetailsShort>(json);
 
-                // Convert to ModDetails
+                // Convert to ModDetailsDTO
                 if (portalResponse == null) return null;
-
-                return new ModDetailsShort
-                {
-                    Name = portalResponse.Name,
-                    Title = portalResponse.Title,
-                    Category = portalResponse.Category,
-                    DownloadsCount = portalResponse.DownloadsCount,
-                    Releases = [.. portalResponse.Releases.Select(r => new ModReleaseDto
-                    {
-                        Version = r.Version,
-                        DownloadUrl = r.DownloadUrl,
-                        ReleasedAt = r.ReleasedAt
-                    })]
-                };
+                return portalResponse.ToShortDTO();
             }
             catch (Exception ex)
             {
@@ -58,7 +41,7 @@ namespace FactorioModManager.Services.API
             }
         }
 
-        public async Task<ModDetailsFull?> GetModDetailsFullAsync(string modName)
+        public async Task<ModDetailsFullDTO?> GetModDetailsFullAsync(string modName)
         {
             try
             {
@@ -75,23 +58,7 @@ namespace FactorioModManager.Services.API
 
                 // Convert to ModDetails
                 if (portalResponse == null) return null;
-
-                return new ModDetailsFull
-                {
-                    Name = portalResponse.Name,
-                    Title = portalResponse.Title,
-                    Category = portalResponse.Category,
-                    SourceUrl = portalResponse.SourceUrl,
-                    Homepage = portalResponse.Homepage,
-                    Changelog = portalResponse.Changelog,
-                    DownloadsCount = portalResponse.DownloadsCount,
-                    Releases = [.. portalResponse.Releases.Select(r => new ModReleaseDto
-                    {
-                        Version = r.Version,
-                        DownloadUrl = r.DownloadUrl,
-                        ReleasedAt = r.ReleasedAt
-                    })]
-                };
+                return portalResponse.ToFullDTO();
             }
             catch (Exception ex)
             {

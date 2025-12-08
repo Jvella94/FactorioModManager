@@ -113,7 +113,7 @@ namespace FactorioModManager.Tests.ViewModels
                 .GetValue(_viewModel)?
                 .GetType()
                 .GetMethod("Execute")?
-                .Invoke(_viewModel.ToggleModCommand, new object?[] { testMod });
+                .Invoke(_viewModel.ToggleModCommand, [testMod]);
 
             testMod.IsEnabled.Should().BeTrue();
         }
@@ -125,7 +125,7 @@ namespace FactorioModManager.Tests.ViewModels
             _viewModel.SelectedMod = testMod;
 
             // No parameter - toggles SelectedMod
-            _viewModel.ToggleModCommand.Execute(null);
+            _viewModel.ToggleModCommand.Execute();
 
             testMod.IsEnabled.Should().BeTrue();
         }
@@ -147,7 +147,7 @@ namespace FactorioModManager.Tests.ViewModels
             var testMod = new ModViewModel { IsEnabled = false, Name = "test-mod" };
             _viewModel.SelectedMod = testMod;
 
-            _viewModel.ToggleModCommand.Execute(null);
+            _viewModel.ToggleModCommand.Execute();
 
             Assert.True(testMod.IsEnabled);
         }

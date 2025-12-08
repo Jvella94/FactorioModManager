@@ -7,7 +7,7 @@ namespace FactorioModManager.Models.API
     /// Release info from Factorio Mod Portal API
     /// https://wiki.factorio.com/Mod_portal_API#Releases
     /// </summary>
-    public class ModReleaseDto
+    public class ModRelease
     {
         [JsonPropertyName("version")]
         public string Version { get; set; } = string.Empty;

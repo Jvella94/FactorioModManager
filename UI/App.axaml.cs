@@ -32,7 +32,7 @@ namespace FactorioModManager
                 }
                 catch (Exception ex)
                 {
-                    LogService.Instance.LogError($"Error during initialization: {ex.Message}");
+                    LogService.Instance.LogError($"Error during initialization: {ex.Message}", ex);
                     throw;
                 }
             }

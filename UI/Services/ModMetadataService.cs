@@ -121,8 +121,7 @@ namespace FactorioModManager.Services
             metadata.LastChecked = DateTime.UtcNow;
             SaveMetadata();
 
-            LogService.Instance.LogDebug($"Saved source URL for {modName}: {sourceUrl ?? "null"}");
-            LogService.Instance.Log($"Saved source URL for {modName}: {sourceUrl ?? "(none)"}");
+            LogService.Instance.LogDebug($"Saved source URL for {modName}: {sourceUrl ?? "(none)"}");
         }
 
         public string? GetCategory(string modName)

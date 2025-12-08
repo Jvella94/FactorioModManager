@@ -1,4 +1,5 @@
 ﻿using FactorioModManager.Models;
+using System;
 using System.Collections.Generic;
 
 namespace FactorioModManager.Services.Infrastructure
@@ -11,7 +12,7 @@ namespace FactorioModManager.Services.Infrastructure
 
         void LogWarning(string message);
 
-        void LogError(string message);
+        void LogError(string message, Exception exception);
 
         IEnumerable<LogEntry> GetLogs();
 

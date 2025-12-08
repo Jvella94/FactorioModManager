@@ -70,7 +70,8 @@ internal class Program
 
         var modService = new ModService(
             mockSettings.Object,     // ISettingsService
-            mockLog                  // ILogService
+            mockLog,                  // ILogService
+            new HttpClient()
         );
         var mods = modService.LoadAllMods().ToList();
 
@@ -84,7 +85,7 @@ internal class Program
         var logService = LogService.Instance;
         logService.Log("Test log entry", LogLevel.Info);
         logService.Log("Test warning", LogLevel.Warning);
-        logService.LogError("Test error");
+        logService.LogWarning("Test error");
 
         var logs = logService.GetLogs().ToList();
         logs.Count.Should().Be(3);
@@ -97,7 +98,7 @@ internal class Program
     {
         Console.WriteLine("⚙️ Testing SettingsService...");
 
-        var settings = new SettingsService();
+        var settings = new SettingsService(LogService.Instance);
         settings.SetModsPath("C:\\test-mods");
 
         var savedPath = settings.GetModsPath();

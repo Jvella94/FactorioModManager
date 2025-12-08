@@ -98,7 +98,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                 catch (Exception ex)
                 {
                     StatusText = $"Error opening browser: {ex.Message}";
-                    _logService.LogError($"Error opening mod portal: {ex.Message}");
+                    _logService.LogError($"Error opening mod portal: {ex.Message}", ex);
                 }
             }
         }
