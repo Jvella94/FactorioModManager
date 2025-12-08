@@ -3,6 +3,9 @@ using System.Text.Json.Serialization;
 
 namespace FactorioModManager.Models
 {
+    /// <summary>
+    /// The tags found in mods info.json files to get more details about the mod.
+    /// </summary>
     public class ModInfo
     {
         [JsonPropertyName("name")]
@@ -27,7 +30,7 @@ namespace FactorioModManager.Models
         public string? Description { get; set; }
 
         [JsonPropertyName("factorio_version")]
-        public string FactorioVersion { get; set; } = "1.1";
+        public string FactorioVersion { get; set; } = "2.0";
 
         [JsonPropertyName("dependencies")]
         public List<string> Dependencies { get; set; } = [];

@@ -12,6 +12,9 @@ namespace FactorioModManager.Models
         public bool Enabled { get; set; }
     }
 
+    /// <summary>
+    /// Used for serialising mod-list.json to find which mods are enabled/known to be installed.
+    /// </summary>
     public class ModList
     {
         [JsonPropertyName("mods")]

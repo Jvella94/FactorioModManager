@@ -119,7 +119,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                         var (Success, Hours) = await dialog.ShowDialog(owner);
                         if (Success)
                         {
-                            await CheckForUpdatesAsync(_settingsService.GetApiKey(), Hours);
+                            await CheckForUpdatesAsync(Hours);
                         }
                     }
                 });
@@ -187,7 +187,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                     });
 
                     var apiKey = _settingsService.GetApiKey();
-                    var modDetails = await _apiService.GetModDetailsAsync(modName, apiKey);
+                    var modDetails = await _apiService.GetModDetailsAsync(modName);
 
                     if (modDetails?.Releases == null || modDetails.Releases.Count == 0)
                     {

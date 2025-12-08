@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Reactive.Linq;
+using System.Threading.Tasks;
 
 namespace FactorioModManager.ViewModels.MainWindow
 {
@@ -15,6 +16,7 @@ namespace FactorioModManager.ViewModels.MainWindow
         private ObservableCollection<ModViewModel> _mods;
         private ObservableCollection<ModGroupViewModel> _groups;
         private ObservableCollection<ModViewModel> _selectedMods;
+        private ObservableCollection<string> _installedVersions = new();
         private ModViewModel? _selectedMod;
         private ModGroupViewModel? _selectedGroup;
         private string _searchText = string.Empty;
@@ -150,6 +152,28 @@ namespace FactorioModManager.ViewModels.MainWindow
                 var total = Mods.Count;
                 var updates = Mods.Count(m => m.HasUpdate);
                 return $"Enabled: {enabled}/{total} | Updates: {updates}";
+            }
+        }
+
+        public ObservableCollection<string> InstalledVersions
+        {
+            get => _installedVersions;
+            set => this.RaiseAndSetIfChanged(ref _installedVersions, value);
+        }
+
+        private async Task RefreshSelectedModVersions()
+        {
+            if (SelectedMod != null)
+            {
+                var versions = ServiceContainer.Instance
+                    .Resolve<IModService>()
+                    .GetInstalledVersions(SelectedMod.Name);
+
+                InstalledVersions.Clear();
+                foreach (var version in versions.OrderByDescending(v => v))
+                {
+                    InstalledVersions.Add(version);
+                }
             }
         }
 

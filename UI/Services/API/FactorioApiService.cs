@@ -1,16 +1,15 @@
-﻿using FactorioModManager.Models;
+﻿using FactorioModManager.Models.API;
 using FactorioModManager.Services.Infrastructure;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
-namespace FactorioModManager.Services.API  
+namespace FactorioModManager.Services.API
 {
-    public class FactorioApiService : IFactorioApiService  
+    public class FactorioApiService : IFactorioApiService
     {
         private readonly HttpClient _httpClient;
         private const string BaseUrl = "https://mods.factorio.com/api/mods";
@@ -20,16 +19,11 @@ namespace FactorioModManager.Services.API
             _httpClient = new HttpClient();
         }
 
-        public async Task<ModDetails?> GetModDetailsAsync(string modName, string? apiKey = null)
+        public async Task<ModDetailsShort?> GetModDetailsAsync(string modName)
         {
             try
             {
-                var url = $"{BaseUrl}/{modName}/full?version=2.0&hide_deprecated=true";
-                if (!string.IsNullOrEmpty(apiKey))
-                {
-                    _httpClient.DefaultRequestHeaders.Remove("Authorization");
-                    _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
-                }
+                var url = $"{BaseUrl}/{modName}/?version=2.0&hide_deprecated=true";
 
                 var response = await _httpClient.GetAsync(url);
                 if (!response.IsSuccessStatusCode)
@@ -38,21 +32,18 @@ namespace FactorioModManager.Services.API
                 }
 
                 var json = await response.Content.ReadAsStringAsync();
-                var portalResponse = JsonSerializer.Deserialize<ModPortalResponse>(json);
+                var portalResponse = JsonSerializer.Deserialize<ModDetailsShort>(json);
 
                 // Convert to ModDetails
                 if (portalResponse == null) return null;
 
-                return new ModDetails
+                return new ModDetailsShort
                 {
                     Name = portalResponse.Name,
                     Title = portalResponse.Title,
                     Category = portalResponse.Category,
-                    SourceUrl = portalResponse.SourceUrl,
-                    Homepage = portalResponse.Homepage,
-                    Changelog = portalResponse.Changelog,
                     DownloadsCount = portalResponse.DownloadsCount,
-                    Releases = [.. portalResponse.Releases.Select(r => new ModRelease
+                    Releases = [.. portalResponse.Releases.Select(r => new ModReleaseDto
                     {
                         Version = r.Version,
                         DownloadUrl = r.DownloadUrl,
@@ -67,7 +58,49 @@ namespace FactorioModManager.Services.API
             }
         }
 
-        public async Task<List<string>> GetRecentlyUpdatedModsAsync(int hoursAgo, string? apiKey = null)
+        public async Task<ModDetailsFull?> GetModDetailsFullAsync(string modName)
+        {
+            try
+            {
+                var url = $"{BaseUrl}/{modName}/full?version=2.0&hide_deprecated=true";
+
+                var response = await _httpClient.GetAsync(url);
+                if (!response.IsSuccessStatusCode)
+                {
+                    return null;
+                }
+
+                var json = await response.Content.ReadAsStringAsync();
+                var portalResponse = JsonSerializer.Deserialize<ModDetailsFull>(json);
+
+                // Convert to ModDetails
+                if (portalResponse == null) return null;
+
+                return new ModDetailsFull
+                {
+                    Name = portalResponse.Name,
+                    Title = portalResponse.Title,
+                    Category = portalResponse.Category,
+                    SourceUrl = portalResponse.SourceUrl,
+                    Homepage = portalResponse.Homepage,
+                    Changelog = portalResponse.Changelog,
+                    DownloadsCount = portalResponse.DownloadsCount,
+                    Releases = [.. portalResponse.Releases.Select(r => new ModReleaseDto
+                    {
+                        Version = r.Version,
+                        DownloadUrl = r.DownloadUrl,
+                        ReleasedAt = r.ReleasedAt
+                    })]
+                };
+            }
+            catch (Exception ex)
+            {
+                LogService.Instance.LogDebug($"Error fetching mod details: {ex.Message}");
+                return null;
+            }
+        }
+
+        public async Task<List<string>> GetRecentlyUpdatedModsAsync(int hoursAgo)
         {
             try
             {
@@ -79,11 +112,6 @@ namespace FactorioModManager.Services.API
                 for (int page = 1; page <= maxPages; page++)
                 {
                     var url = $"{BaseUrl}?version=2.0&hide_deprecated=true&sort=updated_at&sort_order=desc&page={page}&page_size={pageSize}";
-                    if (!string.IsNullOrEmpty(apiKey))
-                    {
-                        _httpClient.DefaultRequestHeaders.Remove("Authorization");
-                        _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
-                    }
 
                     var response = await _httpClient.GetAsync(url);
                     if (!response.IsSuccessStatusCode)
@@ -130,91 +158,6 @@ namespace FactorioModManager.Services.API
         public void ClearCache()
         {
             // No-op for non-cached implementation
-        }
-
-        // Internal DTOs for JSON deserialization
-        private class ModPortalResponse
-        {
-            [JsonPropertyName("name")]
-            public string Name { get; set; } = string.Empty;
-
-            [JsonPropertyName("title")]
-            public string Title { get; set; } = string.Empty;
-
-            [JsonPropertyName("category")]
-            public string? Category { get; set; }
-
-            [JsonPropertyName("summary")]
-            public string? Summary { get; set; }
-
-            [JsonPropertyName("description")]
-            public string? Description { get; set; }
-
-            [JsonPropertyName("homepage")]
-            public string? Homepage { get; set; }
-
-            [JsonPropertyName("source_url")]
-            public string? SourceUrl { get; set; }
-
-            [JsonPropertyName("downloads_count")]
-            public int DownloadsCount { get; set; }
-
-            [JsonPropertyName("releases")]
-            public List<ModReleaseDto> Releases { get; set; } = [];
-
-            [JsonPropertyName("changelog")]
-            public string? Changelog { get; set; }
-        }
-
-        private class ModReleaseDto
-        {
-            [JsonPropertyName("version")]
-            public string Version { get; set; } = string.Empty;
-
-            [JsonPropertyName("released_at")]
-            public DateTime ReleasedAt { get; set; }
-
-            [JsonPropertyName("download_url")]
-            public string? DownloadUrl { get; set; }
-
-            [JsonPropertyName("sha1")]
-            public string? Sha1 { get; set; }
-
-            [JsonPropertyName("info_json")]
-            public ModInfo? InfoJson { get; set; }
-        }
-
-        private class ModListResponse
-        {
-            [JsonPropertyName("results")]
-            public List<ModSummary> Results { get; set; } = [];
-
-            [JsonPropertyName("pagination")]
-            public PaginationInfo? Pagination { get; set; }
-        }
-
-        private class ModSummary
-        {
-            [JsonPropertyName("name")]
-            public string Name { get; set; } = string.Empty;
-
-            [JsonPropertyName("latest_release")]
-            public ModReleaseDto? LatestRelease { get; set; }
-        }
-
-        private class PaginationInfo
-        {
-            [JsonPropertyName("count")]
-            public int Count { get; set; }
-
-            [JsonPropertyName("page")]
-            public int Page { get; set; }
-
-            [JsonPropertyName("page_count")]
-            public int PageCount { get; set; }
-
-            [JsonPropertyName("page_size")]
-            public int PageSize { get; set; }
         }
     }
 }

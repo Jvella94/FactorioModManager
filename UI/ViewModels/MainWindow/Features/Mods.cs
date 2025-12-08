@@ -163,13 +163,13 @@ namespace FactorioModManager.ViewModels.MainWindow
                     await CheckForAlreadyDownloadedUpdatesAsync();
 
                     // Fetch metadata for mods that need it
-                    await FetchMissingMetadataAsync(apiKey);
+                    await FetchMissingMetadataAsync();
 
                     // Check for updates once per session
                     var lastCheck = _settingsService.GetLastUpdateCheck();
                     if (!lastCheck.HasValue || (DateTime.UtcNow - lastCheck.Value).TotalHours >= 1)
                     {
-                        await CheckForUpdatesAsync(apiKey);
+                        await CheckForUpdatesAsync();
                         _settingsService.SetLastUpdateCheck(DateTime.UtcNow);
                     }
                 }
@@ -190,7 +190,7 @@ namespace FactorioModManager.ViewModels.MainWindow
         }
 
 
-        private async Task FetchMissingMetadataAsync(string? apiKey)
+        private async Task FetchMissingMetadataAsync()
         {
             // Take a snapshot to avoid collection modification issues
             var modsSnapshot = Mods.ToList();
@@ -217,7 +217,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                 });
                 try
                 {
-                    var details = await _apiService.GetModDetailsAsync(mod.Name, apiKey);
+                    var details = await _apiService.GetModDetailsFullAsync(mod.Name);
                     if (details != null)
                     {
                         if (_metadataService.NeedsCategoryCheck(mod.Name))

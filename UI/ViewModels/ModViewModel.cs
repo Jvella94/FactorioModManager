@@ -24,6 +24,13 @@ namespace FactorioModManager.ViewModels
         private Bitmap? _thumbnail;
         private string? _selectedVersion;
         private string? _filePath;
+        private int _installedCount;
+
+        public int InstalledCount
+        {
+            get => _installedCount;
+            set => this.RaiseAndSetIfChanged(ref _installedCount, value);
+        }
 
         public string Name
         {
@@ -191,5 +198,6 @@ namespace FactorioModManager.ViewModels
             get => _filePath;
             set => this.RaiseAndSetIfChanged(ref _filePath, value);
         }
+
     }
 }

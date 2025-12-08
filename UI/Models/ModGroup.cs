@@ -18,6 +18,9 @@ namespace FactorioModManager.Models
         public string? Color { get; set; }
     }
 
+    /// <summary>
+    /// Represents the mod groups made by the user in mod-groups.json.
+    /// </summary>
     public class ModGroupCollection
     {
         [JsonPropertyName("groups")]

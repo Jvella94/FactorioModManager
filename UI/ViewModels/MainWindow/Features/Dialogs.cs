@@ -19,7 +19,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                 try
                 {
                     var apiKey = _settingsService.GetApiKey();
-                    var details = await _apiService.GetModDetailsAsync(SelectedMod.Name, apiKey);
+                    var details = await _apiService.GetModDetailsFullAsync(SelectedMod.Name);
 
                     _uiService.Post(() =>
                     {
@@ -59,13 +59,13 @@ namespace FactorioModManager.ViewModels.MainWindow
                 try
                 {
                     var apiKey = _settingsService.GetApiKey();
-                    var details = await _apiService.GetModDetailsAsync(SelectedMod.Name, apiKey);
+                    var details = await _apiService.GetModDetailsAsync(SelectedMod.Name);
 
                     _uiService.Post(() =>
                     {
                         if (details?.Releases != null && details.Releases.Count > 0)
                         {
-                            var window = new Views.VersionHistoryWindow(SelectedMod.Title, details.Releases);
+                            var window = new Views.VersionHistoryWindow(SelectedMod.Title, SelectedMod.Name, details.Releases);
                             window.Show();
                             StatusText = "Version history opened";
                         }

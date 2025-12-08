@@ -1,0 +1,91 @@
+﻿using FactorioModManager.Models;
+using FactorioModManager.Models.API;
+using FactorioModManager.Services;
+using FactorioModManager.Services.Infrastructure;
+using ReactiveUI;
+using System;
+using System.IO;
+using System.IO.Compression;
+using System.Linq;
+using System.Text.Json;
+
+namespace FactorioModManager.ViewModels
+{
+    public class VersionHistoryReleaseViewModel : ReactiveObject
+    {
+        private readonly IModService _modService;
+        private readonly string _modName;
+        private bool _isInstalling;
+        private double _downloadProgress;
+        private bool _isInstalled;
+        private ModInfo? _infoJson;
+
+        public ModReleaseDto Release { get; }
+
+        public string Version => Release.Version;
+        public DateTime ReleasedAt => Release.ReleasedAt;
+        public ModInfo? InfoJson
+        {
+            get => _infoJson;
+            set => this.RaiseAndSetIfChanged(ref _infoJson, value);
+        }
+        public string? FactorioVersion => InfoJson?.FactorioVersion;
+        public string? DownloadUrl => Release.DownloadUrl;
+
+        public bool IsInstalling
+        {
+            get => _isInstalling;
+            set => this.RaiseAndSetIfChanged(ref _isInstalling, value);
+        }
+
+        public double DownloadProgress
+        {
+            get => _downloadProgress;
+            set => this.RaiseAndSetIfChanged(ref _downloadProgress, value);
+        }
+
+        public bool IsInstalled
+        {
+            get => _isInstalled;
+            set => this.RaiseAndSetIfChanged(ref _isInstalled, value);
+        }
+
+        public bool CanDeleteOrDownload => !IsInstalling;
+
+        public VersionHistoryReleaseViewModel(ModReleaseDto release, IModService modService, string modName)
+        {
+            Release = release;
+            _modService = modService;
+            _modName = modName;  // ✅ Use passed modName
+            IsInstalled = _modService.GetInstalledVersions(modName).Contains(release.Version);
+        }
+
+
+
+
+#pragma warning disable CA1822 // Mark members as static
+        public ModInfo? ExtractInfoJsonFromZip(string zipPath)
+#pragma warning restore CA1822 // Mark members as static
+        {
+            try
+            {
+                using var archive = ZipFile.OpenRead(zipPath);
+                var infoEntry = archive.Entries.FirstOrDefault(e =>
+                    e.FullName.EndsWith("info.json", StringComparison.OrdinalIgnoreCase));
+
+                if (infoEntry != null)
+                {
+                    using var stream = infoEntry.Open();
+                    using var reader = new StreamReader(stream);
+                    var json = reader.ReadToEnd();
+                    return JsonSerializer.Deserialize<ModInfo>(json);
+                }
+            }
+            catch (Exception ex)
+            {
+                LogService.Instance.LogError($"Failed to extract info.json from {Path.GetFileName(zipPath)}: {ex.Message}");
+            }
+            return null;
+        }
+    }
+}

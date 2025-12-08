@@ -1,10 +1,10 @@
 ﻿using Avalonia.Controls;
-using Avalonia.Interactivity;
+using FactorioModManager.Models.API;
+using FactorioModManager.Services;
 using FactorioModManager.Services.API;
-using FactorioModManager.Services.Infrastructure;
+using FactorioModManager.ViewModels;
 using FactorioModManager.Views.Base;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 
 namespace FactorioModManager.Views
@@ -16,33 +16,19 @@ namespace FactorioModManager.Views
             InitializeComponent();
         }
 
-        public VersionHistoryWindow(string modTitle, List<ModRelease> releases) : this()
+        public VersionHistoryWindow(string modTitle, string modName, List<ModReleaseDto> releases) : this()
         {
-            this.FindControl<TextBlock>("ModTitle")!.Text = $"{modTitle} - Version History";
+            var vm = new VersionHistoryViewModel(
+               ServiceContainer.Instance.Resolve<IModService>(),
+               ServiceContainer.Instance.Resolve<IFactorioApiService>(),
+               modTitle, modName, releases);  // ✅ Pass modName
+            DataContext = vm;
 
-            // FIXED: Sort by ReleasedAt descending (newest first)
-            var sortedReleases = releases.OrderByDescending(r => r.ReleasedAt).ToList();
-            this.FindControl<DataGrid>("VersionGrid")!.ItemsSource = sortedReleases;
-        }
+            // ✅ CRITICAL: Bind DataGrid to Releases collection
+            VersionGrid.ItemsSource = vm.Releases;
 
-        private void OpenDownloadLink(object? sender, RoutedEventArgs e)
-        {
-            if (sender is Button button && button.Tag is string url && !string.IsNullOrEmpty(url))
-            {
-                try
-                {
-                    Process.Start(new ProcessStartInfo
-                    {
-                        FileName = $"https://mods.factorio.com{url}",
-                        UseShellExecute = true
-                    });
-                    LogService.Instance.Log($"Opened download link: {url}");
-                }
-                catch
-                {
-                    LogService.Instance.Log($"Failed to open download link: {url}");
-                }
-            }
+            // Update title
+            ModTitle.Text = vm.ModTitle;
         }
     }
 }

@@ -1,4 +1,5 @@
-﻿using FactorioModManager.Services.Infrastructure;
+﻿using FactorioModManager.Models.API;
+using FactorioModManager.Services.Infrastructure;
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -12,15 +13,16 @@ namespace FactorioModManager.Services.API
     public class CachedFactorioApiService(IFactorioApiService innerService) : IFactorioApiService
     {
         private readonly IFactorioApiService _inner = innerService ?? throw new ArgumentNullException(nameof(innerService));
-        private readonly Dictionary<string, CacheEntry<ModDetails>> _modDetailsCache = [];
+        private readonly Dictionary<string, CacheEntry<ModDetailsShort>> _modDetailsShortCache = [];
+        private readonly Dictionary<string, CacheEntry<ModDetailsFull>> _modDetailsFullCache = [];
         private readonly Dictionary<string, CacheEntry<List<string>>> _recentModsCache = [];
         private readonly Lock _lock = new();
 
-        public async Task<ModDetails?> GetModDetailsAsync(string modName, string? apiKey)
+        public async Task<ModDetailsShort?> GetModDetailsAsync(string modName)
         {
             lock (_lock)
             {
-                if (_modDetailsCache.TryGetValue(modName, out var cached))
+                if (_modDetailsShortCache.TryGetValue(modName, out var cached))
                 {
                     if (DateTime.Now - cached.Timestamp < Constants.Cache.ApiCacheLifetime)
                     {
@@ -29,18 +31,18 @@ namespace FactorioModManager.Services.API
                     }
                     else
                     {
-                        _modDetailsCache.Remove(modName);
+                        _modDetailsShortCache.Remove(modName);
                     }
                 }
             }
 
-            var result = await _inner.GetModDetailsAsync(modName, apiKey);
+            var result = await _inner.GetModDetailsAsync(modName);
 
             if (result != null)
             {
                 lock (_lock)
                 {
-                    _modDetailsCache[modName] = new CacheEntry<ModDetails>
+                    _modDetailsShortCache[modName] = new CacheEntry<ModDetailsShort>
                     {
                         Value = result,
                         Timestamp = DateTime.Now
@@ -51,9 +53,44 @@ namespace FactorioModManager.Services.API
             return result;
         }
 
-        public async Task<List<string>> GetRecentlyUpdatedModsAsync(int hoursAgo, string? apiKey)
+           public async Task<ModDetailsFull?> GetModDetailsFullAsync(string modName)
         {
-            var cacheKey = $"{hoursAgo}_{apiKey ?? "nokey"}";
+            lock (_lock)
+            {
+                if (_modDetailsFullCache.TryGetValue(modName, out var cached))
+                {
+                    if (DateTime.Now - cached.Timestamp < Constants.Cache.ApiCacheLifetime)
+                    {
+                        LogService.Instance.LogDebug($"Using cached mod details for {modName}");
+                        return cached.Value;
+                    }
+                    else
+                    {
+                        _modDetailsFullCache.Remove(modName);
+                    }
+                }
+            }
+
+            var result = await _inner.GetModDetailsFullAsync(modName);
+
+            if (result != null)
+            {
+                lock (_lock)
+                {
+                    _modDetailsFullCache[modName] = new CacheEntry<ModDetailsFull>
+                    {
+                        Value = result,
+                        Timestamp = DateTime.Now
+                    };
+                }
+            }
+
+            return result;
+        }
+
+        public async Task<List<string>> GetRecentlyUpdatedModsAsync(int hoursAgo)
+        {
+            var cacheKey = $"{hoursAgo}";
 
             lock (_lock)
             {
@@ -71,7 +108,7 @@ namespace FactorioModManager.Services.API
                 }
             }
 
-            var result = await _inner.GetRecentlyUpdatedModsAsync(hoursAgo, apiKey);
+            var result = await _inner.GetRecentlyUpdatedModsAsync(hoursAgo);
 
             lock (_lock)
             {
@@ -89,7 +126,8 @@ namespace FactorioModManager.Services.API
         {
             lock (_lock)
             {
-                _modDetailsCache.Clear();
+                _modDetailsShortCache.Clear();
+                _modDetailsFullCache.Clear();
                 _recentModsCache.Clear();
             }
             LogService.Instance.Log("API cache cleared");

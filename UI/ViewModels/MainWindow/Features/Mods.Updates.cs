@@ -145,7 +145,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                     });
 
                     var apiKey = _settingsService.GetApiKey();
-                    var modDetails = await _apiService.GetModDetailsAsync(mod.Name, apiKey);
+                    var modDetails = await _apiService.GetModDetailsAsync(mod.Name);
 
                     if (modDetails?.Releases == null)
                     {
@@ -253,7 +253,7 @@ namespace FactorioModManager.ViewModels.MainWindow
             });
         }
 
-        internal async Task CheckForUpdatesAsync(string? apiKey, int hoursAgo = 1)
+        internal async Task CheckForUpdatesAsync(int hoursAgo = 1)
         {
             _logService.Log($"Checking for updates from the last {hoursAgo} hour(s)...");
 
@@ -264,7 +264,7 @@ namespace FactorioModManager.ViewModels.MainWindow
 
             try
             {
-                var recentlyUpdatedModNames = await _apiService.GetRecentlyUpdatedModsAsync(hoursAgo, apiKey);
+                var recentlyUpdatedModNames = await _apiService.GetRecentlyUpdatedModsAsync(hoursAgo);
                 _logService.LogDebug($"Found {recentlyUpdatedModNames.Count} recently updated mods on portal");
 
                 if (recentlyUpdatedModNames.Count == 0)
@@ -297,7 +297,7 @@ namespace FactorioModManager.ViewModels.MainWindow
 
                     try
                     {
-                        var details = await _apiService.GetModDetailsAsync(mod.Name, apiKey);
+                        var details = await _apiService.GetModDetailsAsync(mod.Name);
                         if (details?.Releases != null && details.Releases.Count > 0)
                         {
                             var latestRelease = details.Releases
@@ -373,7 +373,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                 try
                 {
                     var apiKey = _settingsService.GetApiKey();
-                    var details = await _apiService.GetModDetailsAsync(SelectedMod.Name, apiKey);
+                    var details = await _apiService.GetModDetailsAsync(SelectedMod.Name);
 
                     if (details?.Releases != null && details.Releases.Count > 0)
                     {
