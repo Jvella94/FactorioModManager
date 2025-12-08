@@ -152,8 +152,9 @@ namespace FactorioModManager.ViewModels.MainWindow
                         UpdateFilteredMods();
 
                         this.RaisePropertyChanged(nameof(ModCountSummary));
-                        this.RaisePropertyChanged(nameof(HasUnusedInternals));
                         this.RaisePropertyChanged(nameof(UnusedInternalCount));
+                        this.RaisePropertyChanged(nameof(HasUnusedInternals));
+                        this.RaisePropertyChanged(nameof(UnusedInternalWarning));
 
                         StatusText = $"Loaded {Mods.Count} mods and {Groups.Count} groups";
                     });
@@ -317,5 +318,39 @@ namespace FactorioModManager.ViewModels.MainWindow
                 }
             });
         }
+
+        private async Task ViewDependentsAsync(ModViewModel? mod)
+        {
+            if (mod == null)
+                return;
+
+            var targetName = mod.Name; // or Info.Name, whichever you use as ID
+            if (string.IsNullOrWhiteSpace(targetName))
+                return;
+
+            // Scan all loaded mods to see who depends on this one
+            var dependents = Mods
+                .Where(m => m.Dependencies != null &&
+                            m.Dependencies.Any(d =>
+                                d.Contains(targetName, StringComparison.OrdinalIgnoreCase)))
+                .OrderBy(m => m.Title)
+                .ToList();
+
+            if (dependents.Count == 0)
+            {
+                await _uiService.ShowMessageAsync(
+                    "Mods depending on this",
+                    $"No other loaded mods declare a dependency on '{mod.Title}'.");
+                return;
+            }
+
+            var list = string.Join(Environment.NewLine,
+                dependents.Select(m => $"- {m.Title} ({m.Name})"));
+
+            await _uiService.ShowMessageAsync(
+                "Mods depending on this",
+                $"The following mods depend on '{mod.Title}':{Environment.NewLine}{Environment.NewLine}{list}");
+        }
+
     }
 }

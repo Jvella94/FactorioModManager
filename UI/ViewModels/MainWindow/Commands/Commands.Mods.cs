@@ -22,6 +22,8 @@ namespace FactorioModManager.ViewModels.MainWindow
         public ReactiveCommand<ModViewModel, Unit> DownloadUpdateCommand { get; private set; } = null!;
         public ReactiveCommand<ModViewModel, Unit> DeleteOldVersionCommand { get; private set; } = null!;
         public ReactiveCommand<Unit, Unit> CheckSingleModUpdateCommand { get; private set; } = null!;
+        public ReactiveCommand<ModViewModel, Unit> ViewDependentsCommand { get; private set; } = null!;
+
 
         private void InitializeModCommands()
         {
@@ -38,6 +40,8 @@ namespace FactorioModManager.ViewModels.MainWindow
             DownloadUpdateCommand = ReactiveCommand.CreateFromTask<ModViewModel>(mod => DownloadUpdateAsync(mod));
             DeleteOldVersionCommand = ReactiveCommand.Create<ModViewModel>(mod => DeleteOldVersion(mod));
             CheckSingleModUpdateCommand = ReactiveCommand.CreateFromTask(CheckSingleModUpdateAsync);
+            ViewDependentsCommand = ReactiveCommand.CreateFromTask<ModViewModel?>(ViewDependentsAsync);
+
         }
 
         private void OpenModFolder()

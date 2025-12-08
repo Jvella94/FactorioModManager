@@ -77,12 +77,12 @@ namespace FactorioModManager.Views.Converters
     {
         public static ActionButtonColorConverter Instance { get; } = new();
 
-        private static readonly SolidColorBrush GreenBrush = new(Color.FromRgb(0, 255, 0));
-        private static readonly SolidColorBrush RedBrush = new(Color.FromRgb(255, 100, 100));
+        private static readonly SolidColorBrush GreenBrush = new (Color.FromRgb(60, 120, 60));
+        private static readonly SolidColorBrush OrangeRedBrush = new(Color.FromRgb(255, 69, 0));
 
         public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
             => value is bool isInstalled
-                ? (isInstalled ? RedBrush : GreenBrush)
+                ? (isInstalled ? OrangeRedBrush : GreenBrush)
                 : GreenBrush;
 
         public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)

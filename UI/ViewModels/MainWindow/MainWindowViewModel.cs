@@ -7,7 +7,6 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Reactive.Linq;
-using System.Threading.Tasks;
 
 namespace FactorioModManager.ViewModels.MainWindow
 {
@@ -16,7 +15,7 @@ namespace FactorioModManager.ViewModels.MainWindow
         private ObservableCollection<ModViewModel> _mods;
         private ObservableCollection<ModGroupViewModel> _groups;
         private ObservableCollection<ModViewModel> _selectedMods;
-        private ObservableCollection<string> _installedVersions = new();
+        private ObservableCollection<string> _installedVersions = [];
         private ModViewModel? _selectedMod;
         private ModGroupViewModel? _selectedGroup;
         private string _searchText = string.Empty;
@@ -25,6 +24,7 @@ namespace FactorioModManager.ViewModels.MainWindow
         private string _statusText = "Ready";
         private string? _selectedAuthorFilter;
         private string _authorSearchText = string.Empty;
+        public bool HasSelectedMod => SelectedMod != null;
 
         private readonly IModService _modService;
         private readonly IModGroupService _groupService;
@@ -59,8 +59,6 @@ namespace FactorioModManager.ViewModels.MainWindow
             SetupObservables();
         }
 
-        // ... rest of the properties remain the same
-
         public ObservableCollection<ModViewModel> Mods
         {
             get => _mods;
@@ -92,6 +90,7 @@ namespace FactorioModManager.ViewModels.MainWindow
             {
                 var oldMod = _selectedMod;
                 this.RaiseAndSetIfChanged(ref _selectedMod, value);
+
                 if (value != null && oldMod != value)
                 {
                     OnModSelected(value);
@@ -161,25 +160,10 @@ namespace FactorioModManager.ViewModels.MainWindow
             set => this.RaiseAndSetIfChanged(ref _installedVersions, value);
         }
 
-        private async Task RefreshSelectedModVersions()
-        {
-            if (SelectedMod != null)
-            {
-                var versions = ServiceContainer.Instance
-                    .Resolve<IModService>()
-                    .GetInstalledVersions(SelectedMod.Name);
-
-                InstalledVersions.Clear();
-                foreach (var version in versions.OrderByDescending(v => v))
-                {
-                    InstalledVersions.Add(version);
-                }
-            }
-        }
-
         public string UnusedInternalWarning => $"⚠ {UnusedInternalCount} unused internal dependencies";
         public int UnusedInternalCount => Mods.Count(m => m.IsUnusedInternal);
         public bool HasUnusedInternals => UnusedInternalCount > 0;
+
 
         private void SetupObservables()
         {
@@ -206,6 +190,9 @@ namespace FactorioModManager.ViewModels.MainWindow
                         AuthorSearchText = author;
                     }
                 });
+
+            this.WhenAnyValue(x => x.SelectedMod)
+                .Subscribe(_ => this.RaisePropertyChanged(nameof(HasSelectedMod)));
         }
     }
 }

@@ -3,11 +3,16 @@
              x:Class="FactorioModManager.App"
              xmlns:local="using:FactorioModManager"
              RequestedThemeVariant="Default">
-             <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
+  <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
 
   <Application.Styles>
     <FluentTheme />
-    <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml"/>
-    <StyleInclude Source="avares://FactorioModManager/Styles/DialogStyles.axaml"/>
+    <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml" />
+    <StyleInclude Source="avares://FactorioModManager/Styles/DialogStyles.axaml" />
   </Application.Styles>
+
+  <Application.Resources>
+    <!-- Register the icon as a resource -->
+    <Bitmap x:Key="AppIcon">avares://FactorioModManager/Assets/FMM.png</Bitmap>
+  </Application.Resources>
 </Application>

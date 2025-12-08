@@ -23,7 +23,7 @@ namespace FactorioModManager.Services.API
         {
             try
             {
-                var url = $"{BaseUrl}/{modName}/?version=2.0&hide_deprecated=true";
+                var url = $"{BaseUrl}/{modName}?version=2.0&hide_deprecated=true";
 
                 var response = await _httpClient.GetAsync(url);
                 if (!response.IsSuccessStatusCode)

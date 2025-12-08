@@ -80,8 +80,8 @@ namespace FactorioModManager.ViewModels.MainWindow
 
             foreach (var dep in mod.Dependencies)
             {
-                // Skip optional dependencies (start with ?)
-                if (dep.TrimStart().StartsWith('?') || dep.Contains("(?)"))
+                // Skip optional and conflict dependencies (start with ?)
+                if (dep.TrimStart().StartsWith('?') || dep.Contains("(?)") || dep.TrimStart().StartsWith('!'))
                     continue;
 
                 // Skip game dependencies

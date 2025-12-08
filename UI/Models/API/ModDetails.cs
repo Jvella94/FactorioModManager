@@ -34,7 +34,7 @@ namespace FactorioModManager.Models.API
         public string? Thumbnail { get; set; }
 
         [JsonPropertyName("score")]
-        public int? Score { get; set; }  // Only when not 0
+        public float? Score { get; set; }  // Only when not 0
     }
 
     /// <summary>
@@ -64,35 +64,13 @@ namespace FactorioModManager.Models.API
         public string? Homepage { get; set; }
 
         [JsonPropertyName("tags")]
-        public List<Tag> Tags { get; set; } = [];
+        public List<string> Tags { get; set; } = [];
 
         [JsonPropertyName("license")]
         public License? License { get; set; }
 
         [JsonPropertyName("deprecated")]
         public bool? Deprecated { get; set; }
-    }
-
-    /// <summary>
-    /// Tag categorization for mods
-    /// https://wiki.factorio.com/Mod_portal_API#Tags
-    /// </summary>
-    public class Tag
-    {
-        [JsonPropertyName("id")]
-        public int Id { get; set; }
-
-        [JsonPropertyName("name")]
-        public string Name { get; set; } = string.Empty;
-
-        [JsonPropertyName("title")]
-        public string Title { get; set; } = string.Empty;
-
-        [JsonPropertyName("description")]
-        public string? Description { get; set; }
-
-        [JsonPropertyName("type")]
-        public string Type { get; set; } = string.Empty;  // Usually "t"
     }
 
     /// <summary>

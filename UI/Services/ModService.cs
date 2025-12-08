@@ -37,9 +37,10 @@ namespace FactorioModManager.Services
                 }
             }
 
-            var modFiles = Directory.GetFiles(modsDirectory, Constants.FileSystem.ModFilePattern);
             var mods = new List<(ModInfo, bool, DateTime?, string?, string)>();
 
+            // 1) ZIP mods 
+            var modFiles = Directory.GetFiles(modsDirectory, Constants.FileSystem.ModFilePattern);
             foreach (var modFile in modFiles)
             {
                 try
@@ -69,6 +70,37 @@ namespace FactorioModManager.Services
                 {
                     _logService.Log($"Error loading mod {Path.GetFileName(modFile)}: {ex.Message}",
                         LogLevel.Error);
+                }
+            }
+
+            // 2) Folder mods (uncompressed directories with info.json)
+            foreach (var dir in Directory.GetDirectories(modsDirectory))
+            {
+                var infoPath = Path.Combine(dir, Constants.FileSystem.InfoJsonFileName);
+                if (!File.Exists(infoPath))
+                    continue;
+
+                try
+                {
+                    var json = File.ReadAllText(infoPath);
+                    var modInfo = JsonSerializer.Deserialize<ModInfo>(json);
+                    if (modInfo == null)
+                        continue;
+
+                    var isEnabled = enabledMods.GetValueOrDefault(modInfo.Name, true);
+                    var lastModified = Directory.GetLastWriteTime(dir);
+
+                    // Optional: look for thumbnail.png in folder
+                    string? thumbnailPath = null;
+                    var thumbOnDisk = Path.Combine(dir, "thumbnail.png");
+                    if (File.Exists(thumbOnDisk))
+                        thumbnailPath = thumbOnDisk;
+
+                    mods.Add((modInfo, isEnabled, lastModified, thumbnailPath, dir));
+                }
+                catch (Exception ex)
+                {
+                    _logService.Log($"Error loading folder mod {Path.GetFileName(dir)}: {ex.Message}", LogLevel.Error);
                 }
             }
 

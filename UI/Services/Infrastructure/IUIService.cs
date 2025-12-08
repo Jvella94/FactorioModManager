@@ -32,5 +32,13 @@ namespace FactorioModManager.Services.Infrastructure
         /// Checks if the current thread is the UI thread
         /// </summary>
         bool IsOnUIThread { get; }
+
+        /// <summary>
+        /// Displays a message dialog asynchronously with the specified title and content.
+        /// </summary>
+        /// <param name="title">The title text to display in the message dialog. Cannot be null or empty.</param>
+        /// <param name="message">The message content to display in the dialog. Cannot be null.</param>
+        /// <returns>A task that represents the asynchronous operation of showing the message dialog.</returns>
+        Task ShowMessageAsync(string title, string message);
     }
 }

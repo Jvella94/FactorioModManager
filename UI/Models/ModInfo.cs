@@ -8,6 +8,8 @@ namespace FactorioModManager.Models
     /// </summary>
     public class ModInfo
     {
+        private string title = string.Empty;
+
         [JsonPropertyName("name")]
         public string Name { get; set; } = string.Empty;
 
@@ -15,7 +17,11 @@ namespace FactorioModManager.Models
         public string Version { get; set; } = string.Empty;
 
         [JsonPropertyName("title")]
-        public string Title { get; set; } = string.Empty;
+        public string Title
+        {
+            get => title;
+            set { title = value != "[MOD DISPLAY NAME]" ? value : Name; }
+        }
 
         [JsonPropertyName("author")]
         public string Author { get; set; } = string.Empty;

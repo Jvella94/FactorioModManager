@@ -29,9 +29,13 @@
     <Folder Include="Styles\" />
   </ItemGroup>
 
+  <PropertyGroup>
+    <ApplicationIcon>Assets/FMM.ico</ApplicationIcon>
+  </PropertyGroup>
+
   <ItemGroup>
-    <Compile Update="Views\UrlInputDialog.axaml.cs">
-      <DependentUpon>UrlInputDialog.axaml</DependentUpon>
-    </Compile>
+    <Content Include="Assets/FMM.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 </Project>

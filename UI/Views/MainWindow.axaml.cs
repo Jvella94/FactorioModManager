@@ -1,12 +1,16 @@
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using FactorioModManager.Infrastructure;
 using FactorioModManager.ViewModels;
 using FactorioModManager.ViewModels.MainWindow;
 using System;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Reactive.Linq;
 
 namespace FactorioModManager.Views
@@ -22,6 +26,10 @@ namespace FactorioModManager.Views
 
             // Set DataContext from DI
             DataContext = ServiceContainer.Instance.Resolve<MainWindowViewModel>();
+
+            using var stream = AssetLoader.Open(
+                new Uri("avares://FactorioModManager/Assets/FMM.png"));
+            Icon = new WindowIcon(new Bitmap(stream));
         }
 
         private async void Window_Loaded(object? sender, RoutedEventArgs e)
@@ -62,8 +70,20 @@ namespace FactorioModManager.Views
 
         private void DataGrid_OnSelectionChanged(object? sender, SelectionChangedEventArgs e)
         {
-            // Navigation history is handled in the ViewModel
-            // This event handler exists for potential future use
+            if (DataContext is not MainWindowViewModel vm)
+                return;
+
+            if (sender is not DataGrid grid)
+                return;
+
+            // SelectedItem is already bound to SelectedMod via XAML
+
+            // Sync SelectedItems -> SelectedMods collection
+            var selected = grid.SelectedItems
+                               .OfType<ModViewModel>()
+                               .ToList();
+
+            vm.SelectedMods = new ObservableCollection<ModViewModel>(selected);
         }
 
         private void CancelRename(object? sender, RoutedEventArgs e)
