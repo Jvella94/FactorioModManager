@@ -11,9 +11,10 @@ namespace FactorioModManager.Services.API
     /// <summary>
     /// Caches API responses to reduce unnecessary network calls
     /// </summary>
-    public class CachedFactorioApiService(IFactorioApiService innerService) : IFactorioApiService, IDisposable
+    public class CachedFactorioApiService(IFactorioApiService innerService, ILogService logService) : IFactorioApiService, IDisposable
     {
         private readonly IFactorioApiService _inner = innerService ?? throw new ArgumentNullException(nameof(innerService));
+        private readonly ILogService _logService = logService ?? throw new ArgumentNullException(nameof(logService));
         private readonly Dictionary<string, CacheEntry<ModDetailsShortDTO>> _modDetailsShortCache = [];
         private readonly Dictionary<string, CacheEntry<ModDetailsFullDTO>> _modDetailsFullCache = [];
         private readonly Dictionary<string, CacheEntry<List<string>>> _recentModsCache = [];
@@ -30,10 +31,9 @@ namespace FactorioModManager.Services.API
                 {
                     if (DateTime.UtcNow - cached.Timestamp < Constants.Cache.ApiCacheLifetime)
                     {
-                        LogService.Instance.LogDebug($"Using cached mod details for {modName}");
+                        _logService.LogDebug($"Using cached mod details for {modName}");
                         return cached.Value;
                     }
-                    // Cache expired, remove it
                     _modDetailsShortCache.Remove(modName);
                 }
             }
@@ -42,10 +42,8 @@ namespace FactorioModManager.Services.API
                 _semaphore.Release();
             }
 
-            // Fetch from API (outside lock to allow parallel requests for different mods)
             var result = await _inner.GetModDetailsAsync(modName);
 
-            // Update cache with result
             if (result != null)
             {
                 await _semaphore.WaitAsync();
@@ -68,7 +66,6 @@ namespace FactorioModManager.Services.API
 
         public async Task<ModDetailsFullDTO?> GetModDetailsFullAsync(string modName)
         {
-            // Check cache first
             await _semaphore.WaitAsync();
             try
             {
@@ -76,10 +73,9 @@ namespace FactorioModManager.Services.API
                 {
                     if (DateTime.UtcNow - cached.Timestamp < Constants.Cache.ApiCacheLifetime)
                     {
-                        LogService.Instance.LogDebug($"Using cached full mod details for {modName}");
+                        _logService.LogDebug($"Using cached full mod details for {modName}");
                         return cached.Value;
                     }
-                    // Cache expired, remove it
                     _modDetailsFullCache.Remove(modName);
                 }
             }
@@ -88,10 +84,8 @@ namespace FactorioModManager.Services.API
                 _semaphore.Release();
             }
 
-            // Fetch from API (outside lock)
             var result = await _inner.GetModDetailsFullAsync(modName);
 
-            // Update cache with result
             if (result != null)
             {
                 await _semaphore.WaitAsync();
@@ -116,7 +110,6 @@ namespace FactorioModManager.Services.API
         {
             var cacheKey = $"{hoursAgo}";
 
-            // Check cache first
             await _semaphore.WaitAsync();
             try
             {
@@ -124,10 +117,9 @@ namespace FactorioModManager.Services.API
                 {
                     if (DateTime.UtcNow - cached.Timestamp < TimeSpan.FromMinutes(10))
                     {
-                        LogService.Instance.LogDebug($"Using cached recent mods list (last {hoursAgo}h)");
+                        _logService.LogDebug($"Using cached recent mods list (last {hoursAgo}h)");
                         return cached.Value;
                     }
-                    // Cache expired, remove it
                     _recentModsCache.Remove(cacheKey);
                 }
             }
@@ -136,10 +128,8 @@ namespace FactorioModManager.Services.API
                 _semaphore.Release();
             }
 
-            // Fetch from API (outside lock)
             var result = await _inner.GetRecentlyUpdatedModsAsync(hoursAgo);
 
-            // Update cache with result
             await _semaphore.WaitAsync();
             try
             {
@@ -157,9 +147,22 @@ namespace FactorioModManager.Services.API
             return result;
         }
 
+        /// <summary>
+        /// Downloads are not cached - pass through to inner service
+        /// </summary>
+        public Task DownloadModAsync(
+            string downloadUrl,
+            string destinationPath,
+            IProgress<(long bytesDownloaded, long? totalBytes)>? progress = null,
+            CancellationToken cancellationToken = default)
+        {
+            // Pass through - don't cache downloads
+            return _inner.DownloadModAsync(downloadUrl, destinationPath, progress, cancellationToken);
+        }
+
         public void ClearCache()
         {
-            _semaphore.Wait(); // Synchronous wait for void method
+            _semaphore.Wait();
             try
             {
                 _modDetailsShortCache.Clear();
@@ -171,7 +174,7 @@ namespace FactorioModManager.Services.API
                 _semaphore.Release();
             }
 
-            LogService.Instance.Log("API cache cleared");
+            _logService.Log("API cache cleared");
         }
 
         private class CacheEntry<T>

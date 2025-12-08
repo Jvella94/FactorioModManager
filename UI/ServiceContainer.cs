@@ -38,16 +38,16 @@ namespace FactorioModManager
             RegisterSingleton<IModGroupService>(new ModGroupService(Resolve<ILogService>()));
             RegisterSingleton<IModMetadataService>(new ModMetadataService());
 
+            // API Services - wrap with caching
+            var apiService = new FactorioApiService(Resolve<HttpClient>(), Resolve<ILogService>());
+            var cachedApiService = new CachedFactorioApiService(apiService, Resolve<ILogService>());
+            RegisterSingleton<IFactorioApiService>(cachedApiService);
+
             RegisterSingleton<IModService>(new ModService(
                 Resolve<ISettingsService>(),
                 Resolve<ILogService>(),
-                Resolve<HttpClient>()
+                Resolve<IFactorioApiService>()
             ));
-
-            // API Services - wrap with caching
-            var apiService = new FactorioApiService(Resolve<HttpClient>());
-            var cachedApiService = new CachedFactorioApiService(apiService);
-            RegisterSingleton<IFactorioApiService>(cachedApiService);
 
             // ViewModels
             RegisterFactory(() => new MainWindowViewModel(

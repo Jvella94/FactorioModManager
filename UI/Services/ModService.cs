@@ -1,34 +1,39 @@
 ﻿using FactorioModManager.Models;
+using FactorioModManager.Services.API;
 using FactorioModManager.Services.Infrastructure;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
-using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace FactorioModManager.Services
 {
-    public class ModService(ISettingsService _settingsService, ILogService _logService, HttpClient httpClient) : IModService
+    public class ModService(
+        ISettingsService settingsService,
+        ILogService logService,
+        IFactorioApiService apiService) : IModService
     {
+        private readonly ISettingsService _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+        private readonly ILogService _logService = logService ?? throw new ArgumentNullException(nameof(logService));
+        private readonly IFactorioApiService _apiService = apiService ?? throw new ArgumentNullException(nameof(apiService));
         private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
-        private readonly Dictionary<string, HashSet<string>> _installedVersions = [];  // modName → versions
-        private readonly HttpClient _httpClient = httpClient;
+        private readonly Dictionary<string, HashSet<string>> _installedVersions = [];
 
         public string GetModsDirectory()
         {
-            return _settingsService.GetModsPath(); // ✅ Uses injected settings
+            return _settingsService.GetModsPath();
         }
 
         public List<(ModInfo Info, bool IsEnabled, DateTime? LastUpdated, string? ThumbnailPath, string FilePath)> LoadAllMods()
         {
             var modsDirectory = _settingsService.GetModsPath();
             var modListPath = Path.Combine(modsDirectory, Constants.FileSystem.ModListFileName);
-
             var enabledMods = new Dictionary<string, bool>();
+
             if (File.Exists(modListPath))
             {
                 var jsonString = File.ReadAllText(modListPath);
@@ -63,7 +68,6 @@ namespace FactorioModManager.Services
                             var isEnabled = enabledMods.GetValueOrDefault(modInfo.Name, true);
                             var lastModified = File.GetLastWriteTime(modFile);
                             var thumbnailPath = FindThumbnail(archive, modFile);
-
                             mods.Add((modInfo, isEnabled, lastModified, thumbnailPath, modFile));
                         }
                     }
@@ -75,7 +79,7 @@ namespace FactorioModManager.Services
                 }
             }
 
-            // 2) Folder mods (uncompressed directories with info.json)
+            // 2) Folder mods
             foreach (var dir in Directory.GetDirectories(modsDirectory))
             {
                 var infoPath = Path.Combine(dir, Constants.FileSystem.InfoJsonFileName);
@@ -92,7 +96,6 @@ namespace FactorioModManager.Services
                     var isEnabled = enabledMods.GetValueOrDefault(modInfo.Name, true);
                     var lastModified = Directory.GetLastWriteTime(dir);
 
-                    // Optional: look for thumbnail.png in folder
                     string? thumbnailPath = null;
                     var thumbOnDisk = Path.Combine(dir, "thumbnail.png");
                     if (File.Exists(thumbOnDisk))
@@ -126,8 +129,8 @@ namespace FactorioModManager.Services
         {
             var modsDirectory = _settingsService.GetModsPath();
             var modListPath = Path.Combine(modsDirectory, Constants.FileSystem.ModListFileName);
-
             ModList modListData;
+
             if (File.Exists(modListPath))
             {
                 var jsonString = File.ReadAllText(modListPath);
@@ -150,7 +153,6 @@ namespace FactorioModManager.Services
 
             var updatedJson = JsonSerializer.Serialize(modListData, JsonOptions);
             File.WriteAllText(modListPath, updatedJson);
-
             _logService.Log($"Mod '{modName}' {(enabled ? "enabled" : "disabled")}");
         }
 
@@ -166,27 +168,36 @@ namespace FactorioModManager.Services
             }
         }
 
-        public async Task DownloadVersionAsync(string modName, string version, string downloadUrl, CancellationToken cancellationToken = default)
+        public async Task DownloadVersionAsync(
+            string modName,
+            string version,
+            string downloadUrl,
+            IProgress<(long bytesDownloaded, long? totalBytes)>? progress = null,
+            CancellationToken cancellationToken = default)
         {
             var modsDir = _settingsService.GetModsPath();
             var zipPath = Path.Combine(modsDir, $"{modName}_{version}.zip");
 
-            using var httpClient = new HttpClient();
-            using var downloadStream = await _httpClient.GetStreamAsync(downloadUrl, cancellationToken);
-            using var fileStream = new FileStream(zipPath, FileMode.Create);
-
-            var buffer = new byte[8192];
-            int bytesRead;
-            long totalBytes = 0;
-
-            while ((bytesRead = await downloadStream.ReadAsync(buffer, cancellationToken)) > 0)
+            try
             {
-                await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken);
-                totalBytes += bytesRead;
-                // Report progress to caller if needed
+                // Use API service to download
+                await _apiService.DownloadModAsync(downloadUrl, zipPath, progress, cancellationToken);
+
+                // Update installed versions cache
+                RefreshInstalledVersions(modName);
+
+                _logService.Log($"Successfully downloaded {modName} v{version}");
             }
-            RefreshInstalledVersions(modName);
-            _logService.Log($"Downloaded {modName} v{version} to {zipPath}");
+            catch (OperationCanceledException)
+            {
+                _logService.LogWarning($"Download cancelled: {modName} v{version}");
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logService.LogError($"Failed to download {modName} v{version}: {ex.Message}", ex);
+                throw;
+            }
         }
 
         public void DeleteVersion(string modName, string version)
@@ -208,6 +219,7 @@ namespace FactorioModManager.Services
             {
                 RefreshInstalledVersions(modName);
             }
+
             return _installedVersions.GetValueOrDefault(modName, []);
         }
 
@@ -216,8 +228,8 @@ namespace FactorioModManager.Services
             var modsDir = _settingsService.GetModsPath();
             var modPattern = $"{modName}_*.zip";
             var modFiles = Directory.GetFiles(modsDir, modPattern);
-
             var versions = new HashSet<string>();
+
             foreach (var file in modFiles)
             {
                 var version = Path.GetFileNameWithoutExtension(file).Replace($"{modName}_", "");

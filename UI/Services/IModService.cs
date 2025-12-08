@@ -16,7 +16,15 @@ namespace FactorioModManager.Services
 
         string GetModsDirectory();
 
-        Task DownloadVersionAsync(string modName, string version, string downloadUrl, CancellationToken cancellationToken = default);
+        /// <summary>
+        /// Downloads a specific version of a mod
+        /// </summary>
+        Task DownloadVersionAsync(
+            string modName,
+            string version,
+            string downloadUrl,
+            IProgress<(long bytesDownloaded, long? totalBytes)>? progress = null,
+            CancellationToken cancellationToken = default);
 
         void DeleteVersion(string modName, string version);
 
