@@ -4,7 +4,7 @@
         Title="Application Logs"
         Width="900" Height="650"
         Background="#1E1E1E"
-        Icon="avares://FactorioModManager/Assets/avalonia-logo.ico">
+        Loaded="Window_Loaded">
 
   <Grid RowDefinitions="Auto,*,Auto" Margin="10">
     <!-- Header -->
@@ -19,13 +19,13 @@
                    FontSize="16"
                    FontWeight="Bold"
                    Foreground="White"
-                   VerticalAlignment="Center"/>
+                   VerticalAlignment="Center" />
 
         <TextBlock Grid.Column="2"
                    Name="LogCountText"
                    FontSize="12"
                    Foreground="#888"
-                   VerticalAlignment="Center"/>
+                   VerticalAlignment="Center" />
       </Grid>
     </Border>
 
@@ -34,11 +34,11 @@
             Background="#252525"
             CornerRadius="5"
             Padding="10">
-      <ScrollViewer>
+      <ScrollViewer Name="LogScrollViewer">
         <SelectableTextBlock Name="LogTextBlock"
                             FontFamily="Consolas,Courier New,monospace"
                             FontSize="12"
-                            TextWrapping="Wrap"/>
+                            TextWrapping="Wrap" />
       </ScrollViewer>
     </Border>
 
@@ -51,20 +51,19 @@
                 HorizontalAlignment="Right">
       <Button Content="🔄 Refresh"
               Click="Refresh_Click"
-              Width="100"/>
+              Width="100" />
       <Button Content="📁 Open Log File"
               Click="OpenLogFile_Click"
-              Width="130"/>
+              Width="130" />
       <Button Content="📦 Archive Logs"
               Click="ArchiveLogs_Click"
-              Width="120"/>
+              Width="120" />
       <Button Content="🗑️ Clear Logs"
               Click="ClearLogs_Click"
-              Width="120"/>
+              Width="120" />
       <Button Content="Close"
               Click="Close_Click"
-              Width="80"/>
+              Width="80" />
     </StackPanel>
-
   </Grid>
 </Window>

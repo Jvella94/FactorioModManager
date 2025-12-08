@@ -29,12 +29,14 @@ namespace FactorioModManager.Services
         private readonly string _metadataPath;
         private Dictionary<string, ModMetadata> _cache = [];
         private static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = true };
+        private readonly ILogService _logService;
 
-        public ModMetadataService()
+        public ModMetadataService(ILogService logService)
         {
             var modsDir = ModPathHelper.GetModsDirectory();
             _metadataPath = Path.Combine(modsDir, "mod-metadata.json");
             LoadMetadata();
+            _logService = logService;
         }
 
         private void LoadMetadata()
@@ -55,7 +57,7 @@ namespace FactorioModManager.Services
             }
             catch (Exception ex)
             {
-                LogService.Instance.LogDebug($"Error loading metadata: {ex.Message}");
+                _logService.LogError($"Error loading metadata: {ex.Message}", ex);
             }
         }
 
@@ -72,7 +74,7 @@ namespace FactorioModManager.Services
             }
             catch (Exception ex)
             {
-                LogService.Instance.LogDebug($"Error saving metadata: {ex.Message}");
+                _logService.LogError($"Error saving metadata: {ex.Message}", ex);
             }
         }
 
@@ -121,7 +123,7 @@ namespace FactorioModManager.Services
             metadata.LastChecked = DateTime.UtcNow;
             SaveMetadata();
 
-            LogService.Instance.LogDebug($"Saved source URL for {modName}: {sourceUrl ?? "(none)"}");
+            _logService.LogDebug($"Saved source URL for {modName}: {sourceUrl ?? "(none)"}");
         }
 
         public string? GetCategory(string modName)
@@ -203,7 +205,7 @@ namespace FactorioModManager.Services
                 metadata.HasUpdate = false;
                 metadata.LatestVersion = null;
                 SaveMetadata();
-                LogService.Instance.LogDebug($"Cleared update flag for {modName}");
+                _logService.LogDebug($"Cleared update flag for {modName}");
             }
         }
 
@@ -225,7 +227,7 @@ namespace FactorioModManager.Services
                 metadata.HasUpdate = false;
             }
             SaveMetadata();
-            LogService.Instance.LogDebug("Cleared all update flags");
+            _logService.LogDebug("Cleared all update flags");
         }
     }
 }

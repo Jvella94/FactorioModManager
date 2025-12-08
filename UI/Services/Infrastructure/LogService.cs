@@ -10,8 +10,8 @@ namespace FactorioModManager.Services.Infrastructure
 {
     public class LogService : ILogService
     {
-        private static readonly Lazy<LogService> _instance = new(() => new LogService());
-        public static LogService Instance => _instance.Value;
+        // private static readonly Lazy<LogService> _instance = new(() => new LogService());
+        // public static LogService Instance => _instance.Value;
 
         private readonly ConcurrentBag<LogEntry> _logs = [];
         private readonly string _logFilePath;

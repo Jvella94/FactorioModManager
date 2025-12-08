@@ -13,6 +13,8 @@ namespace FactorioModManager.Views
 {
     public partial class LogWindow : Window
     {
+        private readonly ILogService _logService;
+
         [GeneratedRegex(@"(\b(?:enabled|disabled|installed|removed|updated|downloading|downloaded)\b)", RegexOptions.IgnoreCase)]
         private static partial Regex StateWordsRegex();
 
@@ -22,15 +24,16 @@ namespace FactorioModManager.Views
         [GeneratedRegex(@"(?:for|from)\s+([A-Za-z0-9_-]+)")]
         private static partial Regex ModNameRegex();
 
-        public LogWindow()
+        public LogWindow(ILogService logService)
         {
             InitializeComponent();
+            _logService = logService;
             LoadLogs();
         }
 
         private void LoadLogs()
         {
-            var logs = LogService.Instance.GetLogs().ToList();
+            var logs = _logService.GetLogs().ToList();
             var inlineCollection = new InlineCollection();
 
             foreach (var log in logs)
@@ -104,6 +107,11 @@ namespace FactorioModManager.Views
             }
         }
 
+        private async void Window_Loaded(object? sender, RoutedEventArgs e)
+        {
+            LogScrollViewer.ScrollToEnd();
+        }
+
         private void Refresh_Click(object? sender, RoutedEventArgs e)
         {
             LoadLogs();
@@ -113,7 +121,7 @@ namespace FactorioModManager.Views
         {
             try
             {
-                var logFilePath = LogService.Instance.GetLogFilePath();
+                var logFilePath = _logService.GetLogFilePath();
                 Process.Start(new ProcessStartInfo
                 {
                     FileName = logFilePath,
@@ -122,7 +130,7 @@ namespace FactorioModManager.Views
             }
             catch (Exception ex)
             {
-                LogService.Instance.LogError($"Error opening log file: {ex.Message}", ex);
+                _logService.LogError($"Error opening log file: {ex.Message}", ex);
             }
         }
 
@@ -138,7 +146,7 @@ namespace FactorioModManager.Views
             if (result)
             {
                 // Clear the logs
-                LogService.Instance.ClearLogs(); // You'll need to add this method to LogService
+                _logService.ClearLogs();
                 LoadLogs();
             }
         }
@@ -159,7 +167,7 @@ namespace FactorioModManager.Views
 
             if (result)
             {
-                LogService.Instance.ArchiveLogs();
+                _logService.ArchiveLogs();
                 LoadLogs();
 
                 var successDialog = new Dialogs.MessageBoxDialog(

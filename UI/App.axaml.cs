@@ -4,6 +4,7 @@ using Avalonia.Markup.Xaml;
 using FactorioModManager.Services.Infrastructure;
 using FactorioModManager.Views;
 using System;
+using System.Diagnostics;
 
 namespace FactorioModManager
 {
@@ -22,17 +23,17 @@ namespace FactorioModManager
                 {
                     // Initialize service container
                     var container = ServiceContainer.Instance;
-
+                    var logservice = container.Resolve<ILogService>();
                     // Auto-prune logs older than 30 days on startup
-                    LogService.Instance.PruneOldLogs(30);
+                    logservice.PruneOldLogs(30);
                     // Log startup
-                    LogService.Instance.Log("Application starting...");
+                    logservice.Log("Application starting...");
 
                     desktop.MainWindow = new MainWindow();
                 }
                 catch (Exception ex)
                 {
-                    LogService.Instance.LogError($"Error during initialization: {ex.Message}", ex);
+                    Debug.WriteLine($"Error during initialization: {ex.Message}", ex);
                     throw;
                 }
             }

@@ -15,6 +15,7 @@ namespace FactorioModManager.ViewModels
     public class VersionHistoryReleaseViewModel : ReactiveObject
     {
         private readonly IModService _modService;
+        private readonly ILogService _logService;
         private bool _isInstalling;
         private double _downloadProgress;
         private bool _isInstalled;
@@ -47,17 +48,15 @@ namespace FactorioModManager.ViewModels
 
         public bool CanDeleteOrDownload => !IsInstalling;
 
-        public VersionHistoryReleaseViewModel(ReleaseDTO release, IModService modService, string modName)
+        public VersionHistoryReleaseViewModel(ReleaseDTO release, IModService modService, string modName, ILogService logService)
         {
             Release = release;
             _modService = modService;
             IsInstalled = _modService.GetInstalledVersions(modName).Contains(release.Version);
+            _logService = logService;
         }
 
-#pragma warning disable CA1822 // Mark members as static
-
         public ModInfo? ExtractInfoJsonFromZip(string zipPath)
-#pragma warning restore CA1822 // Mark members as static
         {
             try
             {
@@ -75,7 +74,7 @@ namespace FactorioModManager.ViewModels
             }
             catch (Exception ex)
             {
-                LogService.Instance.LogError($"Failed to extract info.json from {Path.GetFileName(zipPath)}: {ex.Message}", ex);
+                _logService.LogError($"Failed to extract info.json from {Path.GetFileName(zipPath)}: {ex.Message}", ex);
             }
             return null;
         }

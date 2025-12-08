@@ -36,7 +36,7 @@ namespace FactorioModManager
             RegisterSingleton<ILogService>(new LogService());
             RegisterSingleton<ISettingsService>(new SettingsService(Resolve<ILogService>()));
             RegisterSingleton<IModGroupService>(new ModGroupService(Resolve<ILogService>()));
-            RegisterSingleton<IModMetadataService>(new ModMetadataService());
+            RegisterSingleton<IModMetadataService>(new ModMetadataService(Resolve<ILogService>()));
 
             // API Services - wrap with caching
             var apiService = new FactorioApiService(Resolve<HttpClient>(), Resolve<ILogService>());

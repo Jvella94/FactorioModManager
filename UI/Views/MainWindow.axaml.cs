@@ -4,6 +4,7 @@ using Avalonia.Interactivity;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using FactorioModManager.Infrastructure;
+using FactorioModManager.Services.Infrastructure;
 using FactorioModManager.ViewModels;
 using FactorioModManager.ViewModels.MainWindow;
 using System;
@@ -42,7 +43,7 @@ namespace FactorioModManager.Views
 
         private void OpenLogs(object? sender, RoutedEventArgs e)
         {
-            var logWindow = new LogWindow();
+            var logWindow = new LogWindow(ServiceContainer.Instance.Resolve<ILogService>());
             logWindow.Show();
         }
 

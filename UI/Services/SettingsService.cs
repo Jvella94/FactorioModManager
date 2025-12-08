@@ -79,7 +79,7 @@ namespace FactorioModManager.Services
             }
         }
 
-        private static (string? Username, string? Token) LoadFactorioDefaults()
+        private (string? Username, string? Token) LoadFactorioDefaults()
         {
             try
             {
@@ -101,18 +101,18 @@ namespace FactorioModManager.Services
                         ? tokenElement.GetString()
                         : null;
 
-                    LogService.Instance.LogDebug($"Loaded Factorio credentials from player-data.json: Username={username}, Token={(token != null ? "***" : "null")}");
+                    _logService.LogDebug($"Loaded Factorio credentials from player-data.json: Username={username}, Token={(token != null ? "***" : "null")}");
 
                     return (username, token);
                 }
                 else
                 {
-                    LogService.Instance.LogDebug($"player-data.json not found at {playerDataPath}");
+                    _logService.LogDebug($"player-data.json not found at {playerDataPath}");
                 }
             }
             catch (Exception ex)
             {
-                LogService.Instance.LogDebug($"Error loading Factorio player-data.json: {ex.Message}");
+                _logService.LogError($"Error loading Factorio player-data.json: {ex.Message}", ex);
             }
 
             return (null, null);

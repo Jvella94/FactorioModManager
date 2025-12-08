@@ -37,7 +37,7 @@ namespace FactorioModManager.ViewModels
 
             Releases = new ObservableCollection<VersionHistoryReleaseViewModel>(
                releases.OrderByDescending(r => r.ReleasedAt)
-               .Select(r => new VersionHistoryReleaseViewModel(r, modService, modName))  // ✅ Pass modName
+               .Select(r => new VersionHistoryReleaseViewModel(r, modService, modName, logService))  // ✅ Pass modName
            );
 
             ActionCommand = ReactiveCommand.CreateFromTask<VersionHistoryReleaseViewModel>(HandleActionAsync);
@@ -126,14 +126,11 @@ namespace FactorioModManager.ViewModels
 
         private void NotifyParentModInstalledCountChanged()
         {
-            var installedVersions = ServiceContainer.Instance
-                 .Resolve<IModService>()
-                 .GetInstalledVersions(ModName);
+            var installedVersions = _modService.GetInstalledVersions(ModName);
             foreach (var release in Releases)
             {
                 release.IsInstalled = installedVersions.Contains(release.Version);
             }
-
             _logService.Log($"Updated {Releases.Count} releases for {ModName}");
             // Option 1: Raise event or use messenger service
             // Option 2: Refresh via ModService
