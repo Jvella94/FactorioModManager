@@ -5,6 +5,8 @@ VisualStudioVersion = 18.0.11222.15
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FactorioModManager", "UI\FactorioModManager.csproj", "{C60CF39E-7F51-1BDF-6FDA-70075C970DA3}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FactorioModPortalAnalyzer", "FactorioModPortalAnalyzer\FactorioModPortalAnalyzer.csproj", "{A8DD86CB-A430-461B-9E22-657725C33EEC}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +17,10 @@ Global
 		{C60CF39E-7F51-1BDF-6FDA-70075C970DA3}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C60CF39E-7F51-1BDF-6FDA-70075C970DA3}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C60CF39E-7F51-1BDF-6FDA-70075C970DA3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A8DD86CB-A430-461B-9E22-657725C33EEC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A8DD86CB-A430-461B-9E22-657725C33EEC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A8DD86CB-A430-461B-9E22-657725C33EEC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A8DD86CB-A430-461B-9E22-657725C33EEC}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
