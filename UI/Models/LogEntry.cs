@@ -10,10 +10,5 @@ namespace FactorioModManager.Models
         Debug
     }
 
-    public record LogEntry
-    {
-        public DateTime Timestamp { get; set; }
-        public string Message { get; set; } = string.Empty;
-        public LogLevel Level { get; set; }
-    }
+    public record LogEntry(DateTime Timestamp, string Message, LogLevel Level);
 }

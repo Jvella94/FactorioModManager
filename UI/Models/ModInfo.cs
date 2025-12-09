@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
 namespace FactorioModManager.Models
@@ -9,7 +10,6 @@ namespace FactorioModManager.Models
     public class ModInfo
     {
         private const string PlaceholderTitle = "[MOD DISPLAY NAME]";
-        private string title = string.Empty;
 
         [JsonPropertyName("name")]
         public string Name { get; set; } = string.Empty;
@@ -18,11 +18,10 @@ namespace FactorioModManager.Models
         public string Version { get; set; } = string.Empty;
 
         [JsonPropertyName("title")]
-        public string Title
-        {
-            get => title;
-            set => title = value != PlaceholderTitle ? value : Name;
-        }
+        public string Title { get; init; } = string.Empty;
+
+        [JsonIgnore]
+        public string DisplayTitle => Title != PlaceholderTitle ? Title : Name;
 
         [JsonPropertyName("author")]
         public string Author { get; set; } = string.Empty;

@@ -6,10 +6,10 @@ namespace FactorioModManager.Models
     public class ModListEntry
     {
         [JsonPropertyName("name")]
-        public string Name { get; set; } = string.Empty;
+        public string Name { get; init; } = string.Empty;
 
         [JsonPropertyName("enabled")]
-        public bool Enabled { get; set; }
+        public bool Enabled { get; init; }
     }
 
     /// <summary>

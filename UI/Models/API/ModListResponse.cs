@@ -21,18 +21,10 @@ namespace FactorioModManager.Models.API
         public ModRelease? LatestRelease { get; set; }
     }
 
-    public record PaginationInfo
-    {
-        [JsonPropertyName("count")]
-        public int Count { get; set; }
-
-        [JsonPropertyName("page")]
-        public int Page { get; set; }
-
-        [JsonPropertyName("page_count")]
-        public int PageCount { get; set; }
-
-        [JsonPropertyName("page_size")]
-        public int PageSize { get; set; }
-    }
+    public record PaginationInfo(
+        [property: JsonPropertyName("count")] int Count,
+        [property: JsonPropertyName("page")] int Page,
+        [property: JsonPropertyName("page_count")] int PageCount,
+        [property: JsonPropertyName("page_size")] int PageSize
+    );
 }

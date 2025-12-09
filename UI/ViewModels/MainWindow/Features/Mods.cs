@@ -127,7 +127,7 @@ namespace FactorioModManager.ViewModels.MainWindow
             var modVm = new ModViewModel
             {
                 Name = info.Name,
-                Title = info.Title ?? info.Name,
+                Title = info.DisplayTitle ?? info.Name,
                 Version = info.Version,
                 Author = info.Author,
                 Description = info.Description ?? string.Empty,

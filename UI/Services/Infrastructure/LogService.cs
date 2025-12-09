@@ -43,11 +43,11 @@ namespace FactorioModManager.Services.Infrastructure
         private void LogInternal(string message, LogLevel level)
         {
             var entry = new LogEntry
-            {
-                Timestamp = DateTime.UtcNow,
-                Level = level,
-                Message = message
-            };
+            (
+                Timestamp: DateTime.UtcNow,
+                Level: level,
+                Message: message
+            );
 
             _logs.Add(entry);
             WriteToFile(entry);
@@ -119,11 +119,11 @@ namespace FactorioModManager.Services.Infrastructure
                 var message = line[(levelEnd + 1)..].Trim();
 
                 return new LogEntry
-                {
-                    Timestamp = ts,
-                    Level = level,
-                    Message = message
-                };
+                (
+                    Timestamp: DateTime.UtcNow,
+                    Level: level,
+                    Message: message
+                );
             }
             catch
             {
