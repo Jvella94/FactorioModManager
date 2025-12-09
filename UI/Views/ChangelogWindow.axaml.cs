@@ -3,7 +3,7 @@ using FactorioModManager.Views.Base;
 
 namespace FactorioModManager.Views
 {
-    public partial class ChangelogWindow : DialogWindowBase<(bool Success, string? Data, bool IsUrl)>
+    public partial class ChangelogWindow : DialogWindowBase<bool>
     {
         public ChangelogWindow()
         {
@@ -12,8 +12,8 @@ namespace FactorioModManager.Views
 
         public ChangelogWindow(string modTitle, string changelog) : this()
         {
-            this.FindControl<TextBlock>("ModTitle")!.Text = $"{modTitle} - Changelog";
-            this.FindControl<TextBlock>("ChangelogText")!.Text = changelog;
+            ModTitle.Text = $"{modTitle} - Changelog";
+            ChangelogText.Text = changelog;
         }
     }
 }

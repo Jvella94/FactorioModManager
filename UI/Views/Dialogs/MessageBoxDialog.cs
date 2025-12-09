@@ -1,50 +1,22 @@
-﻿using Avalonia;
-using Avalonia.Controls;
-using Avalonia.Interactivity;
+﻿using Avalonia.Controls;
 using Avalonia.Layout;
-using Avalonia.Media;
-using FactorioModManager.Views.Base;
-using System;
 
 namespace FactorioModManager.Views.Dialogs
 {
     /// <summary>
     /// A simple message box dialog for displaying information to the user
     /// </summary>
-    public class MessageBoxDialog : DialogWindowBase<bool>
+    // MessageBoxDialog.cs
+    public class MessageBoxDialog : MessageDialogBase<bool>
     {
         public MessageBoxDialog(string title, string message)
+            : base(title, message, width: 450, height: 200)
         {
-            Title = title;
-            Width = 450;
-            Height = 200;
-            MinWidth = 350;
-            MinHeight = 150;
-            WindowStartupLocation = WindowStartupLocation.CenterOwner;
             CanResize = true;
-
-            BuildUI(message);
         }
 
-        private void BuildUI(string message)
+        protected override Panel CreateButtonPanel()
         {
-            var mainPanel = new StackPanel
-            {
-                Margin = new Thickness(20),
-                Spacing = 20
-            };
-
-            // Message text
-            var messageBlock = new TextBlock
-            {
-                Text = message,
-                TextWrapping = TextWrapping.Wrap,
-                Foreground = Brushes.White,
-                FontSize = 14,
-                VerticalAlignment = VerticalAlignment.Top
-            };
-
-            // OK Button
             var okButton = new Button
             {
                 Content = "OK",
@@ -53,24 +25,11 @@ namespace FactorioModManager.Views.Dialogs
                 HorizontalAlignment = HorizontalAlignment.Center,
                 IsDefault = true
             };
+            okButton.Click += (s, e) => CloseWithResult(true);
 
-            okButton.Click += OkButton_Click;
-
-            mainPanel.Children.Add(messageBlock);
-            mainPanel.Children.Add(okButton);
-
-            Content = mainPanel;
-        }
-
-        private void OkButton_Click(object? sender, RoutedEventArgs e)
-        {
-            CloseWithResult(true);
-        }
-
-        protected override void OnDialogOpened(object? sender, EventArgs e)
-        {
-            base.OnDialogOpened(sender, e);
-            // Focus is handled automatically by IsDefault on OK button
+            var panel = new StackPanel();
+            panel.Children.Add(okButton);
+            return panel;
         }
     }
 }

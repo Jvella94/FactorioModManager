@@ -1,186 +1,40 @@
-﻿using Avalonia.Controls;
-using Avalonia.Controls.Documents;
+﻿// Views/LogWindow.axaml.cs
+using Avalonia.Controls;
 using Avalonia.Interactivity;
-using Avalonia.Media;
-using FactorioModManager.Models;
 using FactorioModManager.Services.Infrastructure;
+using FactorioModManager.ViewModels.Dialogs;
 using System;
-using System.Diagnostics;
-using System.Linq;
-using System.Text.RegularExpressions;
 
 namespace FactorioModManager.Views
 {
     public partial class LogWindow : Window
     {
-        private readonly ILogService _logService;
-
-        [GeneratedRegex(@"(\b(?:enabled|disabled|installed|removed|updated|downloading|downloaded)\b)", RegexOptions.IgnoreCase)]
-        private static partial Regex StateWordsRegex();
-
-        [GeneratedRegex(@"^(enabled|disabled|installed|removed|updated|downloading|downloaded)$", RegexOptions.IgnoreCase)]
-        private static partial Regex StateWordMatchRegex();
-
-        [GeneratedRegex(@"(?:for|from)\s+([A-Za-z0-9_-]+)")]
-        private static partial Regex ModNameRegex();
+        private readonly LogWindowViewModel _viewModel;
 
         public LogWindow(ILogService logService)
         {
             InitializeComponent();
-            _logService = logService;
-            LoadLogs();
+            _viewModel = new LogWindowViewModel(logService);
+            DataContext = _viewModel;
         }
 
         public LogWindow()
+            : this(ServiceContainer.Instance.Resolve<ILogService>())
         {
-            _logService = ServiceContainer.Instance.Resolve<ILogService>();
         }
 
-        private void LoadLogs()
+        // ✅ Only platform-specific logic remains
+        protected override void OnOpened(EventArgs e)
         {
-            var logs = _logService.GetLogs().ToList();
-            var inlineCollection = new InlineCollection();
-
-            foreach (var log in logs)
-            {
-                var timestamp = $"[{log.Timestamp:yyyy-MM-dd HH:mm:ss}] ";
-                var level = $"[{log.Level}] ";
-
-                // Timestamp in gray
-                inlineCollection.Add(new Run(timestamp) { Foreground = Brushes.Gray });
-
-                // Level with color coding
-                var levelBrush = log.Level switch
-                {
-                    LogLevel.Error => Brushes.Red,
-                    LogLevel.Warning => Brushes.Orange,
-                    LogLevel.Debug => Brushes.Cyan,
-                    _ => Brushes.White
-                };
-                inlineCollection.Add(new Run(level) { Foreground = levelBrush, FontWeight = FontWeight.Bold });
-
-                // Highlight mod names and states
-                var message = log.Message;
-                var parts = StateWordsRegex().Split(message);
-
-                foreach (var part in parts)
-                {
-                    if (StateWordMatchRegex().IsMatch(part))
-                    {
-                        inlineCollection.Add(new Run(part) { Foreground = Brushes.LightGreen, FontWeight = FontWeight.Bold });
-                    }
-                    else
-                    {
-                        var matches = ModNameRegex().Matches(part);
-                        if (matches.Count > 0)
-                        {
-                            int lastIndex = 0;
-                            foreach (Match match in matches)
-                            {
-                                if (match.Index > lastIndex)
-                                {
-                                    inlineCollection.Add(new Run(part[lastIndex..match.Index]) { Foreground = Brushes.White });
-                                }
-
-                                var prefix = part[match.Index..match.Groups[1].Index];
-                                inlineCollection.Add(new Run(prefix) { Foreground = Brushes.White });
-                                inlineCollection.Add(new Run(match.Groups[1].Value) { Foreground = Brushes.Cyan, FontWeight = FontWeight.Bold });
-
-                                lastIndex = match.Index + match.Length;
-                            }
-
-                            if (lastIndex < part.Length)
-                            {
-                                inlineCollection.Add(new Run(part[lastIndex..]) { Foreground = Brushes.White });
-                            }
-                        }
-                        else
-                        {
-                            inlineCollection.Add(new Run(part) { Foreground = Brushes.White });
-                        }
-                    }
-                }
-
-                inlineCollection.Add(new Run(Environment.NewLine));
-            }
-
-            LogTextBlock.Inlines = inlineCollection;
-
-            if (this.FindControl<TextBlock>("LogCountText") is TextBlock countText)
-            {
-                countText.Text = $"{logs.Count} log entries";
-            }
-        }
-
-        private async void Window_Loaded(object? sender, RoutedEventArgs e)
-        {
+            base.OnOpened(e);
+            // Scroll to bottom after window loads
             LogScrollViewer.ScrollToEnd();
         }
 
-        private void Refresh_Click(object? sender, RoutedEventArgs e)
+        protected override void OnClosed(EventArgs e)
         {
-            LoadLogs();
-        }
-
-        private void OpenLogFile_Click(object? sender, RoutedEventArgs e)
-        {
-            try
-            {
-                var logFilePath = _logService.GetLogFilePath();
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = logFilePath,
-                    UseShellExecute = true
-                });
-            }
-            catch (Exception ex)
-            {
-                _logService.LogError($"Error opening log file: {ex.Message}", ex);
-            }
-        }
-
-        private async void ClearLogs_Click(object? sender, RoutedEventArgs e)
-        {
-            var dialog = new Dialogs.ConfirmationDialog(
-                "Clear Logs",
-                "Are you sure you want to clear all logs?\n\nThis action cannot be undone."
-            );
-
-            var result = await dialog.ShowDialog(this);
-
-            if (result)
-            {
-                // Clear the logs
-                _logService.ClearLogs();
-                LoadLogs();
-            }
-        }
-
-        private void Close_Click(object? sender, RoutedEventArgs e)
-        {
-            Close();
-        }
-
-        private async void ArchiveLogs_Click(object? sender, RoutedEventArgs e)
-        {
-            var dialog = new Dialogs.ConfirmationDialog(
-                "Archive Logs",
-                "Archive current logs to a timestamped file and start fresh?"
-            );
-
-            var result = await dialog.ShowDialog(this);
-
-            if (result)
-            {
-                _logService.ArchiveLogs();
-                LoadLogs();
-
-                var successDialog = new Dialogs.MessageBoxDialog(
-                    "Success",
-                    "Logs have been archived successfully."
-                );
-                await successDialog.ShowDialog(this);
-            }
+            _viewModel?.Dispose();
+            base.OnClosed(e);
         }
     }
 }

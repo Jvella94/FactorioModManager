@@ -31,8 +31,6 @@ namespace FactorioModManager.Views.Converters
         /// Not supported - this converter is one-way only
         /// </summary>
         public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
-        {
-            throw new NotSupportedException("IsNotGameDependencyConverter is a one-way converter.");
-        }
+            => throw new NotSupportedException("One-way converter");
     }
 }

@@ -1,11 +1,9 @@
-﻿using Avalonia.Controls;
-using Avalonia.Interactivity;
+﻿using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using FactorioModManager.Services;
 using FactorioModManager.ViewModels.Dialogs;
 using FactorioModManager.Views.Base;
 using System;
-using System.Threading.Tasks;
 
 namespace FactorioModManager.Views
 {
@@ -22,11 +20,14 @@ namespace FactorioModManager.Views
             InitializeComponent();
             _viewModel = new SettingsWindowViewModel(settingsService);
             DataContext = _viewModel;
+
+            _viewModel.SaveCommand.Subscribe(_ => Close(true));
+            _viewModel.CancelCommand.Subscribe(_ => Close(false));
         }
 
         private async void BrowseModsPath(object? sender, RoutedEventArgs e)
         {
-            var topLevel = TopLevel.GetTopLevel(this);
+            var topLevel = GetTopLevel(this);
             if (topLevel == null) return;
 
             var folderPickerOptions = new FolderPickerOpenOptions
@@ -40,33 +41,6 @@ namespace FactorioModManager.Views
             {
                 _viewModel.ModsPath = folders[0].Path.LocalPath;
             }
-        }
-
-        private async void SaveSettings(object? sender, RoutedEventArgs e)
-        {
-            if (_viewModel.Validate())
-            {
-                _viewModel.SaveCommand.Execute().Subscribe();
-                Close(true);
-            }
-            else
-            {
-                await ShowValidationError("Please select a valid mods directory.");
-            }
-        }
-
-        private void CancelSettings(object? sender, RoutedEventArgs e)
-        {
-            Close(false);
-        }
-
-#pragma warning disable CA1859 // Use concrete types when possible for improved performance
-
-        private Task ShowValidationError(string message)
-#pragma warning restore CA1859 // Use concrete types when possible for improved performance
-        {
-            var dialog = new Dialogs.MessageBoxDialog("Validation Error", message);
-            return dialog.ShowDialog(this);
         }
     }
 }

@@ -9,11 +9,11 @@
   <Grid RowDefinitions="Auto,*">
     <Border Grid.Row="0" BorderBrush="#333" BorderThickness="0,0,0,1"
             Background="#2B2B2B" Padding="15">
-      <TextBlock FontSize="18" FontWeight="Bold" Name="ModTitle"/>
+      <TextBlock FontSize="18" FontWeight="Bold" Name="ModTitle" />
     </Border>
 
     <ScrollViewer Grid.Row="1" Padding="15">
-      <TextBlock Name="ChangelogText" TextWrapping="Wrap" FontFamily="Consolas,Courier New"/>
+      <TextBlock Name="ChangelogText" TextWrapping="Wrap" FontFamily="Consolas,Courier New" />
     </ScrollViewer>
   </Grid>
 </Window>

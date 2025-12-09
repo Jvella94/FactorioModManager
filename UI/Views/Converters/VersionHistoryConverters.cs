@@ -46,7 +46,7 @@ namespace FactorioModManager.Views.Converters
         }
 
         public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
-            => throw new NotImplementedException();
+            => throw new NotSupportedException("One-way converter");
     }
 
     public class CanDownloadToVisibilityConverter : IValueConverter  // ✅ NEW
@@ -57,7 +57,7 @@ namespace FactorioModManager.Views.Converters
             => value is bool canDownload && canDownload ? "Visible" : "Collapsed";
 
         public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
-         => throw new NotImplementedException();
+         => throw new NotSupportedException("One-way converter");
     }
 
     public class ActionButtonTextConverter : IValueConverter  // ✅ NEW
@@ -70,14 +70,14 @@ namespace FactorioModManager.Views.Converters
                 : "Download";
 
         public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
-            => throw new NotImplementedException();
+            => throw new NotSupportedException("One-way converter");
     }
 
     public class ActionButtonColorConverter : IValueConverter  // ✅ NEW
     {
         public static ActionButtonColorConverter Instance { get; } = new();
 
-        private static readonly SolidColorBrush GreenBrush = new (Color.FromRgb(60, 120, 60));
+        private static readonly SolidColorBrush GreenBrush = new(Color.FromRgb(60, 120, 60));
         private static readonly SolidColorBrush OrangeRedBrush = new(Color.FromRgb(255, 69, 0));
 
         public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
@@ -86,6 +86,6 @@ namespace FactorioModManager.Views.Converters
                 : GreenBrush;
 
         public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
-            => throw new NotImplementedException();
+            => throw new NotSupportedException("One-way converter");
     }
 }

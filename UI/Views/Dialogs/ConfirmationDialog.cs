@@ -1,47 +1,15 @@
-﻿using Avalonia;
-using Avalonia.Controls;
-using Avalonia.Interactivity;
+﻿using Avalonia.Controls;
 using Avalonia.Layout;
-using Avalonia.Media;
-using FactorioModManager.Views.Base;
-using System;
 
 namespace FactorioModManager.Views.Dialogs
 {
     /// <summary>
     /// A confirmation dialog with Yes/No buttons
     /// </summary>
-    public class ConfirmationDialog : DialogWindowBase<bool>
+    public class ConfirmationDialog(string title, string message) : MessageDialogBase<bool>(title, message)
     {
-        public ConfirmationDialog(string title, string message)
+        protected override Panel CreateButtonPanel()
         {
-            Title = title;
-            Width = 400;
-            Height = 180;
-            WindowStartupLocation = WindowStartupLocation.CenterOwner;
-            CanResize = false;
-
-            BuildUI(message);
-        }
-
-        private void BuildUI(string message)
-        {
-            var mainPanel = new StackPanel
-            {
-                Margin = new Thickness(20),
-                Spacing = 20
-            };
-
-            // Message text
-            var messageBlock = new TextBlock
-            {
-                Text = message,
-                TextWrapping = TextWrapping.Wrap,
-                Foreground = Brushes.White,
-                FontSize = 14
-            };
-
-            // Button panel
             var buttonPanel = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
@@ -49,7 +17,6 @@ namespace FactorioModManager.Views.Dialogs
                 Spacing = 10
             };
 
-            // Yes button
             var yesButton = new Button
             {
                 Content = "Yes",
@@ -57,9 +24,8 @@ namespace FactorioModManager.Views.Dialogs
                 Height = 32,
                 IsDefault = true
             };
-            yesButton.Click += YesButton_Click;
+            yesButton.Click += (s, e) => CloseWithResult(true);
 
-            // No button
             var noButton = new Button
             {
                 Content = "No",
@@ -67,31 +33,12 @@ namespace FactorioModManager.Views.Dialogs
                 Height = 32,
                 IsCancel = true
             };
-            noButton.Click += NoButton_Click;
+            noButton.Click += (s, e) => CloseWithResult(false);
 
             buttonPanel.Children.Add(yesButton);
             buttonPanel.Children.Add(noButton);
 
-            mainPanel.Children.Add(messageBlock);
-            mainPanel.Children.Add(buttonPanel);
-
-            Content = mainPanel;
-        }
-
-        private void YesButton_Click(object? sender, RoutedEventArgs e)
-        {
-            CloseWithResult(true);
-        }
-
-        private void NoButton_Click(object? sender, RoutedEventArgs e)
-        {
-            CloseWithResult(false);
-        }
-
-        protected override void OnDialogOpened(object? sender, EventArgs e)
-        {
-            base.OnDialogOpened(sender, e);
-            // Focus is handled automatically by IsDefault on Yes button
+            return buttonPanel;
         }
     }
 }

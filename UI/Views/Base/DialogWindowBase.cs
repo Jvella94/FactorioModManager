@@ -8,12 +8,14 @@ namespace FactorioModManager.Views.Base
     /// Base class for dialog windows with result handling
     /// </summary>
     /// <typeparam name="TResult">The type of result returned by the dialog. Use nullable types for dialogs that can be canceled.</typeparam>
-    public abstract class DialogWindowBase<TResult> : Window
+    public abstract class DialogWindowBase<TResult> : Window, IDisposable
     {
         /// <summary>
         /// The result of the dialog. Will be null if the dialog was canceled.
         /// </summary>
         protected TResult? Result { get; set; }
+
+        private bool _disposed;
 
         protected DialogWindowBase()
         {
@@ -33,6 +35,13 @@ namespace FactorioModManager.Views.Base
                     Cancel();
                 }
             };
+
+            Closed += OnDialogClosed;
+        }
+
+        private void OnDialogClosed(object? sender, EventArgs e)
+        {
+            Dispose();
         }
 
         /// <summary>
@@ -66,6 +75,28 @@ namespace FactorioModManager.Views.Base
         public new async Task<TResult?> ShowDialog(Window owner)
         {
             return await ShowDialog<TResult?>(owner);
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposed)
+            {
+                if (disposing)
+                {
+                    // Dispose DataContext if it implements IDisposable
+                    if (DataContext is IDisposable disposableVm)
+                    {
+                        disposableVm.Dispose();
+                    }
+                }
+                _disposed = true;
+            }
         }
     }
 }
