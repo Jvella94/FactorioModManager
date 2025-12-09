@@ -14,7 +14,7 @@
                      Classes="dialog-input"
                      Value="1"
                      Minimum="1"
-                     Maximum="168"
+                     Maximum="750"
                      Increment="1"
                      FormatString="0"
                      Width="120"

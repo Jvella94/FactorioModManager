@@ -11,6 +11,7 @@ namespace FactorioModManager.ViewModels.Dialogs
         private bool _isInstalling;
         private double _downloadProgress;
         private bool _isInstalled;
+        private bool _canDelete = true;
 
         public ReleaseDTO Release { get; }
 
@@ -37,6 +38,19 @@ namespace FactorioModManager.ViewModels.Dialogs
             get => _isInstalled;
             set => this.RaiseAndSetIfChanged(ref _isInstalled, value);
         }
+
+        public bool CanDelete
+        {
+            get => _canDelete;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _canDelete, value);
+                this.RaisePropertyChanged(nameof(CanDeleteOrDownload));
+            }
+        }
+
+        // Button is enabled if: downloading OR (deleting AND canDelete)
+        public bool CanDeleteOrDownload => !IsInstalled || CanDelete;
 
         public VersionHistoryReleaseViewModel(ReleaseDTO release, IModService modService, string modName)
         {

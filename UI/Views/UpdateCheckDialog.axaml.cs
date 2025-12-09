@@ -20,9 +20,9 @@ namespace FactorioModManager.Views
         private void CheckUpdates(object? sender, RoutedEventArgs e)
         {
             var hours = (int?)HoursInput.Value ?? 0;
-            if (hours < 1 || hours > 168)
+            if (hours < 1 || hours > 750)
             {
-                ShowValidationError("Hours must be between 1 and 168 (1 week)");
+                ShowValidationError("Hours must be between 1 and 750 (1 month)");
                 return;
             }
 

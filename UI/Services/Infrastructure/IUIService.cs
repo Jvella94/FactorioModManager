@@ -25,12 +25,24 @@ namespace FactorioModManager.Services.Infrastructure
         /// <summary>
         /// Shows a simple message dialog
         /// </summary>
-        Task ShowMessageAsync(string title, string message);
+        Task ShowMessageAsync(string title, string message, Window? parentWindow = null);
 
         /// <summary>
         /// Shows a confirmation dialog with Yes/No buttons
         /// </summary>
-        Task<bool> ShowConfirmationAsync(string title, string message); // ✅ ADD THIS
+        Task<bool> ShowConfirmationAsync(string title, string message, Window? parentWindow = null);
+
+        /// <summary>
+        /// Shows a customizable confirmation dialog with Yes/No buttons and custom colors
+        /// </summary>
+        Task<bool> ShowConfirmationAsync(
+            string title,
+            string message,
+            Window? parentWindow = null,
+            string yesButtonText = "Yes",
+            string noButtonText = "No",
+            string? yesButtonColor = null,
+            string? noButtonColor = null);
 
         /// <summary>
         /// Opens a URL in the default browser

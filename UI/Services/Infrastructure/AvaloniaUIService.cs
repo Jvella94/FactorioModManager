@@ -26,18 +26,58 @@ namespace FactorioModManager.Services.Infrastructure
             return Dispatcher.UIThread.InvokeAsync(func).GetTask();
         }
 
-        public async Task ShowMessageAsync(string title, string message)
+        public async Task ShowMessageAsync(string title, string message, Window? parentWindow = null)
         {
             await Dispatcher.UIThread.InvokeAsync(async () =>
             {
-                var window = GetMainWindow();
-                if (window != null)
+                var owner = parentWindow ?? GetMainWindow();
+                if (owner != null)
                 {
                     var messageBoxWindow = new MessageBoxDialog(title, message);
-                    await messageBoxWindow.ShowDialog(window);
+                    await messageBoxWindow.ShowDialog(owner);
+                    _logService.LogDebug($"Messagebox shown with: [{title}] {message}");
                 }
             });
-            _logService.LogDebug($"Messagbox shown with: [{title}] {message}");
+        }
+
+        /// <summary>
+        /// Shows a basic confirmation dialog with default styling
+        /// </summary>
+        public async Task<bool> ShowConfirmationAsync(string title, string message, Window? parentWindow = null)
+        {
+            return await ShowConfirmationAsync(title, message, parentWindow, "Yes", "No", null, null);
+        }
+
+        /// <summary>
+        /// Shows a customizable confirmation dialog with custom button text and colors
+        /// </summary>
+        public async Task<bool> ShowConfirmationAsync(
+            string title,
+            string message,
+            Window? parentWindow = null,
+            string yesButtonText = "Yes",
+            string noButtonText = "No",
+            string? yesButtonColor = null,
+            string? noButtonColor = null)
+        {
+            return await Dispatcher.UIThread.InvokeAsync(async () =>
+            {
+                var owner = parentWindow ?? GetMainWindow();
+                if (owner == null)
+                    return false;
+
+                var confirmDialog = new ConfirmationDialog(
+                    title,
+                    message,
+                    yesButtonText,
+                    noButtonText,
+                    yesButtonColor,
+                    noButtonColor);
+
+                var result = await confirmDialog.ShowDialog(owner);
+                _logService.LogDebug($"Confirmation dialog [{title}]: {result}");
+                return result;
+            });
         }
 
         public void OpenUrl(string url)
@@ -91,7 +131,6 @@ namespace FactorioModManager.Services.Infrastructure
                 var settingsService = ServiceContainer.Instance.Resolve<ISettingsService>();
                 var dialog = new Views.SettingsWindow(settingsService);
                 var owner = GetMainWindow();
-
                 if (owner != null)
                 {
                     return await dialog.ShowDialog<bool>(owner);
@@ -106,7 +145,6 @@ namespace FactorioModManager.Services.Infrastructure
             {
                 var dialog = new Views.UpdateCheckDialog();
                 var owner = GetMainWindow();
-
                 if (owner != null)
                 {
                     return await dialog.ShowDialog<(bool, int)>(owner);
@@ -121,7 +159,6 @@ namespace FactorioModManager.Services.Infrastructure
             {
                 var dialog = new Views.InstallModDialog();
                 var owner = GetMainWindow();
-
                 if (owner != null)
                 {
                     return await dialog.ShowDialog<(bool, string?, bool)>(owner);
@@ -147,81 +184,6 @@ namespace FactorioModManager.Services.Infrastructure
                 var window = new Views.VersionHistoryWindow(modTitle, modName, releases);
                 window.Show();
             }).GetTask();
-        }
-
-        /// <summary>
-        /// ✅ Shows a confirmation dialog with Yes/No buttons
-        /// </summary>
-        public async Task<bool> ShowConfirmationAsync(string title, string message)
-        {
-            return await Dispatcher.UIThread.InvokeAsync(async () =>
-            {
-                var window = GetMainWindow();
-                if (window == null)
-                    return false;
-
-                var confirmWindow = new Window
-                {
-                    Title = title,
-                    Width = 400,
-                    Height = 200,
-                    WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                    CanResize = false
-                };
-
-                var textBlock = new Avalonia.Controls.TextBlock
-                {
-                    Text = message,
-                    TextWrapping = Avalonia.Media.TextWrapping.Wrap,
-                    Margin = new Avalonia.Thickness(20)
-                };
-
-                var result = false;
-
-                var yesButton = new Button
-                {
-                    Content = "Yes",
-                    Width = 80,
-                    Margin = new Avalonia.Thickness(0, 10, 10, 0)
-                };
-
-                var noButton = new Button
-                {
-                    Content = "No",
-                    Width = 80,
-                    Margin = new Avalonia.Thickness(10, 10, 0, 0)
-                };
-
-                yesButton.Click += (s, e) =>
-                {
-                    result = true;
-                    confirmWindow.Close();
-                };
-
-                noButton.Click += (s, e) =>
-                {
-                    result = false;
-                    confirmWindow.Close();
-                };
-
-                var buttonPanel = new StackPanel
-                {
-                    Orientation = Avalonia.Layout.Orientation.Horizontal,
-                    HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
-                    Children = { yesButton, noButton }
-                };
-
-                var stack = new StackPanel
-                {
-                    Children = { textBlock, buttonPanel }
-                };
-
-                confirmWindow.Content = stack;
-
-                await confirmWindow.ShowDialog(window);
-
-                return result;
-            });
         }
     }
 }

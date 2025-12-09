@@ -20,7 +20,8 @@ namespace FactorioModManager.Views
                ServiceContainer.Instance.Resolve<IModService>(),
                ServiceContainer.Instance.Resolve<ISettingsService>(),
                ServiceContainer.Instance.Resolve<ILogService>(),
-               modTitle, modName, releases);  // ✅ Pass modName
+               ServiceContainer.Instance.Resolve<IUIService>(),
+               modTitle, modName, releases, this);
             DataContext = vm;
 
             // Update title

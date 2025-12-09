@@ -17,14 +17,9 @@ namespace FactorioModManager.Services.Infrastructure
         Task<bool> ShowConfirmationAsync(string title, string message);
     }
 
-    public class NotificationService : INotificationService
+    public class NotificationService(IUIService uiService) : INotificationService
     {
-        private readonly IUIService _uiService;
-
-        public NotificationService(IUIService uiService)
-        {
-            _uiService = uiService;
-        }
+        private readonly IUIService _uiService = uiService;
 
         public void Show(string title, string message, NotificationType type)
         {
@@ -39,7 +34,7 @@ namespace FactorioModManager.Services.Infrastructure
         public async Task<bool> ShowConfirmationAsync(string title, string message)
         {
             // Show confirmation dialog
-            return await _uiService.ShowConfirmationAsync(title, message);
+            return await _uiService.ShowConfirmationAsync(title, message, null);
         }
     }
 }

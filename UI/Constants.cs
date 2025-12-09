@@ -144,7 +144,7 @@ namespace FactorioModManager
             public static readonly TimeSpan ApiCacheLifetime = TimeSpan.FromMinutes(5);
 
             /// <summary>
-            /// How long to cache mod metadata (24 hours)
+            /// How long to cache mod metadata (90 days)
             /// </summary>
             public static readonly TimeSpan MetadataCacheLifetime = TimeSpan.FromDays(90);
         }

@@ -302,9 +302,14 @@ namespace FactorioModManager.Services
             try
             {
                 _logService.Log($"Downloading {fileName} from {downloadUrl}");
-                await _downloadService.DownloadFileAsync(modName, filePath, progress, cancellationToken);
+                var result = await _downloadService.DownloadFileAsync(downloadUrl, filePath, progress, cancellationToken);
+                if (result == null || result.Success == false)
+                {
+                    _logService.LogWarning($"Did not manage to download {fileName}");
+                    if (result != null) _logService.LogWarning($"Code: {result.Code} Error:{result.Error}");
+                    return;
+                }
                 _logService.Log($"Successfully downloaded {fileName}");
-
                 // ✅ Clear version cache
                 _versionCache.Remove(modName);
             }

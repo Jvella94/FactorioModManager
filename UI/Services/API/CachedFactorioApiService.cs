@@ -17,7 +17,6 @@ namespace FactorioModManager.Services.API
         private readonly ILogService _logService = logService ?? throw new ArgumentNullException(nameof(logService));
         private readonly Dictionary<string, CacheEntry<ModDetailsShortDTO>> _modDetailsShortCache = [];
         private readonly Dictionary<string, CacheEntry<ModDetailsFullDTO>> _modDetailsFullCache = [];
-        private readonly Dictionary<string, CacheEntry<List<string>>> _recentModsCache = [];
         private readonly SemaphoreSlim _semaphore = new(1, 1);
         private bool _disposed;
 
@@ -108,43 +107,8 @@ namespace FactorioModManager.Services.API
 
         public async Task<List<string>> GetRecentlyUpdatedModsAsync(int hoursAgo)
         {
-            var cacheKey = $"{hoursAgo}";
-
-            await _semaphore.WaitAsync();
-            try
-            {
-                if (_recentModsCache.TryGetValue(cacheKey, out var cached))
-                {
-                    if (DateTime.UtcNow - cached.Timestamp < TimeSpan.FromMinutes(10))
-                    {
-                        _logService.LogDebug($"Using cached recent mods list (last {hoursAgo}h)");
-                        return cached.Value;
-                    }
-                    _recentModsCache.Remove(cacheKey);
-                }
-            }
-            finally
-            {
-                _semaphore.Release();
-            }
-
-            var result = await _inner.GetRecentlyUpdatedModsAsync(hoursAgo);
-
-            await _semaphore.WaitAsync();
-            try
-            {
-                _recentModsCache[cacheKey] = new CacheEntry<List<string>>
-                {
-                    Value = result,
-                    Timestamp = DateTime.UtcNow
-                };
-            }
-            finally
-            {
-                _semaphore.Release();
-            }
-
-            return result;
+            // Pass through - last update is cached in service.
+            return await _inner.GetRecentlyUpdatedModsAsync(hoursAgo);
         }
 
         /// <summary>
@@ -167,7 +131,6 @@ namespace FactorioModManager.Services.API
             {
                 _modDetailsShortCache.Clear();
                 _modDetailsFullCache.Clear();
-                _recentModsCache.Clear();
             }
             finally
             {

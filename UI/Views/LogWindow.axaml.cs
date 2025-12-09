@@ -1,6 +1,5 @@
 ﻿// Views/LogWindow.axaml.cs
 using Avalonia.Controls;
-using Avalonia.Interactivity;
 using FactorioModManager.Services.Infrastructure;
 using FactorioModManager.ViewModels.Dialogs;
 using System;

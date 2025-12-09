@@ -228,9 +228,8 @@ namespace FactorioModManager.ViewModels.MainWindow
                     {
                         await _uiService.InvokeAsync(() =>
                         {
-                            SetStatus($"Successfully installed {modTitle}. Refreshing...");
+                            SetStatus($"Successfully installed {modTitle} version {latestRelease.Version}. Refreshing...");
                         });
-                        _logService.Log($"Successfully installed {modTitle} version {latestRelease.Version}");
                     }
 
                     return downloadResult;

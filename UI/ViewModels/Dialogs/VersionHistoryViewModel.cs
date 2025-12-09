@@ -1,4 +1,5 @@
-﻿using FactorioModManager.Models.DTO;
+﻿using Avalonia.Controls;
+using FactorioModManager.Models.DTO;
 using FactorioModManager.Services;
 using FactorioModManager.Services.Infrastructure;
 using ReactiveUI;
@@ -17,13 +18,14 @@ namespace FactorioModManager.ViewModels.Dialogs
         private readonly IModService _modService;
         private readonly ISettingsService _settingsService;
         private readonly ILogService _logService;
+        private readonly IUIService _uiService;
+        private readonly Window? _parentWindow;
         private readonly CompositeDisposable _disposables = [];
         private CancellationTokenSource? _currentOperationCts;
 
         public string ModTitle { get; }
         public string ModName { get; }
         public ObservableCollection<VersionHistoryReleaseViewModel> Releases { get; }
-
         public ReactiveCommand<VersionHistoryReleaseViewModel, Unit> ActionCommand { get; }
         public ReactiveCommand<Unit, Unit> CancelCommand { get; }
 
@@ -31,13 +33,17 @@ namespace FactorioModManager.ViewModels.Dialogs
             IModService modService,
             ISettingsService settingsService,
             ILogService logService,
+            IUIService uiService,
             string modTitle,
             string modName,
-            System.Collections.Generic.List<ReleaseDTO> releases)
+            System.Collections.Generic.List<ReleaseDTO> releases,
+            Window? parentWindow = null)
         {
             _modService = modService;
             _settingsService = settingsService;
             _logService = logService;
+            _uiService = uiService;
+            _parentWindow = parentWindow;
             ModTitle = modTitle;
             ModName = modName;
 
@@ -45,6 +51,15 @@ namespace FactorioModManager.ViewModels.Dialogs
                 releases.OrderByDescending(r => r.ReleasedAt)
                     .Select(r => new VersionHistoryReleaseViewModel(r, modService, modName))
             );
+
+            // Subscribe to changes in installed status to update CanDelete
+            foreach (var release in Releases)
+            {
+                release.WhenAnyValue(x => x.IsInstalled)
+                    .Subscribe(_ => UpdateCanDeleteFlags());
+            }
+
+            UpdateCanDeleteFlags();
 
             // ✅ ActionCommand with cancellation support
             ActionCommand = ReactiveCommand.CreateFromTask<VersionHistoryReleaseViewModel>(
@@ -57,7 +72,7 @@ namespace FactorioModManager.ViewModels.Dialogs
             });
         }
 
-        private async Task HandleActionAsync(VersionHistoryReleaseViewModel release)
+        private async Task HandleActionAsync(VersionHistoryReleaseViewModel releaseVM)
         {
             // Cancel any ongoing operation
             _currentOperationCts?.Cancel();
@@ -65,13 +80,27 @@ namespace FactorioModManager.ViewModels.Dialogs
 
             try
             {
-                if (release.IsInstalled)
+                if (releaseVM.IsInstalled)
                 {
-                    await DeleteVersionAsync(release, _currentOperationCts.Token);
+                    // Show confirmation dialog before deletion using UIService
+                    var result = await _uiService.ShowConfirmationAsync(
+                        "Confirm Deletion",
+                        $"Are you sure you want to delete version {releaseVM.Version} of {ModTitle}?",
+                        _parentWindow,
+                        yesButtonText: "Yes, Delete",
+                        noButtonText: "No",
+                        yesButtonColor: "#D32F2F",  // Red for destructive action
+                        noButtonColor: "#3A3A3A"    // Gray for cancel
+                    );
+
+                    if (result)
+                    {
+                        await DeleteVersionAsync(releaseVM, _currentOperationCts.Token);
+                    }
                 }
                 else
                 {
-                    await DownloadVersionAsync(release, _currentOperationCts.Token);
+                    await DownloadVersionAsync(releaseVM, _currentOperationCts.Token);
                 }
 
                 RefreshInstalledStates();
@@ -82,12 +111,20 @@ namespace FactorioModManager.ViewModels.Dialogs
             }
         }
 
+        private void UpdateCanDeleteFlags()
+        {
+            var installedCount = Releases.Count(r => r.IsInstalled);
+            foreach (var release in Releases)
+            {
+                release.CanDelete = installedCount > 1;
+            }
+        }
+
         private async Task DeleteVersionAsync(
             VersionHistoryReleaseViewModel release,
             CancellationToken cancellationToken)
         {
             release.IsInstalling = true;
-
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -132,7 +169,6 @@ namespace FactorioModManager.ViewModels.Dialogs
 
                 var username = _settingsService.GetUsername();
                 var token = _settingsService.GetToken();
-
                 if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(token))
                 {
                     _logService.LogWarning("Download requires username and token");
@@ -179,7 +215,6 @@ namespace FactorioModManager.ViewModels.Dialogs
         private void RefreshInstalledStates()
         {
             var installedVersions = _modService.GetInstalledVersions(ModName);
-
             foreach (var release in Releases)
             {
                 release.IsInstalled = installedVersions.Contains(release.Version);
@@ -196,7 +231,6 @@ namespace FactorioModManager.ViewModels.Dialogs
                 _currentOperationCts?.Dispose();
                 _disposables?.Dispose();
             }
-
             base.Dispose(disposing);
         }
     }

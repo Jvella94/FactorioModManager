@@ -15,6 +15,8 @@ namespace FactorioModManager.Services.API
     {
         private readonly HttpClient _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         private readonly ILogService _logService = logService ?? throw new ArgumentNullException(nameof(logService));
+        private DateTime _lastUpdateTime = DateTime.MinValue;
+        private string _lastModName = string.Empty;
         private const string BaseUrl = "https://mods.factorio.com/api/mods";
 
         public async Task<ModDetailsShortDTO?> GetModDetailsAsync(string modName)
@@ -72,10 +74,10 @@ namespace FactorioModManager.Services.API
             try
             {
                 var sinceTime = DateTime.UtcNow.AddHours(-hoursAgo);
+                _logService.LogDebug($"Started looking for updates since {sinceTime.ToLocalTime():yyyy-MM-dd HH:mm:ss} on the portal.");
                 var recentModNames = new HashSet<string>();
                 var pageSize = 100;
                 var maxPages = 5;
-
                 for (int page = 1; page <= maxPages; page++)
                 {
                     var url = $"{BaseUrl}?version=2.0&hide_deprecated=true&sort=updated_at&sort_order=desc&page={page}&page_size={pageSize}";
@@ -98,9 +100,17 @@ namespace FactorioModManager.Services.API
                     var foundRecentMod = false;
                     foreach (var mod in result.Results)
                     {
-                        if (mod.LatestRelease?.ReleasedAt >= sinceTime)
+                        if (mod.LatestRelease is null) continue;
+                        // Check if we've gone past hour range requested or have seen this mod before.
+                        if (mod.LatestRelease.ReleasedAt == _lastUpdateTime) break;
+                        if (mod.LatestRelease.ReleasedAt >= sinceTime)
                         {
                             recentModNames.Add(mod.Name);
+                            if (_lastUpdateTime < mod.LatestRelease.ReleasedAt)
+                            {
+                                _lastUpdateTime = mod.LatestRelease.ReleasedAt.ToUniversalTime();
+                                _lastModName = mod.Name;
+                            }
                             foundRecentMod = true;
                         }
                     }
@@ -112,8 +122,11 @@ namespace FactorioModManager.Services.API
 
                     await Task.Delay(100);
                 }
-
-                _logService.LogDebug($"Found {recentModNames.Count} mods updated since {sinceTime:yyyy-MM-dd HH:mm:ss} UTC on the portal.");
+                if (_lastUpdateTime != DateTime.MinValue)
+                {
+                    _logService.LogDebug($"Latest update known is of {_lastModName} at {_lastUpdateTime.ToLocalTime()::yyyy-MM-dd HH:mm:ss}.");
+                }
+                _logService.LogDebug($"Found {recentModNames.Count} updates on the portal.");
                 return [.. recentModNames];
             }
             catch (Exception ex)

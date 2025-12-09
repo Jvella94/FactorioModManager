@@ -247,7 +247,7 @@ namespace FactorioModManager.ViewModels.MainWindow
         /// <summary>
         /// Checks for mod updates from the portal
         /// </summary>
-        internal async Task CheckForUpdatesAsync(int hoursAgo = 1)
+        internal async Task CheckForUpdatesAsync(int hoursAgo)
         {
             _logService.Log($"Checking for updates from the last {hoursAgo} hour(s)...");
 
@@ -264,7 +264,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                 {
                     await _uiService.InvokeAsync(() =>
                     {
-                        SetStatus("No recently updated mods found");
+                        SetStatus("No recently updated mods found.");
                     });
                     return;
                 }
@@ -275,7 +275,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                     .Where(m => recentlyUpdatedModNames.Contains(m.Name))
                     .ToList();
 
-                _logService.Log($"Found {installedRecentlyUpdated.Count} of your installed mods pending updates");
+                _logService.Log($"{installedRecentlyUpdated.Count} of your installed mods have new updates.");
 
                 var updateCount = 0;
                 var currentIndex = 0;
@@ -335,14 +335,12 @@ namespace FactorioModManager.ViewModels.MainWindow
                 {
                     if (updateCount > 0)
                     {
-                        SetStatus($"Found {updateCount} mod update(s) available");
-                        _logService.Log($"Update check complete: {updateCount} updates found");
+                        SetStatus($"Found {updateCount} mod update(s) available.");
                         this.RaisePropertyChanged(nameof(ModCountSummary));
                     }
                     else
                     {
-                        SetStatus("All mods are up to date");
-                        _logService.Log("All mods are up to date");
+                        SetStatus("All mods are up to date.");
                     }
                 });
             }

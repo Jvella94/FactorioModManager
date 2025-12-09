@@ -44,9 +44,8 @@ namespace FactorioModManager.ViewModels.MainWindow
                 {
                     await _uiService.InvokeAsync(() =>
                     {
-                        SetStatus($"Error fetching changelog: {ex.Message}", LogLevel.Error);
+                        HandleError(ex,$"Error fetching changelog: {ex.Message}");
                     });
-                    _logService.LogError($"Error fetching changelog: {ex.Message}", ex);
                 }
             });
         }
@@ -93,9 +92,8 @@ namespace FactorioModManager.ViewModels.MainWindow
                 {
                     await _uiService.InvokeAsync(() =>
                     {
-                        SetStatus($"Error fetching version history: {ex.Message}", LogLevel.Error);
+                        HandleError(ex, $"Error fetching version history: {ex.Message}");
                     });
-                    _logService.LogError($"Error fetching version history: {ex.Message}", ex);
                 }
             });
         }
