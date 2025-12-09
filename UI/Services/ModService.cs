@@ -15,10 +15,12 @@ namespace FactorioModManager.Services
 {
     public class ModService(
         ILogService logService,
-        ISettingsService settingsService) : IModService
+        ISettingsService settingsService,
+        IDownloadService downloadService) : IModService
     {
         private readonly ILogService _logService = logService;
         private readonly ISettingsService _settingsService = settingsService;
+        private readonly IDownloadService _downloadService = downloadService;
 
         // ✅ Version cache
         private readonly Dictionary<string, List<string>> _versionCache = [];
@@ -105,7 +107,7 @@ namespace FactorioModManager.Services
                 }
             }
 
-            _logService.Log($"Loaded {mods.Count} mods");
+            _logService.Log($"Loaded {mods.Count} total mods including old versions.");
             return mods;
         }
 
@@ -299,8 +301,7 @@ namespace FactorioModManager.Services
             try
             {
                 _logService.Log($"Downloading {fileName} from {downloadUrl}");
-                var downloadService = ServiceContainer.Instance.Resolve<IDownloadService>();
-                await downloadService.DownloadFileAsync(modName, filePath, progress);
+                await _downloadService.DownloadFileAsync(modName, filePath, progress);
                 _logService.Log($"Successfully downloaded {fileName}");
 
                 // ✅ Clear version cache

@@ -99,7 +99,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                     x => x.FilterBySelectedGroup)
                     .Throttle(TimeSpan.FromMilliseconds(Constants.Throttle.SearchMs))
                     .Select(_ => CreateModFilterPredicate()))
-                .ObserveOn(RxApp.MainThreadScheduler) // ✅ ADD THIS - Marshal to UI thread
+                .ObserveOn(RxApp.MainThreadScheduler) 
                 .SortAndBind(
                     out _filteredMods,
                     SortExpressionComparer<ModViewModel>.Descending(m => m.LastUpdated ?? DateTime.MinValue))
@@ -116,7 +116,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                 .Filter(author => !string.IsNullOrEmpty(author))
                 .GroupWithImmutableState(author => author!)
                 .Transform(group => $"{group.Key} ({group.Count})")
-                .ObserveOn(RxApp.MainThreadScheduler) // ✅ ADD THIS - Marshal to UI thread
+                .ObserveOn(RxApp.MainThreadScheduler) 
                 .SortAndBind(
                     out _authors,
                     SortExpressionComparer<string>.Descending(a => ExtractAuthorCount(a)))
@@ -129,13 +129,13 @@ namespace FactorioModManager.ViewModels.MainWindow
                 .Filter(this.WhenAnyValue(x => x.AuthorSearchText)
                     .Throttle(TimeSpan.FromMilliseconds(Constants.Throttle.AuthorSearchMs))
                     .Select(searchText => CreateAuthorFilterPredicate(searchText)))
-                .ObserveOn(RxApp.MainThreadScheduler) // ✅ ADD THIS - Marshal to UI thread
+                .ObserveOn(RxApp.MainThreadScheduler) 
                 .Bind(out _filteredAuthors)
                 .Subscribe();
 
             // ✅ Sync author search with selected author
             this.WhenAnyValue(x => x.SelectedAuthorFilter)
-                .ObserveOn(RxApp.MainThreadScheduler) // ✅ Ensure UI thread
+                .ObserveOn(RxApp.MainThreadScheduler) 
                 .Subscribe(author =>
                 {
                     if (!string.IsNullOrEmpty(author))

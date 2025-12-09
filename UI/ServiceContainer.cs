@@ -46,7 +46,8 @@ namespace FactorioModManager
 
             RegisterSingleton<IModService>(new ModService(
                 Resolve<ILogService>(),
-                Resolve<ISettingsService>()
+                Resolve<ISettingsService>(),
+                Resolve<IDownloadService>()
             ));
 
             // ViewModels

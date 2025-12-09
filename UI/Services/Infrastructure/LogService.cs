@@ -10,11 +10,10 @@ namespace FactorioModManager.Services.Infrastructure
 {
     public class LogService : ILogService
     {
-        private readonly ConcurrentBag<LogEntry> _logs = [];
         private readonly string _logFilePath;
         private readonly Lock _fileLock = new();
         private readonly ConcurrentQueue<LogEntry> _logQueue = new();
-        private readonly StreamWriter _logWriter;
+        private StreamWriter _logWriter;
         private readonly Timer _flushTimer;
         private const int MAX_MEMORY_LOGS = 1000;
 
@@ -23,12 +22,16 @@ namespace FactorioModManager.Services.Infrastructure
             var appDataPath = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                 "FactorioModManager");
-
             Directory.CreateDirectory(appDataPath);
+
             _logFilePath = Path.Combine(appDataPath, "application.log");
 
             // Keep file open with buffered writer
-            _logWriter = new StreamWriter(path: _logFilePath, append: true, encoding: System.Text.Encoding.UTF8, bufferSize: 4096)
+            _logWriter = new StreamWriter(
+                path: _logFilePath,
+                append: true,
+                encoding: System.Text.Encoding.UTF8,
+                bufferSize: 4096)
             {
                 AutoFlush = false
             };
@@ -83,22 +86,6 @@ namespace FactorioModManager.Services.Infrastructure
             catch { /* Ignore */ }
         }
 
-        private void WriteToFile(LogEntry entry)
-        {
-            try
-            {
-                using (_fileLock.EnterScope())
-                {
-                    var line = $"[{entry.Timestamp:yyyy-MM-dd HH:mm:ss}] [{entry.Level}] {entry.Message}";
-                    File.AppendAllText(_logFilePath, line + Environment.NewLine);
-                }
-            }
-            catch
-            {
-                // Intentionally ignore logging failures
-            }
-        }
-
         private void LoadLogsFromFile()
         {
             try
@@ -109,11 +96,17 @@ namespace FactorioModManager.Services.Infrastructure
                 lock (_fileLock)
                 {
                     var lines = File.ReadAllLines(_logFilePath);
-                    foreach (var line in lines)
+
+                    // ✅ Load only recent logs to respect MAX_MEMORY_LOGS limit
+                    var recentLines = lines.TakeLast(MAX_MEMORY_LOGS);
+
+                    foreach (var line in recentLines)
                     {
                         var entry = ParseLogLine(line);
                         if (entry != null)
-                            _logs.Add(entry);
+                        {
+                            _logQueue.Enqueue(entry); // ✅ Add to _logQueue instead of _logs
+                        }
                     }
                 }
             }
@@ -127,7 +120,6 @@ namespace FactorioModManager.Services.Infrastructure
         {
             try
             {
-                // Format: [2025-12-08 03:00:00] [Info] Message
                 if (line.Length < 25 || line[0] != '[')
                     return null;
 
@@ -143,17 +135,14 @@ namespace FactorioModManager.Services.Infrastructure
                 if (levelStart == -1 || levelEnd == -1) return null;
 
                 var levelStr = line[(levelStart + 1)..levelEnd].Trim();
+
+                // ✅ Add <LogLevel> generic type parameter
                 if (!Enum.TryParse<LogLevel>(levelStr, true, out var level))
                     level = LogLevel.Info;
 
                 var message = line[(levelEnd + 1)..].Trim();
 
-                return new LogEntry
-                (
-                    Timestamp: DateTime.UtcNow,
-                    Level: level,
-                    Message: message
-                );
+                return new LogEntry(ts, message, level);
             }
             catch
             {
@@ -163,7 +152,8 @@ namespace FactorioModManager.Services.Infrastructure
 
         public IEnumerable<LogEntry> GetLogs()
         {
-            return _logs.OrderBy(l => l.Timestamp);
+            // ✅ Return snapshot from _logQueue instead of _logs
+            return _logQueue.ToList().OrderBy(l => l.Timestamp);
         }
 
         public string GetLogFilePath() => _logFilePath;
@@ -172,8 +162,8 @@ namespace FactorioModManager.Services.Infrastructure
         {
             try
             {
-                // Clear in-memory logs
-                _logs.Clear();
+                // ✅ Clear _logQueue instead of _logs
+                while (_logQueue.TryDequeue(out _)) { }
 
                 // Clear file
                 lock (_fileLock)
@@ -197,11 +187,27 @@ namespace FactorioModManager.Services.Infrastructure
                     if (!File.Exists(_logFilePath))
                         return;
 
+                    // ✅ Close the writer first
+                    _logWriter?.Flush();
+                    _logWriter?.Dispose();
+
                     var archivePath = Path.Combine(
                         Path.GetDirectoryName(_logFilePath)!,
                         $"application_{DateTime.UtcNow:yyyyMMdd_HHmmss}.log");
 
                     File.Move(_logFilePath, archivePath);
+
+                    // ✅ Create new empty file and reopen writer
+                    File.WriteAllText(_logFilePath, string.Empty);
+
+                    _logWriter = new StreamWriter(
+                        path: _logFilePath,
+                        append: true,
+                        encoding: System.Text.Encoding.UTF8,
+                        bufferSize: 4096)
+                    {
+                        AutoFlush = false
+                    };
                 }
 
                 Log("Logs archived", LogLevel.Info);
@@ -218,18 +224,32 @@ namespace FactorioModManager.Services.Infrastructure
             {
                 var cutoff = DateTime.UtcNow.AddDays(-daysToKeep);
 
-                // Rebuild file from recent logs
+                var recentLogs = _logQueue
+                    .Where(l => l.Timestamp >= cutoff)
+                    .OrderBy(l => l.Timestamp)
+                    .ToList();
+
                 lock (_fileLock)
                 {
-                    var recentLogs = _logs
-                        .Where(l => l.Timestamp >= cutoff)
-                        .OrderBy(l => l.Timestamp)
-                        .ToList();
+                    // ✅ Close the writer first
+                    _logWriter?.Flush();
+                    _logWriter?.Dispose();
 
+                    // Rewrite file with only recent logs
                     var lines = recentLogs.Select(entry =>
                         $"[{entry.Timestamp:yyyy-MM-dd HH:mm:ss}] [{entry.Level}] {entry.Message}");
 
                     File.WriteAllLines(_logFilePath, lines);
+
+                    // ✅ Reopen the writer
+                    _logWriter = new StreamWriter(
+                        path: _logFilePath,
+                        append: true,
+                        encoding: System.Text.Encoding.UTF8,
+                        bufferSize: 4096)
+                    {
+                        AutoFlush = false
+                    };
                 }
 
                 Log($"Pruned logs older than {daysToKeep} days", LogLevel.Info);

@@ -113,7 +113,7 @@ namespace FactorioModManager.Services.API
                     await Task.Delay(100);
                 }
 
-                _logService.LogDebug($"Found {recentModNames.Count} mods updated since {sinceTime:yyyy-MM-dd HH:mm:ss} UTC");
+                _logService.LogDebug($"Found {recentModNames.Count} mods updated since {sinceTime:yyyy-MM-dd HH:mm:ss} UTC on the portal.");
                 return [.. recentModNames];
             }
             catch (Exception ex)

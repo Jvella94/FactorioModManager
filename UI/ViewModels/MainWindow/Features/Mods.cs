@@ -40,7 +40,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                         UpdateModsCache(latestMods, loadedGroups);
                         UpdateGroupsCollection(loadedGroups);
 
-                        SetStatus($"Loaded {AllModsCount} mods and {Groups.Count} groups");
+                        SetStatus($"Loaded {AllModsCount} unique mods and {Groups.Count} groups");
                     });
 
                     await CheckForAlreadyDownloadedUpdatesAsync();

@@ -117,7 +117,7 @@ namespace FactorioModManager.Services
 
             if (needsSave)
             {
-                SaveMetadata();
+                MarkDirty();
             }
         }
 
@@ -199,7 +199,7 @@ namespace FactorioModManager.Services
             var metadata = GetOrCreate(modName);
             metadata.LastChecked = DateTime.UtcNow;
             metadata.SourceUrlChecked = true;
-            SaveMetadata();
+            MarkDirty();
         }
 
         public string? GetLatestVersion(string modName)
@@ -218,7 +218,7 @@ namespace FactorioModManager.Services
             {
                 metadata.HasUpdate = false;
                 metadata.LatestVersion = null;
-                SaveMetadata();
+                MarkDirty();
                 _logService.LogDebug($"Cleared update flag for {modName}");
             }
         }
@@ -229,7 +229,7 @@ namespace FactorioModManager.Services
             metadata.LatestVersion = version;
             metadata.HasUpdate = hasUpdate;
             metadata.LastUpdateCheck = DateTime.UtcNow;
-            SaveMetadata();
+            MarkDirty();
         }
 
         public void ClearAllUpdates()
@@ -238,7 +238,7 @@ namespace FactorioModManager.Services
             {
                 metadata.HasUpdate = false;
             }
-            SaveMetadata();
+            SaveNow();
             _logService.LogDebug("Cleared all update flags");
         }
 

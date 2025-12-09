@@ -259,7 +259,6 @@ namespace FactorioModManager.ViewModels.MainWindow
             try
             {
                 var recentlyUpdatedModNames = await _apiService.GetRecentlyUpdatedModsAsync(hoursAgo);
-                _logService.LogDebug($"Found {recentlyUpdatedModNames.Count} recently updated mods on portal");
 
                 if (recentlyUpdatedModNames.Count == 0)
                 {
@@ -276,7 +275,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                     .Where(m => recentlyUpdatedModNames.Contains(m.Name))
                     .ToList();
 
-                _logService.Log($"Checking {installedRecentlyUpdated.Count} of your installed mods for updates");
+                _logService.Log($"Found {installedRecentlyUpdated.Count} of your installed mods pending updates");
 
                 var updateCount = 0;
                 var currentIndex = 0;
@@ -287,7 +286,7 @@ namespace FactorioModManager.ViewModels.MainWindow
 
                     await _uiService.InvokeAsync(() =>
                     {
-                        SetStatus($"Checking updates ({currentIndex}/{installedRecentlyUpdated.Count}): {mod.Title}");
+                        SetStatus($"Checking updates for ({currentIndex}/{installedRecentlyUpdated.Count}): {mod.Title}");
                     });
 
                     try
