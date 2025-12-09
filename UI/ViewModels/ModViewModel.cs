@@ -4,12 +4,31 @@ using ReactiveUI;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Reactive.Disposables;
+using System.Reactive.Disposables.Fluent;
+using System.Reactive.Linq;
 
 namespace FactorioModManager.ViewModels
 {
     public class ModViewModel : ViewModelBase
     {
+        private readonly CompositeDisposable _disposables = [];
+
+        // Static brushes - frozen for performance
+        private static readonly IBrush UpdateBrush = CreateFrozenBrush(60, 120, 60);
+
+        private static readonly IBrush UnusedBrush = CreateFrozenBrush(255, 140, 0);
+
+        private static SolidColorBrush CreateFrozenBrush(byte r, byte g, byte b)
+        {
+            var brush = new SolidColorBrush(Color.FromRgb(r, g, b));
+            // Freeze the brush for better performance
+            return brush;
+        }
+
+        // Backing fields
         private string _name = string.Empty;
+
         private string _title = string.Empty;
         private string _version = string.Empty;
         private string _author = string.Empty;
@@ -25,13 +44,12 @@ namespace FactorioModManager.ViewModels
         private string? _selectedVersion;
         private string? _filePath;
         private int _installedCount;
+        private bool _isDownloading;
+        private double _downloadProgress;
+        private bool _hasDownloadProgress;
+        private string _downloadStatusText = string.Empty;
 
-        public int InstalledCount
-        {
-            get => _installedCount;
-            set => this.RaiseAndSetIfChanged(ref _installedCount, value);
-        }
-
+        // Properties
         public string Name
         {
             get => _name;
@@ -110,14 +128,35 @@ namespace FactorioModManager.ViewModels
             set => this.RaiseAndSetIfChanged(ref _thumbnail, value);
         }
 
-        public List<string> Dependencies { get; set; } = [];
-        public DateTime? LastUpdated { get; set; }
-        public string? ThumbnailPath { get; set; }
+        public int InstalledCount
+        {
+            get => _installedCount;
+            set => this.RaiseAndSetIfChanged(ref _installedCount, value);
+        }
 
-        // ADDED: Version management
-        public ObservableCollection<string> AvailableVersions { get; set; } = [];
+        public bool IsDownloading
+        {
+            get => _isDownloading;
+            set => this.RaiseAndSetIfChanged(ref _isDownloading, value);
+        }
 
-        public List<string> VersionFilePaths { get; set; } = []; // Track file paths for each version
+        public double DownloadProgress
+        {
+            get => _downloadProgress;
+            set => this.RaiseAndSetIfChanged(ref _downloadProgress, value);
+        }
+
+        public bool HasDownloadProgress
+        {
+            get => _hasDownloadProgress;
+            set => this.RaiseAndSetIfChanged(ref _hasDownloadProgress, value);
+        }
+
+        public string DownloadStatusText
+        {
+            get => _downloadStatusText;
+            set => this.RaiseAndSetIfChanged(ref _downloadStatusText, value);
+        }
 
         public string? SelectedVersion
         {
@@ -125,9 +164,28 @@ namespace FactorioModManager.ViewModels
             set => this.RaiseAndSetIfChanged(ref _selectedVersion, value);
         }
 
+        public string? FilePath
+        {
+            get => _filePath;
+            set => this.RaiseAndSetIfChanged(ref _filePath, value);
+        }
+
+        // Collections
+        public List<string> Dependencies { get; set; } = [];
+
+        public ObservableCollection<string> AvailableVersions { get; set; } = [];
+        public List<string> VersionFilePaths { get; set; } = [];
+
+        // Non-observable properties
+        public DateTime? LastUpdated { get; set; }
+
+        public string? ThumbnailPath { get; set; }
+
+        // ✅ Computed properties with proper change notifications
         public bool HasMultipleVersions => AvailableVersions.Count > 1;
 
-        public bool IsOldVersionSelected => SelectedVersion != null && SelectedVersion != Version;
+        public bool IsOldVersionSelected =>
+            SelectedVersion != null && SelectedVersion != Version;
 
         public string LastUpdatedText => LastUpdated.HasValue
             ? LastUpdated.Value.ToString("yyyy-MM-dd")
@@ -139,9 +197,6 @@ namespace FactorioModManager.ViewModels
 
         public string ModPortalUrl => $"https://mods.factorio.com/mod/{Name}";
 
-        private static readonly IBrush UpdateBrush = new SolidColorBrush(Color.FromRgb(60, 120, 60));
-        private static readonly IBrush UnusedBrush = new SolidColorBrush(Color.FromRgb(255, 140, 0));
-
         public IBrush? RowBrush
         {
             get
@@ -152,60 +207,35 @@ namespace FactorioModManager.ViewModels
             }
         }
 
-        private bool _isDownloading;
-
-        public bool IsDownloading
-        {
-            get => _isDownloading;
-            set => this.RaiseAndSetIfChanged(ref _isDownloading, value);
-        }
-
-        private double _downloadProgress;
-
-        public double DownloadProgress
-        {
-            get => _downloadProgress;
-            set => this.RaiseAndSetIfChanged(ref _downloadProgress, value);
-        }
-
-        private bool _hasDownloadProgress;
-
-        public bool HasDownloadProgress
-        {
-            get => _hasDownloadProgress;
-            set => this.RaiseAndSetIfChanged(ref _hasDownloadProgress, value);
-        }
-
-        private string _downloadStatusText = "";
-
-        public string DownloadStatusText
-        {
-            get => _downloadStatusText;
-            set => this.RaiseAndSetIfChanged(ref _downloadStatusText, value);
-        }
-
-        public string? FilePath
-        {
-            get => _filePath;
-            set => this.RaiseAndSetIfChanged(ref _filePath, value);
-        }
-
         public ModViewModel()
         {
-            this.WhenAnyValue(
-                  x => x.HasUpdate,
-                  x => x.IsUnusedInternal)
-                  .Subscribe(_ => this.RaisePropertyChanged(nameof(RowBrush)));
+            // ✅ Properly managed subscriptions
+            this.WhenAnyValue(x => x.HasUpdate, x => x.IsUnusedInternal)
+                .Subscribe(_ => this.RaisePropertyChanged(nameof(RowBrush)))
+                .DisposeWith(_disposables);
 
-            this.WhenAnyValue(
-                  x => x.HasUpdate,
-                  x => x.LatestVersion)
-                  .Subscribe(_ => this.RaisePropertyChanged(nameof(UpdateText)));
+            this.WhenAnyValue(x => x.HasUpdate, x => x.LatestVersion)
+                .Subscribe(_ => this.RaisePropertyChanged(nameof(UpdateText)))
+                .DisposeWith(_disposables);
 
-            this.WhenAnyValue(
-                x => x.SelectedVersion,
-                x => x.Version)
-                .Subscribe(_ => this.RaisePropertyChanged(nameof(IsOldVersionSelected)));
+            this.WhenAnyValue(x => x.SelectedVersion, x => x.Version)
+                .Subscribe(_ => this.RaisePropertyChanged(nameof(IsOldVersionSelected)))
+                .DisposeWith(_disposables);
+
+            // ✅ Notify when collection changes
+            AvailableVersions.CollectionChanged += (_, __) =>
+                this.RaisePropertyChanged(nameof(HasMultipleVersions));
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _disposables?.Dispose();
+                _thumbnail?.Dispose();
+            }
+
+            base.Dispose(disposing);
         }
     }
 }

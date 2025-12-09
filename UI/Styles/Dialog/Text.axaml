@@ -1,71 +1,70 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-  
+
   <!-- Dialog Title -->
   <Style Selector="TextBlock.dialog-title">
-    <Setter Property="FontSize" Value="{StaticResource DialogTitleFontSize}"/>
-    <Setter Property="FontWeight" Value="Bold"/>
-    <Setter Property="Foreground" Value="{StaticResource DialogForegroundBrush}"/>
-    <Setter Property="Margin" Value="0,0,0,15"/>
+    <Setter Property="FontSize" Value="{StaticResource DialogTitleFontSize}" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="Foreground" Value="{StaticResource DialogForegroundBrush}" />
+    <Setter Property="Margin" Value="{StaticResource DialogTitleMargin}" />
   </Style>
-  
-  <!-- Dialog Subtitle -->
-  <Style Selector="TextBlock.dialog-subtitle">
-    <Setter Property="FontSize" Value="{StaticResource DialogBodyFontSize}"/>
-    <Setter Property="Foreground" Value="{StaticResource DialogForegroundSecondaryBrush}"/>
-    <Setter Property="Margin" Value="0,-10,0,15"/>
-    <Setter Property="TextWrapping" Value="Wrap"/>
-  </Style>
-  
+
   <!-- Dialog Labels -->
   <Style Selector="TextBlock.dialog-label">
-    <Setter Property="Foreground" Value="{StaticResource DialogForegroundBrush}"/>
-    <Setter Property="FontSize" Value="{StaticResource DialogLabelFontSize}"/>
-    <Setter Property="Margin" Value="0,0,0,5"/>
+    <Setter Property="Foreground" Value="{StaticResource DialogForegroundBrush}" />
+    <Setter Property="FontSize" Value="{StaticResource DialogLabelFontSize}" />
+    <Setter Property="Margin" Value="{StaticResource DialogLabelMargin}" />
   </Style>
-  
+
+  <!-- Dialog Subtitle -->
+  <Style Selector="TextBlock.dialog-subtitle">
+    <Setter Property="FontSize" Value="{StaticResource DialogBodyFontSize}" />
+    <Setter Property="Foreground" Value="{StaticResource DialogForegroundSecondaryBrush}" />
+    <Setter Property="Margin" Value="0,-10,0,15" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+
   <!-- Required Field Indicator -->
-  <Style Selector="TextBlock.dialog-label.required:after">
-    <Setter Property="Content" Value=" *"/>
-    <Setter Property="Foreground" Value="{StaticResource ErrorBrush}"/>
+  <Style Selector="Run.required">
+    <Setter Property="Foreground" Value="{StaticResource ErrorBrush}" />
   </Style>
-  
+
   <!-- Body Text -->
   <Style Selector="TextBlock.dialog-body">
-    <Setter Property="FontSize" Value="{StaticResource DialogBodyFontSize}"/>
-    <Setter Property="Foreground" Value="{StaticResource DialogForegroundBrush}"/>
-    <Setter Property="TextWrapping" Value="Wrap"/>
-    <Setter Property="Margin" Value="0,0,0,10"/>
+    <Setter Property="FontSize" Value="{StaticResource DialogBodyFontSize}" />
+    <Setter Property="Foreground" Value="{StaticResource DialogForegroundBrush}" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="Margin" Value="0,0,0,10" />
   </Style>
-  
+
   <!-- Error Message -->
   <Style Selector="TextBlock.error-message">
-    <Setter Property="Foreground" Value="{StaticResource ErrorBrush}"/>
-    <Setter Property="FontSize" Value="{StaticResource DialogSmallFontSize}"/>
-    <Setter Property="Margin" Value="0,-10,0,10"/>
-    <Setter Property="TextWrapping" Value="Wrap"/>
+    <Setter Property="Foreground" Value="{StaticResource ErrorBrush}" />
+    <Setter Property="FontSize" Value="{StaticResource DialogSmallFontSize}" />
+    <Setter Property="Margin" Value="0,-10,0,10" />
+    <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
-  
+
   <!-- Success Message -->
   <Style Selector="TextBlock.success-message">
-    <Setter Property="Foreground" Value="{StaticResource SuccessBrush}"/>
-    <Setter Property="FontSize" Value="{StaticResource DialogSmallFontSize}"/>
-    <Setter Property="Margin" Value="0,0,0,10"/>
+    <Setter Property="Foreground" Value="{StaticResource SuccessBrush}" />
+    <Setter Property="FontSize" Value="{StaticResource DialogSmallFontSize}" />
+    <Setter Property="Margin" Value="0,0,0,10" />
   </Style>
-  
+
   <!-- Warning Message -->
   <Style Selector="TextBlock.warning-message">
-    <Setter Property="Foreground" Value="{StaticResource WarningBrush}"/>
-    <Setter Property="FontSize" Value="{StaticResource DialogSmallFontSize}"/>
-    <Setter Property="Margin" Value="0,0,0,10"/>
+    <Setter Property="Foreground" Value="{StaticResource WarningBrush}" />
+    <Setter Property="FontSize" Value="{StaticResource DialogSmallFontSize}" />
+    <Setter Property="Margin" Value="0,0,0,10" />
   </Style>
-  
+
   <!-- Help Text -->
   <Style Selector="TextBlock.help-text">
-    <Setter Property="FontSize" Value="{StaticResource DialogSmallFontSize}"/>
-    <Setter Property="Foreground" Value="{StaticResource DialogForegroundSecondaryBrush}"/>
-    <Setter Property="Margin" Value="0,-10,0,10"/>
-    <Setter Property="TextWrapping" Value="Wrap"/>
-    <Setter Property="FontStyle" Value="Italic"/>
+    <Setter Property="FontSize" Value="{StaticResource DialogSmallFontSize}" />
+    <Setter Property="Foreground" Value="{StaticResource DialogForegroundSecondaryBrush}" />
+    <Setter Property="Margin" Value="0,-10,0,10" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="FontStyle" Value="Italic" />
   </Style>
 </Styles>

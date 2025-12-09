@@ -4,6 +4,7 @@ using FactorioModManager.Services;
 using FactorioModManager.Services.API;
 using FactorioModManager.Services.Infrastructure;
 using FactorioModManager.ViewModels;
+using FactorioModManager.ViewModels.Dialogs;
 using FactorioModManager.Views.Base;
 using System.Collections.Generic;
 

@@ -1,15 +1,13 @@
 ﻿using FactorioModManager.Models.DTO;
 using FactorioModManager.Services;
-using FactorioModManager.Services.Infrastructure;
 using ReactiveUI;
 using System;
 
-namespace FactorioModManager.ViewModels
+namespace FactorioModManager.ViewModels.Dialogs
 {
-    public class VersionHistoryReleaseViewModel : ReactiveObject
+    public class VersionHistoryReleaseViewModel : ViewModelBase
     {
         private readonly IModService _modService;
-        private readonly ILogService _logService;
         private bool _isInstalling;
         private double _downloadProgress;
         private bool _isInstalled;
@@ -40,12 +38,11 @@ namespace FactorioModManager.ViewModels
             set => this.RaiseAndSetIfChanged(ref _isInstalled, value);
         }
 
-        public VersionHistoryReleaseViewModel(ReleaseDTO release, IModService modService, string modName, ILogService logService)
+        public VersionHistoryReleaseViewModel(ReleaseDTO release, IModService modService, string modName)
         {
             Release = release;
             _modService = modService;
             IsInstalled = _modService.GetInstalledVersions(modName).Contains(release.Version);
-            _logService = logService;
         }
     }
 }

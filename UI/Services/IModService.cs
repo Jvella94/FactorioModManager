@@ -2,6 +2,7 @@
 using FactorioModManager.Models;
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace FactorioModManager.Services
@@ -50,6 +51,6 @@ namespace FactorioModManager.Services
             string modName,
             string version,
             string downloadUrl,
-            IProgress<(long bytesDownloaded, long? totalBytes)> progress);
+            IProgress<(long bytesDownloaded, long? totalBytes)> progress, CancellationToken cancellationToken = default);
     }
 }

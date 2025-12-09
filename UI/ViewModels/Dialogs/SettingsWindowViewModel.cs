@@ -1,6 +1,8 @@
 ﻿using FactorioModManager.Services;
 using ReactiveUI;
+using System;
 using System.Reactive;
+using System.Reactive.Linq;
 
 namespace FactorioModManager.ViewModels.Dialogs
 {
@@ -9,6 +11,11 @@ namespace FactorioModManager.ViewModels.Dialogs
         private readonly ISettingsService _settingsService;
 
         private string? _modsPath;
+        private string? _apiKey;
+        private string? _username;
+        private string? _token;
+        private bool _keepOldModFiles;
+        private string? _validationError;
 
         public string? ModsPath
         {
@@ -16,15 +23,11 @@ namespace FactorioModManager.ViewModels.Dialogs
             set => this.RaiseAndSetIfChanged(ref _modsPath, value);
         }
 
-        private string? _apiKey;
-
         public string? ApiKey
         {
             get => _apiKey;
             set => this.RaiseAndSetIfChanged(ref _apiKey, value);
         }
-
-        private string? _username;
 
         public string? Username
         {
@@ -32,20 +35,23 @@ namespace FactorioModManager.ViewModels.Dialogs
             set => this.RaiseAndSetIfChanged(ref _username, value);
         }
 
-        private string? _token;
-
         public string? Token
         {
             get => _token;
             set => this.RaiseAndSetIfChanged(ref _token, value);
         }
 
-        private bool _keepOldModFiles;
-
         public bool KeepOldModFiles
         {
             get => _keepOldModFiles;
             set => this.RaiseAndSetIfChanged(ref _keepOldModFiles, value);
+        }
+
+        // ✅ Validation error display
+        public string? ValidationError
+        {
+            get => _validationError;
+            private set => this.RaiseAndSetIfChanged(ref _validationError, value);
         }
 
         public ReactiveCommand<Unit, Unit> SaveCommand { get; }
@@ -62,12 +68,42 @@ namespace FactorioModManager.ViewModels.Dialogs
             Token = _settingsService.GetToken();
             KeepOldModFiles = _settingsService.GetKeepOldModFiles();
 
-            SaveCommand = ReactiveCommand.Create(SaveSettings);
+            // ✅ SaveCommand with validation
+            var canSave = this.WhenAnyValue(x => x.ModsPath)
+                .Select(_ => Validate())
+                .ObserveOn(RxApp.MainThreadScheduler);
+
+            SaveCommand = ReactiveCommand.Create(SaveSettings, canSave);
             CancelCommand = ReactiveCommand.Create(() => { });
+
+            // ✅ Clear validation error when path changes
+            this.WhenAnyValue(x => x.ModsPath)
+                .Subscribe(_ => ValidationError = null);
+        }
+
+        internal bool Validate()
+        {
+            if (string.IsNullOrWhiteSpace(ModsPath))
+            {
+                ValidationError = "Mods path is required";
+                return false;
+            }
+
+            if (!System.IO.Directory.Exists(ModsPath))
+            {
+                ValidationError = "Directory does not exist";
+                return false;
+            }
+
+            ValidationError = null;
+            return true;
         }
 
         private void SaveSettings()
         {
+            if (!Validate())
+                return;
+
             _settingsService.SetApiKey(string.IsNullOrWhiteSpace(ApiKey) ? null : ApiKey);
 
             if (!string.IsNullOrWhiteSpace(ModsPath))
@@ -78,16 +114,6 @@ namespace FactorioModManager.ViewModels.Dialogs
             _settingsService.SetUsername(string.IsNullOrWhiteSpace(Username) ? null : Username);
             _settingsService.SetToken(string.IsNullOrWhiteSpace(Token) ? null : Token);
             _settingsService.SetKeepOldModFiles(KeepOldModFiles);
-        }
-
-        public bool Validate()
-        {
-            if (string.IsNullOrWhiteSpace(ModsPath))
-            {
-                return false;
-            }
-
-            return System.IO.Directory.Exists(ModsPath);
         }
     }
 }

@@ -9,6 +9,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace FactorioModManager.Services
@@ -293,7 +294,7 @@ namespace FactorioModManager.Services
             string modName,
             string version,
             string downloadUrl,
-            IProgress<(long bytesDownloaded, long? totalBytes)> progress)
+            IProgress<(long bytesDownloaded, long? totalBytes)> progress, CancellationToken cancellationToken = default)
         {
             var modsDirectory = GetModsDirectory();
             var fileName = $"{modName}_{version}.zip";
@@ -301,7 +302,7 @@ namespace FactorioModManager.Services
             try
             {
                 _logService.Log($"Downloading {fileName} from {downloadUrl}");
-                await _downloadService.DownloadFileAsync(modName, filePath, progress);
+                await _downloadService.DownloadFileAsync(modName, filePath, progress, cancellationToken);
                 _logService.Log($"Successfully downloaded {fileName}");
 
                 // ✅ Clear version cache
@@ -439,7 +440,7 @@ namespace FactorioModManager.Services
             return null;
         }
 
-        private string? FindThumbnailInDirectory(string directory)
+        private static string? FindThumbnailInDirectory(string directory)
         {
             var thumbnailPath = Path.Combine(directory, "thumbnail.png");
             return File.Exists(thumbnailPath) ? thumbnailPath : null;

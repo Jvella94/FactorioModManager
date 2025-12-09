@@ -1,67 +1,67 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-  
+
   <!-- Base Input Style -->
   <Style Selector="TextBox.dialog-input, NumericUpDown.dialog-input">
-    <Setter Property="MinHeight" Value="32"/>
-    <Setter Property="Margin" Value="0,0,0,15"/>
+    <Setter Property="MinHeight" Value="32" />
+    <Setter Property="Margin" Value="{StaticResource DialogInputMargin}" />
   </Style>
-  
+
   <!-- Focus State -->
   <Style Selector="TextBox.dialog-input:focus, NumericUpDown.dialog-input:focus">
-    <Setter Property="BorderBrush" Value="{StaticResource PrimaryBrush}"/>
-    <Setter Property="BorderThickness" Value="2"/>
+    <Setter Property="BorderBrush" Value="{StaticResource PrimaryBrush}" />
+    <Setter Property="BorderThickness" Value="2" />
   </Style>
-  
+
   <!-- Disabled State -->
   <Style Selector="TextBox.dialog-input:disabled, NumericUpDown.dialog-input:disabled">
-    <Setter Property="Opacity" Value="0.6"/>
-    <Setter Property="Background" Value="{StaticResource DialogBackgroundHoverBrush}"/>
+    <Setter Property="Opacity" Value="0.6" />
+    <Setter Property="Background" Value="{StaticResource DialogBackgroundHoverBrush}" />
   </Style>
-  
+
   <!-- Error State -->
   <Style Selector="TextBox.dialog-input.error, NumericUpDown.dialog-input.error">
-    <Setter Property="BorderBrush" Value="{StaticResource ErrorBrush}"/>
-    <Setter Property="BorderThickness" Value="2"/>
+    <Setter Property="BorderBrush" Value="{StaticResource ErrorBrush}" />
+    <Setter Property="BorderThickness" Value="2" />
   </Style>
-  
+
   <!-- Success State -->
   <Style Selector="TextBox.dialog-input.success">
-    <Setter Property="BorderBrush" Value="{StaticResource SuccessBrush}"/>
-    <Setter Property="BorderThickness" Value="2"/>
+    <Setter Property="BorderBrush" Value="{StaticResource SuccessBrush}" />
+    <Setter Property="BorderThickness" Value="2" />
   </Style>
-  
+
   <!-- Wide Input Variant -->
   <Style Selector="TextBox.dialog-input.wide">
-    <Setter Property="MinWidth" Value="400"/>
+    <Setter Property="MinWidth" Value="400" />
   </Style>
-  
+
   <!-- Multiline TextBox -->
   <Style Selector="TextBox.dialog-input.multiline">
-    <Setter Property="AcceptsReturn" Value="True"/>
-    <Setter Property="TextWrapping" Value="Wrap"/>
-    <Setter Property="MinHeight" Value="80"/>
-    <Setter Property="VerticalContentAlignment" Value="Top"/>
+    <Setter Property="AcceptsReturn" Value="True" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="MinHeight" Value="80" />
+    <Setter Property="VerticalContentAlignment" Value="Top" />
   </Style>
-  
+
   <!-- ComboBox -->
   <Style Selector="ComboBox.dialog-input">
-    <Setter Property="MinHeight" Value="32"/>
-    <Setter Property="Margin" Value="0,0,0,15"/>
+    <Setter Property="MinHeight" Value="32" />
+    <Setter Property="Margin" Value="0,0,0,15" />
   </Style>
-  
+
   <Style Selector="ComboBox.dialog-input:focus">
-    <Setter Property="BorderBrush" Value="{StaticResource PrimaryBrush}"/>
-    <Setter Property="BorderThickness" Value="2"/>
+    <Setter Property="BorderBrush" Value="{StaticResource PrimaryBrush}" />
+    <Setter Property="BorderThickness" Value="2" />
   </Style>
-  
+
   <!-- CheckBox -->
   <Style Selector="CheckBox.dialog-checkbox">
-    <Setter Property="Margin" Value="0,5,0,10"/>
+    <Setter Property="Margin" Value="0,5,0,10" />
   </Style>
-  
+
   <!-- RadioButton -->
   <Style Selector="RadioButton.dialog-radio">
-    <Setter Property="Margin" Value="0,5,0,5"/>
+    <Setter Property="Margin" Value="0,5,0,5" />
   </Style>
 </Styles>

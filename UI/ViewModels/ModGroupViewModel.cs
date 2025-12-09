@@ -2,12 +2,16 @@
 using System;
 using System.Collections.Generic;
 using System.Reactive;
+using System.Reactive.Disposables;
+using System.Reactive.Disposables.Fluent;
 using System.Reactive.Linq;
 
 namespace FactorioModManager.ViewModels
 {
     public class ModGroupViewModel : ViewModelBase
     {
+        private readonly CompositeDisposable _disposables = [];
+
         private string _name = string.Empty;
         private int _enabledCount;
         private int _totalCount;
@@ -50,11 +54,21 @@ namespace FactorioModManager.ViewModels
 
         public ModGroupViewModel()
         {
-            this.WhenAnyValue(
-                x => x.EnabledCount,
-                x => x.TotalCount)
+            // ✅ Dispose subscription properly
+            this.WhenAnyValue(x => x.EnabledCount, x => x.TotalCount)
                 .Select(_ => Unit.Default)
-                .Subscribe(_ => this.RaisePropertyChanged(nameof(StatusText)));
+                .Subscribe(_ => this.RaisePropertyChanged(nameof(StatusText)))
+                .DisposeWith(_disposables);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _disposables?.Dispose();
+            }
+
+            base.Dispose(disposing);
         }
     }
 }
