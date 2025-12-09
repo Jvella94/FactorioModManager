@@ -40,6 +40,14 @@ namespace FactorioModManager.ViewModels.MainWindow
             _navigationHistory.Add(newMod);
             _navigationIndex = _navigationHistory.Count - 1;
 
+            // ✅ ADD LIMIT
+            const int MaxHistorySize = 50;
+            if (_navigationHistory.Count > MaxHistorySize)
+            {
+                _navigationHistory.RemoveAt(0);
+                _navigationIndex--;
+            }
+
             this.RaisePropertyChanged(nameof(CanNavigateBack));
             this.RaisePropertyChanged(nameof(CanNavigateForward));
         }

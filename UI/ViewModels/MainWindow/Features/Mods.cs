@@ -75,8 +75,8 @@ namespace FactorioModManager.ViewModels.MainWindow
         /// ✅ NEW: Updates the mods cache with loaded data
         /// </summary>
         private void UpdateModsCache(
-            List<(Models.ModInfo Info, bool IsEnabled, DateTime? LastUpdated, string? ThumbnailPath, string FilePath)> latestMods,
-            List<Models.ModGroup> loadedGroups)
+            List<(ModInfo Info, bool IsEnabled, DateTime? LastUpdated, string? ThumbnailPath, string FilePath)> latestMods,
+            List<ModGroup> loadedGroups)
         {
             var allDependencies = new HashSet<string>();
             var modViewModels = new List<ModViewModel>();
@@ -111,6 +111,12 @@ namespace FactorioModManager.ViewModels.MainWindow
             // ✅ Update cache (this triggers reactive pipeline automatically)
             _modsCache.Edit(updater =>
             {
+                // ✅ Dispose old ViewModels before clearing
+                foreach (var oldMod in updater.Items.ToList())
+                {
+                    oldMod?.Dispose();
+                }
+
                 updater.Clear();
                 updater.AddOrUpdate(modViewModels);
             });
@@ -151,10 +157,15 @@ namespace FactorioModManager.ViewModels.MainWindow
             return modVm;
         }
 
-        private void UpdateGroupsCollection(List<Models.ModGroup> loadedGroups)
+        private void UpdateGroupsCollection(List<ModGroup> loadedGroups)
         {
-            Groups.Clear();
+            // ✅ Dispose old group VMs first
+            foreach (var oldGroup in Groups)
+            {
+                oldGroup?.Dispose();
+            }
 
+            Groups.Clear();
             foreach (var group in loadedGroups)
             {
                 var groupVm = new ModGroupViewModel
@@ -162,7 +173,6 @@ namespace FactorioModManager.ViewModels.MainWindow
                     Name = group.Name,
                     ModNames = group.ModNames
                 };
-
                 UpdateGroupStatus(groupVm);
                 Groups.Add(groupVm);
             }

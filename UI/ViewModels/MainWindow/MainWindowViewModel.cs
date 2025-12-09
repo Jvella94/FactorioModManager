@@ -10,12 +10,17 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Reactive;
+using System.Reactive.Disposables;
+using System.Reactive.Disposables.Fluent;
 using System.Reactive.Linq;
 
 namespace FactorioModManager.ViewModels.MainWindow
 {
     public partial class MainWindowViewModel : ViewModelBase
     {
+        // ✅ ADD THIS: Store all subscriptions
+        private readonly CompositeDisposable _disposables = [];
+
         // ✅ NEW: Source cache for mods
         private readonly SourceCache<ModViewModel, string> _modsCache;
 
@@ -99,7 +104,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                     x => x.FilterBySelectedGroup)
                     .Throttle(TimeSpan.FromMilliseconds(Constants.Throttle.SearchMs))
                     .Select(_ => CreateModFilterPredicate()))
-                .ObserveOn(RxApp.MainThreadScheduler) 
+                .ObserveOn(RxApp.MainThreadScheduler)
                 .SortAndBind(
                     out _filteredMods,
                     SortExpressionComparer<ModViewModel>.Descending(m => m.LastUpdated ?? DateTime.MinValue))
@@ -107,7 +112,8 @@ namespace FactorioModManager.ViewModels.MainWindow
                 .Subscribe(_ =>
                 {
                     this.RaisePropertyChanged(nameof(ModCountText));
-                });
+                })
+                .DisposeWith(_disposables);
 
             // ✅ Authors pipeline - ADD ObserveOn BEFORE SortAndBind
             _modsCache
@@ -116,11 +122,12 @@ namespace FactorioModManager.ViewModels.MainWindow
                 .Filter(author => !string.IsNullOrEmpty(author))
                 .GroupWithImmutableState(author => author!)
                 .Transform(group => $"{group.Key} ({group.Count})")
-                .ObserveOn(RxApp.MainThreadScheduler) 
+                .ObserveOn(RxApp.MainThreadScheduler)
                 .SortAndBind(
                     out _authors,
                     SortExpressionComparer<string>.Descending(a => ExtractAuthorCount(a)))
-                .Subscribe();
+                .Subscribe()
+                .DisposeWith(_disposables);
 
             // ✅ Filtered authors pipeline - ADD ObserveOn BEFORE Bind
             Observable.Return(_authors)
@@ -129,25 +136,28 @@ namespace FactorioModManager.ViewModels.MainWindow
                 .Filter(this.WhenAnyValue(x => x.AuthorSearchText)
                     .Throttle(TimeSpan.FromMilliseconds(Constants.Throttle.AuthorSearchMs))
                     .Select(searchText => CreateAuthorFilterPredicate(searchText)))
-                .ObserveOn(RxApp.MainThreadScheduler) 
+                .ObserveOn(RxApp.MainThreadScheduler)
                 .Bind(out _filteredAuthors)
-                .Subscribe();
+                .Subscribe()
+                .DisposeWith(_disposables);
 
             // ✅ Sync author search with selected author
             this.WhenAnyValue(x => x.SelectedAuthorFilter)
-                .ObserveOn(RxApp.MainThreadScheduler) 
+                .ObserveOn(RxApp.MainThreadScheduler)
                 .Subscribe(author =>
                 {
                     if (!string.IsNullOrEmpty(author))
                     {
                         AuthorSearchText = author;
                     }
-                });
+                })
+                .DisposeWith(_disposables);
 
             // ✅ Update HasSelectedMod
             this.WhenAnyValue(x => x.SelectedMod)
                 .ObserveOn(RxApp.MainThreadScheduler) // ✅ Ensure UI thread
-                .Subscribe(_ => this.RaisePropertyChanged(nameof(HasSelectedMod)));
+                .Subscribe(_ => this.RaisePropertyChanged(nameof(HasSelectedMod)))
+                .DisposeWith(_disposables);
 
             // ✅ Update ModCountSummary when mods change - Already has ObserveOn, keep it
             _modsCache
@@ -162,7 +172,8 @@ namespace FactorioModManager.ViewModels.MainWindow
                     this.RaisePropertyChanged(nameof(UnusedInternalCount));
                     this.RaisePropertyChanged(nameof(HasUnusedInternals));
                     this.RaisePropertyChanged(nameof(UnusedInternalWarning));
-                });
+                })
+                .DisposeWith(_disposables);
         }
 
         private static int ExtractAuthorCount(string authorWithCount)
@@ -348,6 +359,37 @@ namespace FactorioModManager.ViewModels.MainWindow
             // Log technical details
             var technicalMessage = _errorMessageService.GetTechnicalMessage(ex);
             _logService.LogError(technicalMessage, ex);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                // 1. Stop all reactive subscriptions first
+                _disposables?.Dispose();
+
+                // 2. Clear navigation history (prevents potential re-selections)
+                _navigationHistory.Clear();
+
+                // 3. Clear selected mods collection
+                SelectedMods.Clear();
+
+                // 4. Dispose child ViewModels
+                foreach (var mod in _modsCache.Items)
+                {
+                    mod?.Dispose();
+                }
+
+                foreach (var group in Groups)
+                {
+                    group?.Dispose();
+                }
+
+                // 5. Finally dispose the cache itself
+                _modsCache?.Dispose();
+            }
+
+            base.Dispose(disposing);
         }
     }
 }
