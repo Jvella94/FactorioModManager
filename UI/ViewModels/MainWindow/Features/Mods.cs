@@ -1,9 +1,6 @@
-﻿using Avalonia.Media.Imaging;
-using ReactiveUI;
+﻿using FactorioModManager.Models;
 using System;
 using System.Collections.Generic;
-using System.IO;
-using System.IO.Compression;
 using System.Linq;
 using System.Threading.Tasks;
 using static FactorioModManager.Constants;
@@ -26,159 +23,35 @@ namespace FactorioModManager.ViewModels.MainWindow
 
             await Task.Run(async () =>
             {
-                _uiService.Post(() =>
+                await _uiService.InvokeAsync(() =>
                 {
-                    StatusText = "Refreshing mods...";
+                    SetStatus("Refreshing mods...");
                 });
 
                 try
                 {
                     var loadedMods = _modService.LoadAllMods();
                     var loadedGroups = _groupService.LoadGroups();
-                    var apiKey = _settingsService.GetApiKey();
+                    var latestMods = GetLatestModVersions(loadedMods);
 
-                    // Group by name and keep only the latest version
-                    var latestMods = loadedMods
-                        .GroupBy(m => m.Info.Name)
-                        .Select(g => g.OrderByDescending(m => m.Info.Version).First())
-                        .ToList();
-
-                    // Use InvokeAsync to WAIT for the UI thread to complete loading mods
                     await _uiService.InvokeAsync(() =>
                     {
-                        Mods.Clear();
-                        Authors.Clear();
-                        _authorModCounts.Clear();
+                        // ✅ Use DynamicData cache instead of ObservableCollection
+                        UpdateModsCache(latestMods, loadedGroups);
+                        UpdateGroupsCollection(loadedGroups);
 
-                        var authorCounts = new Dictionary<string, int>();
-                        var allDependencies = new HashSet<string>();
-
-                        foreach (var (info, isEnabled, lastUpdated, thumbnailPath, filePath) in latestMods)
-                        {
-                            var modVm = new ModViewModel
-                            {
-                                Name = info.Name,
-                                Title = info.Title ?? info.Name,
-                                Version = info.Version,
-                                Author = info.Author,
-                                Description = info.Description ?? "",
-                                IsEnabled = isEnabled,
-                                Dependencies = info.Dependencies,
-                                LastUpdated = lastUpdated,
-                                ThumbnailPath = thumbnailPath,
-                                Category = _metadataService.GetCategory(info.Name),
-                                SourceUrl = _metadataService.GetSourceUrl(info.Name),
-                                HasUpdate = _metadataService.GetHasUpdate(info.Name),
-                                LatestVersion = _metadataService.GetLatestVersion(info.Name),
-                                FilePath = filePath
-                            };
-
-                            // Track all dependencies
-                            foreach (var dep in info.Dependencies)
-                            {
-                                var depName = dep.Split(Separators.Dependency, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
-                                if (!string.IsNullOrEmpty(depName))
-                                {
-                                    allDependencies.Add(depName);
-                                }
-                            }
-
-                            // Load available versions for this mod
-                            LoadModVersions(modVm);
-
-                            // Determine group
-                            var group = loadedGroups.FirstOrDefault(g => g.ModNames.Contains(modVm.Title));
-                            if (group != null)
-                            {
-                                modVm.GroupName = group.Name;
-                            }
-
-                            Mods.Add(modVm);
-
-                            if (!string.IsNullOrEmpty(info.Author))
-                            {
-                                if (!authorCounts.TryGetValue(info.Author, out var count))
-                                {
-                                    count = 0;
-                                }
-                                authorCounts[info.Author] = count + 1;
-                            }
-                        }
-
-                        // Mark unused internal mods
-                        foreach (var mod in Mods)
-                        {
-                            if (mod.Category?.Equals("internal", StringComparison.OrdinalIgnoreCase) == true)
-                            {
-                                mod.IsUnusedInternal = !allDependencies.Contains(mod.Name);
-                            }
-                        }
-
-                        // Sort by LastUpdated descending
-                        var sortedMods = Mods.OrderByDescending(m => m.LastUpdated ?? DateTime.MinValue).ToList();
-                        Mods.Clear();
-                        foreach (var mod in sortedMods)
-                        {
-                            Mods.Add(mod);
-                        }
-
-                        // Build author list
-                        _authorModCounts = authorCounts;
-                        var sortedAuthors = authorCounts
-                            .OrderByDescending(kvp => kvp.Value)
-                            .Select(kvp => $"{kvp.Key} ({kvp.Value})")
-                            .ToList();
-
-                        foreach (var author in sortedAuthors)
-                        {
-                            Authors.Add(author);
-                        }
-
-                        Groups.Clear();
-                        foreach (var group in loadedGroups)
-                        {
-                            var groupVm = new ModGroupViewModel
-                            {
-                                Name = group.Name,
-                                ModNames = group.ModNames
-                            };
-                            UpdateGroupStatus(groupVm);
-                            Groups.Add(groupVm);
-                        }
-
-                        SelectedAuthorFilter = null;
-                        AuthorSearchText = string.Empty;
-                        UpdateFilteredAuthors();
-                        UpdateFilteredMods();
-
-                        this.RaisePropertyChanged(nameof(ModCountSummary));
-                        this.RaisePropertyChanged(nameof(UnusedInternalCount));
-                        this.RaisePropertyChanged(nameof(HasUnusedInternals));
-                        this.RaisePropertyChanged(nameof(UnusedInternalWarning));
-
-                        StatusText = $"Loaded {Mods.Count} mods and {Groups.Count} groups";
+                        SetStatus($"Loaded {AllModsCount} mods and {Groups.Count} groups");
                     });
 
-                    // NOW mods are fully loaded - safe to check for updates
                     await CheckForAlreadyDownloadedUpdatesAsync();
-
-                    // Fetch metadata for mods that need it
                     await FetchMissingMetadataAsync();
-
-                    // Check for updates once per session
-                    var lastCheck = _settingsService.GetLastUpdateCheck();
-                    if (!lastCheck.HasValue || (DateTime.UtcNow - lastCheck.Value).TotalHours >= 1)
-                    {
-                        await CheckForUpdatesAsync();
-                        _settingsService.SetLastUpdateCheck(DateTime.UtcNow);
-                    }
+                    await CheckForUpdatesIfNeededAsync();
                 }
                 catch (Exception ex)
                 {
-                    _logService.LogDebug($"ERROR in RefreshModsAsync: {ex}");
-                    _uiService.Post(() =>
+                    await _uiService.InvokeAsync(() =>
                     {
-                        StatusText = $"Error: {ex.Message}";
+                        HandleError(ex, "Refresh Mods");
                     });
                 }
                 finally
@@ -189,89 +62,110 @@ namespace FactorioModManager.ViewModels.MainWindow
             });
         }
 
-        private async Task FetchMissingMetadataAsync()
+        private static List<(ModInfo Info, bool IsEnabled, DateTime? LastUpdated, string? ThumbnailPath, string FilePath)>
+            GetLatestModVersions(
+                List<(ModInfo Info, bool IsEnabled, DateTime? LastUpdated, string? ThumbnailPath, string FilePath)> loadedMods)
         {
-            // Take a snapshot to avoid collection modification issues
-            var modsSnapshot = Mods.ToList();
+            return [.. loadedMods
+                .GroupBy(m => m.Info.Name)
+                .Select(g => g.OrderByDescending(m => m.Info.Version).First())];
+        }
 
-            var modsNeedingMetadata = modsSnapshot.Where(m =>
-                _metadataService.NeedsCategoryCheck(m.Name) ||
-                _metadataService.NeedsSourceUrlCheck(m.Name)).ToList();
+        /// <summary>
+        /// ✅ NEW: Updates the mods cache with loaded data
+        /// </summary>
+        private void UpdateModsCache(
+            List<(Models.ModInfo Info, bool IsEnabled, DateTime? LastUpdated, string? ThumbnailPath, string FilePath)> latestMods,
+            List<Models.ModGroup> loadedGroups)
+        {
+            var allDependencies = new HashSet<string>();
+            var modViewModels = new List<ModViewModel>();
 
-            if (modsNeedingMetadata.Count == 0) return;
-
-            _uiService.Post(() =>
+            foreach (var (info, isEnabled, lastUpdated, thumbnailPath, filePath) in latestMods)
             {
-                StatusText = $"Fetching metadata for {modsNeedingMetadata.Count} mods...";
-            });
-            var currentIndex = 0;
-            foreach (var mod in modsNeedingMetadata)
-            {
-                currentIndex++;
+                var modVm = CreateModViewModel(info, isEnabled, lastUpdated, thumbnailPath, filePath, loadedGroups);
 
-                // ADDED: Update progress
-                _uiService.Post(() =>
+                // Track dependencies
+                foreach (var dep in info.Dependencies)
                 {
-                    StatusText = $"Fetching metadata ({currentIndex}/{modsNeedingMetadata.Count}): {mod.Title}";
-                });
-                try
-                {
-                    var details = await _apiService.GetModDetailsFullAsync(mod.Name);
-                    if (details != null)
+                    var depName = DependencyHelper.ExtractDependencyName(dep);
+                    if (!string.IsNullOrEmpty(depName))
                     {
-                        if (_metadataService.NeedsCategoryCheck(mod.Name))
-                        {
-                            _metadataService.UpdateCategory(mod.Name, details.Category);
-                            _uiService.Post(() =>
-                            {
-                                mod.Category = details.Category;
-                            });
-                        }
-
-                        if (_metadataService.NeedsSourceUrlCheck(mod.Name))
-                        {
-                            _metadataService.UpdateSourceUrl(mod.Name, details.SourceUrl);
-                            _uiService.Post(() =>
-                            {
-                                mod.SourceUrl = details.SourceUrl;
-                            });
-                        }
+                        allDependencies.Add(depName);
                     }
-                    else
-                    {
-                        _metadataService.MarkAsChecked(mod.Name);
-                    }
-
-                    await Task.Delay(100); // Rate limiting
                 }
-                catch (Exception ex)
+
+                LoadModVersions(modVm);
+                modViewModels.Add(modVm);
+            }
+
+            // Mark unused internal mods
+            foreach (var mod in modViewModels)
+            {
+                if (mod.Category?.Equals("internal", StringComparison.OrdinalIgnoreCase) == true)
                 {
-                    _logService.LogDebug($"Error fetching metadata for {mod.Name}: {ex.Message}");
-                    _metadataService.MarkAsChecked(mod.Name);
+                    mod.IsUnusedInternal = !allDependencies.Contains(mod.Name);
                 }
             }
 
-            _uiService.Post(() =>
+            // ✅ Update cache (this triggers reactive pipeline automatically)
+            _modsCache.Edit(updater =>
             {
-                StatusText = "Metadata update complete";
+                updater.Clear();
+                updater.AddOrUpdate(modViewModels);
             });
         }
 
-        private static int CompareVersions(string v1, string v2)
+        private ModViewModel CreateModViewModel(
+            Models.ModInfo info,
+            bool isEnabled,
+            DateTime? lastUpdated,
+            string? thumbnailPath,
+            string filePath,
+            List<Models.ModGroup> loadedGroups)
         {
-            var parts1 = v1.Split('.').Select(int.Parse).ToArray();
-            var parts2 = v2.Split('.').Select(int.Parse).ToArray();
-
-            for (int i = 0; i < Math.Max(parts1.Length, parts2.Length); i++)
+            var modVm = new ModViewModel
             {
-                var p1 = i < parts1.Length ? parts1[i] : 0;
-                var p2 = i < parts2.Length ? parts2[i] : 0;
+                Name = info.Name,
+                Title = info.Title ?? info.Name,
+                Version = info.Version,
+                Author = info.Author,
+                Description = info.Description ?? string.Empty,
+                IsEnabled = isEnabled,
+                Dependencies = info.Dependencies,
+                LastUpdated = lastUpdated,
+                ThumbnailPath = thumbnailPath,
+                Category = _metadataService.GetCategory(info.Name),
+                SourceUrl = _metadataService.GetSourceUrl(info.Name),
+                HasUpdate = _metadataService.GetHasUpdate(info.Name),
+                LatestVersion = _metadataService.GetLatestVersion(info.Name),
+                FilePath = filePath
+            };
 
-                if (p1 > p2) return 1;
-                if (p1 < p2) return -1;
+            var group = loadedGroups.FirstOrDefault(g => g.ModNames.Contains(modVm.Title));
+            if (group != null)
+            {
+                modVm.GroupName = group.Name;
             }
 
-            return 0;
+            return modVm;
+        }
+
+        private void UpdateGroupsCollection(List<Models.ModGroup> loadedGroups)
+        {
+            Groups.Clear();
+
+            foreach (var group in loadedGroups)
+            {
+                var groupVm = new ModGroupViewModel
+                {
+                    Name = group.Name,
+                    ModNames = group.ModNames
+                };
+
+                UpdateGroupStatus(groupVm);
+                Groups.Add(groupVm);
+            }
         }
 
         private async Task LoadThumbnailAsync(ModViewModel mod)
@@ -282,57 +176,53 @@ namespace FactorioModManager.ViewModels.MainWindow
                 return;
             }
 
-            await Task.Run(() =>
+            try
             {
-                try
-                {
-                    Bitmap? thumbnail = null;
+                var thumbnail = await _modService.LoadThumbnailAsync(mod.ThumbnailPath);
 
-                    if (mod.ThumbnailPath.Contains('|'))
-                    {
-                        var parts = mod.ThumbnailPath.Split('|');
-                        using var archive = ZipFile.OpenRead(parts[0]);
-                        var entry = archive.GetEntry(parts[1]);
-                        if (entry != null)
-                        {
-                            using var stream = entry.Open();
-                            using var memStream = new MemoryStream();
-                            stream.CopyTo(memStream);
-                            memStream.Position = 0;
-                            thumbnail = new Bitmap(memStream);
-                        }
-                    }
-                    else if (File.Exists(mod.ThumbnailPath))
-                    {
-                        thumbnail = new Bitmap(mod.ThumbnailPath);
-                    }
-
-                    _uiService.Post(() =>
-                    {
-                        mod.Thumbnail = thumbnail;
-                    });
-                }
-                catch (Exception ex)
+                await _uiService.InvokeAsync(() =>
                 {
-                    _logService.LogDebug($"Error loading thumbnail: {ex.Message}");
-                }
-            });
+                    mod.Thumbnail = thumbnail;
+                });
+            }
+            catch (Exception ex)
+            {
+                _logService.LogError($"Error loading thumbnail for {mod.Name}: {ex.Message}", ex);
+            }
+        }
+
+        private async Task CheckForUpdatesIfNeededAsync()
+        {
+            var lastCheck = _settingsService.GetLastUpdateCheck();
+
+            if (!lastCheck.HasValue || (DateTime.UtcNow - lastCheck.Value).TotalHours >= 1)
+            {
+                await CheckForUpdatesAsync();
+                _settingsService.SetLastUpdateCheck(DateTime.UtcNow);
+            }
         }
 
         private async Task ViewDependentsAsync(ModViewModel? mod)
         {
             if (mod == null)
+            {
+                SetStatus("No mod selected", LogLevel.Warning);
                 return;
+            }
 
-            var targetName = mod.Name; // or Info.Name, whichever you use as ID
+            var targetName = mod.Name;
+
             if (string.IsNullOrWhiteSpace(targetName))
                 return;
 
-            // Scan all loaded mods to see who depends on this one
-            var dependents = Mods
+            // ✅ Query from cache
+            var dependents = _modsCache.Items
                 .Where(m => m.Dependencies != null &&
-                            m.Dependencies.Any(d =>
-                                d.Contains(targetName, StringComparison.OrdinalIgnoreCase)))
+                    m.Dependencies.Any(dep =>
+                    {
+                        var depName = DependencyHelper.ExtractDependencyName(dep);
+                        return depName.Equals(targetName, StringComparison.OrdinalIgnoreCase);
+                    }))
                 .OrderBy(m => m.Title)
                 .ToList();
 
@@ -352,5 +242,80 @@ namespace FactorioModManager.ViewModels.MainWindow
                 $"The following mods depend on '{mod.Title}':{Environment.NewLine}{Environment.NewLine}{list}");
         }
 
+        /// <summary>
+        /// Fetches missing metadata (category, source URL) from API
+        /// </summary>
+        private async Task FetchMissingMetadataAsync()
+        {
+            // Take a snapshot to avoid collection modification issues
+            var modsSnapshot = _modsCache.Items.ToList();
+            var modsNeedingMetadata = modsSnapshot.Where(m =>
+                _metadataService.NeedsCategoryCheck(m.Name) ||
+                _metadataService.NeedsSourceUrlCheck(m.Name)).ToList();
+
+            if (modsNeedingMetadata.Count == 0)
+                return;
+
+            await _uiService.InvokeAsync(() =>
+            {
+                SetStatus($"Fetching metadata for {modsNeedingMetadata.Count} mods...");
+            });
+
+            var currentIndex = 0;
+
+            foreach (var mod in modsNeedingMetadata)
+            {
+                currentIndex++;
+
+                await _uiService.InvokeAsync(() =>
+                {
+                    SetStatus($"Fetching metadata ({currentIndex}/{modsNeedingMetadata.Count}): {mod.Title}");
+                });
+
+                try
+                {
+                    var details = await _apiService.GetModDetailsFullAsync(mod.Name);
+
+                    if (details != null)
+                    {
+                        if (_metadataService.NeedsCategoryCheck(mod.Name))
+                        {
+                            _metadataService.UpdateCategory(mod.Name, details.Category);
+
+                            await _uiService.InvokeAsync(() =>
+                            {
+                                mod.Category = details.Category;
+                            });
+                        }
+
+                        if (_metadataService.NeedsSourceUrlCheck(mod.Name))
+                        {
+                            _metadataService.UpdateSourceUrl(mod.Name, details.SourceUrl);
+
+                            await _uiService.InvokeAsync(() =>
+                            {
+                                mod.SourceUrl = details.SourceUrl;
+                            });
+                        }
+                    }
+                    else
+                    {
+                        _metadataService.MarkAsChecked(mod.Name);
+                    }
+
+                    await Task.Delay(100); // Rate limiting
+                }
+                catch (Exception ex)
+                {
+                    _logService.LogError(_errorMessageService.GetTechnicalMessage(ex), ex);
+                    _metadataService.MarkAsChecked(mod.Name);
+                }
+            }
+
+            await _uiService.InvokeAsync(() =>
+            {
+                SetStatus("Metadata update complete");
+            });
+        }
     }
 }

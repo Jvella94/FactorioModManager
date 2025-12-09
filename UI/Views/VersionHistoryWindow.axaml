@@ -44,7 +44,8 @@
                         Command="{Binding $parent[Window].DataContext.ActionCommand}"
                         CommandParameter="{Binding}"
                         Background="{Binding IsInstalled, Converter={x:Static conv:ActionButtonColorConverter.Instance}}"
-                        MinWidth="90"/>
+                        MinWidth="90"
+                        HorizontalContentAlignment="Center"/>
                 <ProgressBar IsVisible="{Binding IsInstalling}"
                              Value="{Binding DownloadProgress}"
                              Maximum="100"

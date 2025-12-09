@@ -1,235 +1,295 @@
-﻿using ReactiveUI;
+﻿using FactorioModManager.Models;
+using ReactiveUI;
 using System.Linq;
 
 namespace FactorioModManager.ViewModels.MainWindow
 {
     public partial class MainWindowViewModel
     {
+        /// <summary>
+        /// Creates a new mod group
+        /// </summary>
         private void CreateGroup()
         {
-            _uiService.Post(() =>
+            var groupName = $"New Group {Groups.Count + 1}";
+            var newGroup = new Models.ModGroup
             {
-                var groupName = $"New Group {Groups.Count + 1}";
-                var newGroup = new Models.ModGroup
-                {
-                    Name = groupName,
-                    Description = "New mod group",
-                    ModNames = []
-                };
-                _groupService.AddGroup(newGroup);
-                var groupVm = new ModGroupViewModel
-                {
-                    Name = newGroup.Name,
-                    ModNames = newGroup.ModNames
-                };
-                UpdateGroupStatus(groupVm);
-                Groups.Add(groupVm);
-                StatusText = $"Created group: {groupName}";
-            });
+                Name = groupName,
+                Description = "New mod group",
+                ModNames = []
+            };
+
+            // ✅ Save to service
+            _groupService.AddGroup(newGroup);
+
+            // Update UI
+            var groupVm = new ModGroupViewModel
+            {
+                Name = newGroup.Name,
+                ModNames = newGroup.ModNames
+            };
+            UpdateGroupStatus(groupVm);
+            Groups.Add(groupVm);
+
+            SetStatus($"Created group: {groupName}");
         }
 
-        private void ToggleGroup(ModGroupViewModel group)
+        /// <summary>
+        /// Toggles all mods in a group on/off
+        /// </summary>
+        private void ToggleGroup(ModGroupViewModel? group)
         {
-            _uiService.Post(() =>
+            if (group == null)
+                return;
+
+            var enableGroup = group.EnabledCount < group.TotalCount;
+
+            foreach (var modName in group.ModNames)
             {
-                if (group != null)
+                var mod = _modsCache.Items.FirstOrDefault(m => m.Title == modName);
+                if (mod != null && mod.IsEnabled != enableGroup)
                 {
-                    var enableGroup = group.EnabledCount < group.TotalCount;
-                    foreach (var modName in group.ModNames)
-                    {
-                        var mod = Mods.FirstOrDefault(m => m.Title == modName);
-                        if (mod != null && mod.IsEnabled != enableGroup)
-                        {
-                            mod.IsEnabled = enableGroup;
-                            _modService.ToggleMod(mod.Name, mod.IsEnabled);
-                        }
-                    }
-                    this.RaisePropertyChanged(nameof(ModCountSummary));
-                    UpdateGroupStatus(group);
-                    StatusText = $"Group '{group.Name}' {(enableGroup ? "enabled" : "disabled")}";
+                    mod.IsEnabled = enableGroup;
+                    _modService.ToggleMod(mod.Name, mod.IsEnabled);
                 }
-            });
+            }
+
+            this.RaisePropertyChanged(nameof(ModCountSummary));
+            UpdateGroupStatus(group);
+
+            SetStatus($"Group '{group.Name}' {(enableGroup ? "enabled" : "disabled")}");
         }
 
+        /// <summary>
+        /// Adds the selected mod to the selected group
+        /// </summary>
         private void AddToGroup()
         {
-            _uiService.Post(() =>
+            if (SelectedMod == null || SelectedGroup == null)
             {
-                if (SelectedMod != null && SelectedGroup != null)
-                {
-                    if (!SelectedGroup.ModNames.Contains(SelectedMod.Title))
-                    {
-                        SelectedGroup.ModNames.Add(SelectedMod.Title);
-                        SelectedMod.GroupName = SelectedGroup.Name;
-                        SaveGroupChanges(SelectedGroup);
-                        UpdateGroupStatus(SelectedGroup);
-                        StatusText = $"Added '{SelectedMod.Title}' to group '{SelectedGroup.Name}'";
-                    }
-                }
-                else
-                {
-                    StatusText = "Select a mod and a group first";
-                }
-            });
+                SetStatus("Select a mod and a group first", LogLevel.Warning);
+                return;
+            }
+
+            if (SelectedGroup.ModNames.Contains(SelectedMod.Title))
+            {
+                SetStatus($"'{SelectedMod.Title}' is already in group '{SelectedGroup.Name}'", LogLevel.Warning);
+                return;
+            }
+
+            SelectedGroup.ModNames.Add(SelectedMod.Title);
+            SelectedMod.GroupName = SelectedGroup.Name;
+
+            // ✅ Save changes
+            SaveGroupChanges(SelectedGroup);
+            UpdateGroupStatus(SelectedGroup);
+
+            SetStatus($"Added '{SelectedMod.Title}' to group '{SelectedGroup.Name}'");
         }
 
+        /// <summary>
+        /// Adds multiple selected mods to the selected group
+        /// </summary>
         private void AddMultipleToGroup()
         {
-            _uiService.Post(() =>
+            if (SelectedMods.Count == 0 || SelectedGroup == null)
             {
-                if (SelectedMods.Count > 0 && SelectedGroup != null)
+                SetStatus("Select mods and a group first", LogLevel.Warning);
+                return;
+            }
+
+            var addedCount = 0;
+
+            foreach (var mod in SelectedMods.ToList())
+            {
+                if (!SelectedGroup.ModNames.Contains(mod.Title))
                 {
-                    var addedCount = 0;
-                    foreach (var mod in SelectedMods)
-                    {
-                        if (!SelectedGroup.ModNames.Contains(mod.Title))
-                        {
-                            SelectedGroup.ModNames.Add(mod.Title);
-                            mod.GroupName = SelectedGroup.Name;
-                            addedCount++;
-                        }
-                    }
-                    if (addedCount > 0)
-                    {
-                        SaveGroupChanges(SelectedGroup);
-                        UpdateGroupStatus(SelectedGroup);
-                        StatusText = $"Added {addedCount} mods to group '{SelectedGroup.Name}'";
-                    }
+                    SelectedGroup.ModNames.Add(mod.Title);
+                    mod.GroupName = SelectedGroup.Name;
+                    addedCount++;
                 }
-                else
-                {
-                    StatusText = "Select mods and a group first";
-                }
-            });
+            }
+
+            if (addedCount > 0)
+            {
+                SaveGroupChanges(SelectedGroup);
+                UpdateGroupStatus(SelectedGroup);
+                SetStatus($"Added {addedCount} mod(s) to group '{SelectedGroup.Name}'");
+            }
+            else
+            {
+                SetStatus("All selected mods are already in this group", LogLevel.Warning);
+            }
         }
 
+        /// <summary>
+        /// Removes the selected mod from the selected group
+        /// </summary>
         private void RemoveFromGroup()
         {
-            _uiService.Post(() =>
+            if (SelectedMod == null || SelectedGroup == null)
             {
-                if (SelectedMod != null && SelectedGroup != null)
-                {
-                    if (SelectedGroup.ModNames.Contains(SelectedMod.Title))
-                    {
-                        SelectedGroup.ModNames.Remove(SelectedMod.Title);
-                        SelectedMod.GroupName = Constants.UI.DefaultGroupName;
-                        SaveGroupChanges(SelectedGroup);
-                        UpdateGroupStatus(SelectedGroup);
-                        StatusText = $"Removed '{SelectedMod.Title}' from group '{SelectedGroup.Name}'";
-                    }
-                }
-                else
-                {
-                    StatusText = "Select a mod and a group first";
-                }
-            });
+                SetStatus("Select a mod and a group first", LogLevel.Warning);
+                return;
+            }
+
+            if (!SelectedGroup.ModNames.Contains(SelectedMod.Title))
+            {
+                SetStatus($"'{SelectedMod.Title}' is not in group '{SelectedGroup.Name}'", LogLevel.Warning);
+                return;
+            }
+
+            SelectedGroup.ModNames.Remove(SelectedMod.Title);
+            SelectedMod.GroupName = null;
+
+            SaveGroupChanges(SelectedGroup);
+            UpdateGroupStatus(SelectedGroup);
+
+            SetStatus($"Removed '{SelectedMod.Title}' from group '{SelectedGroup.Name}'");
         }
 
+        /// <summary>
+        /// Removes multiple selected mods from the selected group
+        /// </summary>
         private void RemoveMultipleFromGroup()
         {
-            _uiService.Post(() =>
+            if (SelectedMods.Count == 0 || SelectedGroup == null)
             {
-                if (SelectedMods.Count > 0 && SelectedGroup != null)
+                SetStatus("Select mods and a group first", LogLevel.Warning);
+                return;
+            }
+
+            var removedCount = 0;
+
+            foreach (var mod in SelectedMods.ToList())
+            {
+                if (SelectedGroup.ModNames.Contains(mod.Title))
                 {
-                    var removedCount = 0;
-                    foreach (var mod in SelectedMods.ToList())
-                    {
-                        if (SelectedGroup.ModNames.Contains(mod.Title))
-                        {
-                            SelectedGroup.ModNames.Remove(mod.Title);
-                            mod.GroupName = Constants.UI.DefaultGroupName;
-                            removedCount++;
-                        }
-                    }
-                    if (removedCount > 0)
-                    {
-                        SaveGroupChanges(SelectedGroup);
-                        UpdateGroupStatus(SelectedGroup);
-                        StatusText = $"Removed {removedCount} mods from group '{SelectedGroup.Name}'";
-                    }
+                    SelectedGroup.ModNames.Remove(mod.Title);
+                    mod.GroupName = null;
+                    removedCount++;
                 }
-                else
-                {
-                    StatusText = "Select mods and a group first";
-                }
-            });
+            }
+
+            if (removedCount > 0)
+            {
+                SaveGroupChanges(SelectedGroup);
+                UpdateGroupStatus(SelectedGroup);
+                SetStatus($"Removed {removedCount} mod(s) from group '{SelectedGroup.Name}'");
+            }
+            else
+            {
+                SetStatus("None of the selected mods are in this group", LogLevel.Warning);
+            }
         }
 
-        private void StartRenameGroup(ModGroupViewModel group)
+        /// <summary>
+        /// Deletes a group
+        /// </summary>
+        private void DeleteGroup(ModGroupViewModel? group)
         {
-            _uiService.Post(() =>
+            if (group == null)
+                return;
+
+            // ✅ Use DeleteGroup from service
+            _groupService.DeleteGroup(group.Name);
+            Groups.Remove(group);
+
+            // Clear group name from mods
+            foreach (var mod in _modsCache.Items.Where(m => m.GroupName == group.Name))
             {
-                if (group != null)
-                {
-                    group.IsEditing = true;
-                    group.EditName = group.Name;
-                }
-            });
+                mod.GroupName = null;
+            }
+
+            SetStatus($"Deleted group: {group.Name}");
         }
 
-        private void ConfirmRenameGroup(ModGroupViewModel group)
+        /// <summary>
+        /// Starts renaming a group
+        /// </summary>
+        private void StartRenameGroup(ModGroupViewModel? group)
         {
-            _uiService.Post(() =>
-            {
-                if (group != null && !string.IsNullOrWhiteSpace(group.EditName))
-                {
-                    var oldName = group.Name;
-                    var newName = group.EditName.Trim();
-                    if (oldName != newName)
-                    {
-                        var groups = _groupService.LoadGroups();
-                        var groupData = groups.FirstOrDefault(g => g.Name == oldName);
-                        if (groupData != null)
-                        {
-                            groupData.Name = newName;
-                            _groupService.SaveGroups(groups);
-                            group.Name = newName;
-                            foreach (var mod in Mods.Where(m => m.GroupName == oldName))
-                            {
-                                mod.GroupName = newName;
-                            }
-                            StatusText = $"Renamed group to '{newName}'";
-                        }
-                    }
-                    group.IsEditing = false;
-                }
-            });
+            if (group == null)
+                return;
+
+            group.IsRenaming = true;
+            group.EditedName = group.Name;
         }
 
-        private void DeleteGroup(ModGroupViewModel group)
+        /// <summary>
+        /// Confirms renaming a group
+        /// </summary>
+        private void ConfirmRenameGroup(ModGroupViewModel? group)
         {
-            _uiService.Post(() =>
+            if (group == null || string.IsNullOrWhiteSpace(group.EditedName))
+                return;
+
+            var oldName = group.Name;
+            var newName = group.EditedName.Trim();
+
+            if (oldName == newName)
             {
-                if (group != null)
-                {
-                    _groupService.DeleteGroup(group.Name);
-                    foreach (var mod in Mods.Where(m => m.GroupName == group.Name))
-                    {
-                        mod.GroupName = Constants.UI.DefaultGroupName;
-                    }
-                    Groups.Remove(group);
-                    StatusText = $"Deleted group: {group.Name}";
-                }
-            });
+                group.IsRenaming = false;
+                return;
+            }
+
+            // Check for duplicate names
+            if (Groups.Any(g => g.Name.Equals(newName, System.StringComparison.OrdinalIgnoreCase) && g != group))
+            {
+                SetStatus($"A group named '{newName}' already exists", LogLevel.Warning);
+                return;
+            }
+
+            // ✅ Create updated group with new name
+            var updatedGroup = new Models.ModGroup
+            {
+                Name = newName,
+                Description = "Mod group",
+                ModNames = group.ModNames,
+                Color = null
+            };
+
+            // ✅ Use UpdateGroup(oldName, newGroup) from service
+            _groupService.UpdateGroup(oldName, updatedGroup);
+
+            group.Name = newName;
+            group.IsRenaming = false;
+
+            // Update mods that reference this group
+            foreach (var mod in _modsCache.Items.Where(m => m.GroupName == oldName))
+            {
+                mod.GroupName = newName;
+            }
+
+            SetStatus($"Renamed group from '{oldName}' to '{newName}'");
         }
 
+        /// <summary>
+        /// Updates a group's status (enabled/total count)
+        /// </summary>
         private void UpdateGroupStatus(ModGroupViewModel group)
         {
-            var groupModNames = group.ModNames;
-            var enabledCount = Mods.Count(m => groupModNames.Contains(m.Title) && m.IsEnabled);
-            group.EnabledCount = enabledCount;
-            group.TotalCount = groupModNames.Count;
+            var modsInGroup = _modsCache.Items.Where(m => group.ModNames.Contains(m.Title)).ToList();
+
+            group.TotalCount = modsInGroup.Count;
+            group.EnabledCount = modsInGroup.Count(m => m.IsEnabled);
         }
 
-        private void SaveGroupChanges(ModGroupViewModel groupVm)
+        /// <summary>
+        /// ✅ Saves group changes to the service (for mod list changes)
+        /// </summary>
+        private void SaveGroupChanges(ModGroupViewModel group)
         {
-            var groups = _groupService.LoadGroups();
-            var group = groups.FirstOrDefault(g => g.Name == groupVm.Name);
-            if (group != null)
+            var modelGroup = new Models.ModGroup
             {
-                group.ModNames = groupVm.ModNames;
-                _groupService.SaveGroups(groups);
-            }
+                Name = group.Name,
+                Description = "Mod group",
+                ModNames = group.ModNames,
+                Color = null
+            };
+
+            // ✅ Use UpdateGroup(oldName, newGroup) - oldName is same as current name
+            _groupService.UpdateGroup(group.Name, modelGroup);
         }
     }
 }

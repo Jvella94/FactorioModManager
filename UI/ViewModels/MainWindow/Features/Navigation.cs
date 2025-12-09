@@ -1,7 +1,9 @@
-﻿using ReactiveUI;
+﻿using FactorioModManager.Models;
+using ReactiveUI;
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
+using static FactorioModManager.Constants;
 
 namespace FactorioModManager.ViewModels.MainWindow
 {
@@ -13,11 +15,15 @@ namespace FactorioModManager.ViewModels.MainWindow
         public bool CanNavigateBack => _navigationIndex > 0;
         public bool CanNavigateForward => _navigationIndex < _navigationHistory.Count - 1;
 
+        /// <summary>
+        /// Handles mod selection and adds to navigation history
+        /// </summary>
         private void OnModSelected(ModViewModel? newMod)
         {
             if (newMod == null)
                 return;
 
+            // Don't add duplicate consecutive entries
             if (_navigationIndex >= 0 &&
                 _navigationIndex < _navigationHistory.Count &&
                 _navigationHistory[_navigationIndex] == newMod)
@@ -25,6 +31,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                 return;
             }
 
+            // Clear forward history when navigating to a new mod
             while (_navigationHistory.Count > _navigationIndex + 1)
             {
                 _navigationHistory.RemoveAt(_navigationHistory.Count - 1);
@@ -32,10 +39,14 @@ namespace FactorioModManager.ViewModels.MainWindow
 
             _navigationHistory.Add(newMod);
             _navigationIndex = _navigationHistory.Count - 1;
+
             this.RaisePropertyChanged(nameof(CanNavigateBack));
             this.RaisePropertyChanged(nameof(CanNavigateForward));
         }
 
+        /// <summary>
+        /// Navigates to the previous mod in history
+        /// </summary>
         private void NavigateBack()
         {
             if (!CanNavigateBack)
@@ -44,10 +55,14 @@ namespace FactorioModManager.ViewModels.MainWindow
             _navigationIndex--;
             var mod = _navigationHistory[_navigationIndex];
             SelectedMod = mod;
+
             this.RaisePropertyChanged(nameof(CanNavigateBack));
             this.RaisePropertyChanged(nameof(CanNavigateForward));
         }
 
+        /// <summary>
+        /// Navigates to the next mod in history
+        /// </summary>
         private void NavigateForward()
         {
             if (!CanNavigateForward)
@@ -56,50 +71,66 @@ namespace FactorioModManager.ViewModels.MainWindow
             _navigationIndex++;
             var mod = _navigationHistory[_navigationIndex];
             SelectedMod = mod;
+
             this.RaisePropertyChanged(nameof(CanNavigateBack));
             this.RaisePropertyChanged(nameof(CanNavigateForward));
         }
 
+        /// <summary>
+        /// Navigates to a dependency mod or opens mod portal if not installed
+        /// </summary>
         private void NavigateToDependency(string dependency)
         {
-            var dependencyName = dependency.Split(Constants.Separators.Dependency,
-                StringSplitOptions.RemoveEmptyEntries)
-                .FirstOrDefault();
+            var dependencyName = DependencyHelper.ExtractDependencyName(dependency);
 
             if (string.IsNullOrEmpty(dependencyName))
+            {
+                SetStatus("Invalid dependency", LogLevel.Warning);
                 return;
+            }
 
-            if (Constants.GameDependencies.IsGameDependency(dependencyName))
+            // Skip game dependencies
+            if (DependencyHelper.IsGameDependency(dependencyName))
+            {
+                SetStatus($"{dependencyName} is a base game dependency");
                 return;
+            }
 
-            var targetMod = Mods.FirstOrDefault(m =>
-                m.Name.Equals(dependencyName, StringComparison.OrdinalIgnoreCase));
+            // Try to find installed mod
+            var targetMod = _modsCache.Items.FirstOrDefault(m => m.Name.Equals(dependencyName, StringComparison.OrdinalIgnoreCase));
 
             if (targetMod != null)
             {
+                // Navigate to installed mod
                 SelectedMod = targetMod;
+                SetStatus($"Navigated to {targetMod.Title}");
             }
             else
             {
-                try
-                {
-                    var url = Constants.Urls.GetModUrl(dependencyName);
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName = url,
-                        UseShellExecute = true
-                    });
+                // Open mod portal for uninstalled dependency
+                OpenDependencyInPortal(dependencyName, dependency);
+            }
+        }
 
-                    var isOptional = dependency.TrimStart().StartsWith('?') || dependency.Contains("(?)");
-                    var depType = isOptional ? "optional" : "required";
-                    StatusText = $"Opened mod portal for {depType} dependency: {dependencyName}";
-                    _logService.Log($"Opened mod portal for {depType} dependency: {dependencyName}");
-                }
-                catch (Exception ex)
-                {
-                    StatusText = $"Error opening browser: {ex.Message}";
-                    _logService.LogError($"Error opening mod portal: {ex.Message}", ex);
-                }
+        /// <summary>
+        /// Opens a dependency in the mod portal
+        /// </summary>
+        private void OpenDependencyInPortal(string dependencyName, string dependency)
+        {
+            try
+            {
+                var url = Urls.GetModUrl(dependencyName);
+                _uiService.OpenUrl(url);
+
+                var isOptional = DependencyHelper.IsOptionalDependency(dependency);
+                var depType = isOptional ? "optional" : "required";
+
+                SetStatus($"Opened mod portal for {depType} dependency: {dependencyName}");
+            }
+            catch (Exception ex)
+            {
+                SetStatus($"Error opening browser: {ex.Message}", LogLevel.Error);
+                _logService.LogError($"Error opening mod portal: {ex.Message}", ex);
             }
         }
     }

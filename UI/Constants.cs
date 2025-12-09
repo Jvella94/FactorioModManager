@@ -1,5 +1,7 @@
-﻿using System;
+﻿using NuGet.Versioning;
+using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace FactorioModManager
 {
@@ -110,6 +112,8 @@ namespace FactorioModManager
             /// Name of the mod list file (mod-list.json)
             /// </summary>
             public const string ModListFileName = "mod-list.json";
+
+            public const string ModSettingsFolder = "mod-settings";
         }
 
         /// <summary>
@@ -142,6 +146,99 @@ namespace FactorioModManager
             /// How long to cache mod metadata (24 hours)
             /// </summary>
             public static readonly TimeSpan MetadataCacheLifetime = TimeSpan.FromDays(90);
+        }
+
+        public static class VersionHelper
+        {
+            /// <summary>
+            /// Compares two version strings
+            /// Returns: 1 if v1 > v2, -1 if v1 < v2, 0 if equal
+            /// </summary>
+            public static int CompareVersions(string v1, string v2)
+            {
+                if (string.IsNullOrWhiteSpace(v1) || string.IsNullOrWhiteSpace(v2))
+                    return string.Compare(v1, v2, StringComparison.Ordinal);
+
+                // Try semantic versioning first
+                if (NuGetVersion.TryParse(v1, out var version1) &&
+                    NuGetVersion.TryParse(v2, out var version2))
+                {
+                    return version1.CompareTo(version2);
+                }
+
+                // Fallback to string comparison
+                return string.Compare(v1, v2, StringComparison.Ordinal);
+            }
+
+            /// <summary>
+            /// Checks if version1 is newer than version2
+            /// </summary>
+            public static bool IsNewerVersion(string version1, string version2)
+            {
+                return CompareVersions(version1, version2) > 0;
+            }
+        }
+
+        public static class DependencyHelper
+        {
+            private static readonly HashSet<string> GameDependencies = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "base",
+            "space-age",
+            "quality",
+            "elevated-rails"
+        };
+
+            /// <summary>
+            /// Extracts the dependency name from a dependency string
+            /// Example: "? base >= 1.0" -> "base"
+            /// </summary>
+            public static string ExtractDependencyName(string dependency)
+            {
+                if (string.IsNullOrWhiteSpace(dependency))
+                    return string.Empty;
+
+                return dependency
+                    .Split(Constants.Separators.Dependency, StringSplitOptions.RemoveEmptyEntries)
+                    .FirstOrDefault()?.Trim() ?? string.Empty;
+            }
+
+            /// <summary>
+            /// Checks if a dependency is optional
+            /// </summary>
+            public static bool IsOptionalDependency(string dependency)
+            {
+                var trimmed = dependency.TrimStart();
+                return trimmed.StartsWith('?') || dependency.Contains("(?)");
+            }
+
+            /// <summary>
+            /// Checks if a dependency is a conflict dependency
+            /// </summary>
+            public static bool IsConflictDependency(string dependency)
+            {
+                var trimmed = dependency.TrimStart();
+                return trimmed.StartsWith('!') || dependency.Contains("(!)");
+            }
+
+            /// <summary>
+            /// Checks if a dependency is a game/base dependency
+            /// </summary>
+            public static bool IsGameDependency(string dependencyName)
+            {
+                return GameDependencies.Contains(dependencyName);
+            }
+
+            /// <summary>
+            /// Gets all mandatory (required) dependencies from a mod
+            /// </summary>
+            public static List<string> GetMandatoryDependencies(IEnumerable<string> dependencies)
+            {
+                return [.. dependencies
+                    .Where(dep => !IsOptionalDependency(dep) && !IsConflictDependency(dep))
+                    .Select(ExtractDependencyName)
+                    .Where(name => !string.IsNullOrEmpty(name) && !IsGameDependency(name))];
+            }
         }
     }
 }

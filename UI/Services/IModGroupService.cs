@@ -11,7 +11,8 @@ namespace FactorioModManager.Services
 
         void AddGroup(ModGroup group);
 
-        void DeleteGroup(string groupName);
         void UpdateGroup(string oldName, ModGroup updatedGroup);
+
+        void DeleteGroup(string groupName);
     }
 }

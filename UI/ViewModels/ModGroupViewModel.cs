@@ -36,13 +36,13 @@ namespace FactorioModManager.ViewModels
 
         public string StatusText => $"{EnabledCount}/{TotalCount} enabled";
 
-        public bool IsEditing
+        public bool IsRenaming
         {
             get => _isEditing;
             set => this.RaiseAndSetIfChanged(ref _isEditing, value);
         }
 
-        public string EditName
+        public string EditedName
         {
             get => _editName;
             set => this.RaiseAndSetIfChanged(ref _editName, value);

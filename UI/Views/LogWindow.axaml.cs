@@ -31,6 +31,11 @@ namespace FactorioModManager.Views
             LoadLogs();
         }
 
+        public LogWindow()
+        {
+            _logService = ServiceContainer.Instance.Resolve<ILogService>();
+        }
+
         private void LoadLogs()
         {
             var logs = _logService.GetLogs().ToList();

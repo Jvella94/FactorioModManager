@@ -103,7 +103,7 @@
               <DataTemplate>
                 <StackPanel Spacing="3">
                   <!-- Display mode -->
-                  <StackPanel IsVisible="{Binding !IsEditing}">
+                  <StackPanel IsVisible="{Binding !IsRenaming}">
                     <ToolTip.Tip>
                       <StackPanel MaxWidth="300">
                         <TextBlock Text="{Binding Name}" FontWeight="Bold" Margin="0,0,0,5" />
@@ -137,8 +137,8 @@
                   </StackPanel>
 
                   <!-- Edit mode -->
-                  <StackPanel IsVisible="{Binding IsEditing}" Spacing="5">
-                    <TextBox Text="{Binding EditName}" Watermark="Group name" />
+                  <StackPanel IsVisible="{Binding IsRenaming}" Spacing="5">
+                    <TextBox Text="{Binding EditedName}" Watermark="Group name" />
                     <StackPanel Orientation="Horizontal" Spacing="5">
                       <Button Content="Save"
                               Command="{Binding $parent[Window].((vmmw:MainWindowViewModel)DataContext).ConfirmRenameGroupCommand}"

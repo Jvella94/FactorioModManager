@@ -24,8 +24,9 @@ namespace FactorioModManager
         private void RegisterServices()
         {
             // Infrastructure
-            RegisterSingleton<IUIService>(new AvaloniaUIService());
-
+            RegisterSingleton<ILogService>(new LogService());
+            RegisterSingleton<IUIService>(new AvaloniaUIService(Resolve<ILogService>()));
+            RegisterSingleton<IErrorMessageService>(new ErrorMessageService());
             var httpClient = new HttpClient
             {
                 Timeout = TimeSpan.FromSeconds(30)
@@ -33,10 +34,10 @@ namespace FactorioModManager
             RegisterSingleton(httpClient);
 
             // Core Services
-            RegisterSingleton<ILogService>(new LogService());
             RegisterSingleton<ISettingsService>(new SettingsService(Resolve<ILogService>()));
             RegisterSingleton<IModGroupService>(new ModGroupService(Resolve<ILogService>()));
             RegisterSingleton<IModMetadataService>(new ModMetadataService(Resolve<ILogService>()));
+            RegisterSingleton<IDownloadService>(new DownloadService(Resolve<ISettingsService>(), Resolve<ILogService>(), Resolve<HttpClient>()));
 
             // API Services - wrap with caching
             var apiService = new FactorioApiService(Resolve<HttpClient>(), Resolve<ILogService>());
@@ -44,9 +45,9 @@ namespace FactorioModManager
             RegisterSingleton<IFactorioApiService>(cachedApiService);
 
             RegisterSingleton<IModService>(new ModService(
-                Resolve<ISettingsService>(),
                 Resolve<ILogService>(),
-                Resolve<IFactorioApiService>()
+                Resolve<ISettingsService>(),
+                Resolve<HttpClient>()
             ));
 
             // ViewModels
@@ -57,7 +58,9 @@ namespace FactorioModManager
                 Resolve<IModMetadataService>(),
                 Resolve<ISettingsService>(),
                 Resolve<IUIService>(),
-                Resolve<ILogService>()
+                Resolve<ILogService>(),
+                Resolve<IDownloadService>(),
+                Resolve<IErrorMessageService>()
             ));
         }
 

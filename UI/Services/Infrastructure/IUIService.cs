@@ -1,11 +1,10 @@
-﻿using System;
+﻿using Avalonia.Controls;
+using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace FactorioModManager.Services.Infrastructure
 {
-    /// <summary>
-    /// Abstracts UI thread operations for testability and maintainability
-    /// </summary>
     public interface IUIService
     {
         /// <summary>
@@ -24,21 +23,54 @@ namespace FactorioModManager.Services.Infrastructure
         Task<T> InvokeAsync<T>(Func<T> func);
 
         /// <summary>
-        /// Invokes an async function on the UI thread
+        /// Shows a simple message dialog
         /// </summary>
-        Task InvokeAsync(Func<Task> asyncAction);
-
-        /// <summary>
-        /// Checks if the current thread is the UI thread
-        /// </summary>
-        bool IsOnUIThread { get; }
-
-        /// <summary>
-        /// Displays a message dialog asynchronously with the specified title and content.
-        /// </summary>
-        /// <param name="title">The title text to display in the message dialog. Cannot be null or empty.</param>
-        /// <param name="message">The message content to display in the dialog. Cannot be null.</param>
-        /// <returns>A task that represents the asynchronous operation of showing the message dialog.</returns>
         Task ShowMessageAsync(string title, string message);
+
+        /// <summary>
+        /// Shows a confirmation dialog with Yes/No buttons
+        /// </summary>
+        Task<bool> ShowConfirmationAsync(string title, string message); // ✅ ADD THIS
+
+        /// <summary>
+        /// Opens a URL in the default browser
+        /// </summary>
+        void OpenUrl(string url);
+
+        /// <summary>
+        /// Opens a folder in the file explorer
+        /// </summary>
+        void OpenFolder(string path);
+
+        /// <summary>
+        /// Gets the main application window
+        /// </summary>
+        Window? GetMainWindow();
+
+        /// <summary>
+        /// Shows the settings dialog
+        /// </summary>
+        Task<bool> ShowSettingsDialogAsync();
+
+        /// <summary>
+        /// Shows the update check dialog
+        /// </summary>
+        Task<(bool Success, int Hours)> ShowUpdateCheckDialogAsync();
+
+        /// <summary>
+        /// Shows the install mod dialog
+        /// </summary>
+        Task<(bool Success, string? Data, bool IsUrl)> ShowInstallModDialogAsync();
+
+        /// <summary>
+        /// Shows the changelog window
+        /// </summary>
+        Task ShowChangelogAsync(string modTitle, string changelog);
+
+        /// <summary>
+        /// Shows the version history window
+        /// </summary>
+        Task ShowVersionHistoryAsync(string modTitle, string modName,
+            List<Models.DTO.ReleaseDTO> releases);
     }
 }

@@ -1,48 +1,37 @@
-﻿namespace FactorioModManager.ViewModels.MainWindow
+﻿using DynamicData;
+using System.Linq;
+
+namespace FactorioModManager.ViewModels.MainWindow
 {
     public partial class MainWindowViewModel
     {
         private void ToggleMod(ModViewModel? mod)
         {
-            if (mod == null) return;
+            if (mod == null)
+                return;
 
-            _uiService.Post(() =>
+            mod.IsEnabled = !mod.IsEnabled;
+            _modService.ToggleMod(mod.Name, mod.IsEnabled);
+
+            // Update groups
+            foreach (var group in Groups.Where(g => g.ModNames.Contains(mod.Title)))
             {
-                // Toggle the enabled state
-                mod.IsEnabled = !mod.IsEnabled;
+                UpdateGroupStatus(group);
+            }
 
-                // Persist to mod-list.json
-                _modService.ToggleMod(mod.Name, mod.IsEnabled);
-
-                // Update group statuses
-                foreach (var group in Groups)
-                {
-                    if (group.ModNames.Contains(mod.Title))
-                    {
-                        UpdateGroupStatus(group);
-                    }
-                }
-
-                // Refresh filtered mods if "Show Disabled" is off
-                if (!ShowDisabled)
-                {
-                    UpdateFilteredMods();
-                }
-
-                StatusText = $"{mod.Title} {(mod.IsEnabled ? "enabled" : "disabled")}";
-            });
+            // ✅ DynamicData automatically updates FilteredMods and ModCountSummary
+            SetStatus($"{mod.Title} {(mod.IsEnabled ? "enabled" : "disabled")}");
         }
 
         private void RemoveMod(ModViewModel? mod)
         {
-            if (mod == null) return;
+            if (mod == null)
+                return;
 
-            _uiService.Post(() =>
-            {
-                Mods.Remove(mod);
-                UpdateFilteredMods();
-                StatusText = $"Removed {mod.Title}";
-            });
+            // ✅ Remove from cache (DynamicData handles the rest)
+            _modsCache.Remove(mod.Name);
+
+            SetStatus($"Removed {mod.Title}");
         }
     }
 }

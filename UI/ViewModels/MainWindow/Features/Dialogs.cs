@@ -1,85 +1,101 @@
-﻿using System.Threading.Tasks;
+﻿using FactorioModManager.Models;
+using System.Threading.Tasks;
 
 namespace FactorioModManager.ViewModels.MainWindow
 {
     public partial class MainWindowViewModel
     {
+        /// <summary>
+        /// Opens the changelog for the selected mod
+        /// </summary>
         private async Task OpenChangelogAsync()
         {
-            if (SelectedMod == null) return;
+            if (SelectedMod == null)
+            {
+                SetStatus("No mod selected", LogLevel.Warning);
+                return;
+            }
 
             await Task.Run(async () =>
             {
-                _uiService.Post(() =>
+                await _uiService.InvokeAsync(() =>
                 {
-                    StatusText = "Fetching changelog...";
+                    SetStatus("Fetching changelog...");
                 });
 
                 try
                 {
-                    var apiKey = _settingsService.GetApiKey();
                     var details = await _apiService.GetModDetailsFullAsync(SelectedMod.Name);
 
-                    _uiService.Post(() =>
+                    await _uiService.InvokeAsync(async () =>
                     {
                         if (details?.Changelog != null)
                         {
-                            var window = new Views.ChangelogWindow(SelectedMod.Title, details.Changelog);
-                            window.Show();
-                            StatusText = "Changelog opened";
+                            await _uiService.ShowChangelogAsync(SelectedMod.Title, details.Changelog);
+                            SetStatus("Changelog opened");
                         }
                         else
                         {
-                            StatusText = "No changelog available";
+                            SetStatus("No changelog available", LogLevel.Warning);
                         }
                     });
                 }
                 catch (System.Exception ex)
                 {
-                    _uiService.Post(() =>
+                    await _uiService.InvokeAsync(() =>
                     {
-                        StatusText = $"Error fetching changelog: {ex.Message}";
+                        SetStatus($"Error fetching changelog: {ex.Message}", LogLevel.Error);
                     });
+                    _logService.LogError($"Error fetching changelog: {ex.Message}", ex);
                 }
             });
         }
 
+        /// <summary>
+        /// Opens the version history for the selected mod
+        /// </summary>
         private async Task OpenVersionHistoryAsync()
         {
-            if (SelectedMod == null) return;
+            if (SelectedMod == null)
+            {
+                SetStatus("No mod selected", LogLevel.Warning);
+                return;
+            }
 
             await Task.Run(async () =>
             {
-                _uiService.Post(() =>
+                await _uiService.InvokeAsync(() =>
                 {
-                    StatusText = "Fetching version history...";
+                    SetStatus("Fetching version history...");
                 });
 
                 try
                 {
-                    var apiKey = _settingsService.GetApiKey();
                     var details = await _apiService.GetModDetailsAsync(SelectedMod.Name);
 
-                    _uiService.Post(() =>
+                    await _uiService.InvokeAsync(async () =>
                     {
                         if (details?.Releases != null && details.Releases.Count > 0)
                         {
-                            var window = new Views.VersionHistoryWindow(SelectedMod.Title, SelectedMod.Name, details.Releases);
-                            window.Show();
-                            StatusText = "Version history opened";
+                            await _uiService.ShowVersionHistoryAsync(
+                                SelectedMod.Title,
+                                SelectedMod.Name,
+                                details.Releases);
+                            SetStatus("Version history opened");
                         }
                         else
                         {
-                            StatusText = "No version history available";
+                            SetStatus("No version history available", LogLevel.Warning);
                         }
                     });
                 }
                 catch (System.Exception ex)
                 {
-                    _uiService.Post(() =>
+                    await _uiService.InvokeAsync(() =>
                     {
-                        StatusText = $"Error fetching version history: {ex.Message}";
+                        SetStatus($"Error fetching version history: {ex.Message}", LogLevel.Error);
                     });
+                    _logService.LogError($"Error fetching version history: {ex.Message}", ex);
                 }
             });
         }

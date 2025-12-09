@@ -6,61 +6,47 @@ namespace FactorioModManager.ViewModels.MainWindow
 {
     public partial class MainWindowViewModel
     {
-        private void UpdateFilteredMods()
+        /// <summary>
+        /// Checks if a mod matches the current filter criteria
+        /// </summary>
+        private bool ModMatchesFilters(ModViewModel mod)
         {
-            _uiService.Post(() =>
-            {
-                FilteredMods.Clear();
-                var filtered = Mods.Where(ModMatchesFilters);
-
-                foreach (var mod in filtered)
-                {
-                    FilteredMods.Add(mod);
-                }
-
-                this.RaisePropertyChanged(nameof(ModCountText));
-            });
-        }
-
-        private bool ModMatchesFilters(ModViewModel m)
-        {
-            if (!ShowDisabled && !m.IsEnabled) return false;
-
-            if (!string.IsNullOrEmpty(SearchText) &&
-                !m.Title.Contains(SearchText, StringComparison.OrdinalIgnoreCase))
+            // Filter: Show disabled
+            if (!ShowDisabled && !mod.IsEnabled)
                 return false;
 
+            // Filter: Search text
+            if (!string.IsNullOrEmpty(SearchText) &&
+                !mod.Title.Contains(SearchText, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            // Filter: Author
             if (!string.IsNullOrEmpty(SelectedAuthorFilter))
             {
-                var authorName = SelectedAuthorFilter.Split('(')[0].Trim();
-                if (m.Author != authorName) return false;
+                var authorName = ExtractAuthorName(SelectedAuthorFilter);
+                if (mod.Author != authorName)
+                    return false;
             }
 
+            // Filter: Group
             if (FilterBySelectedGroup && SelectedGroup != null)
             {
-                if (!SelectedGroup.ModNames.Contains(m.Title))
+                if (!SelectedGroup.ModNames.Contains(mod.Title))
                     return false;
             }
 
             return true;
         }
 
-        private void UpdateFilteredAuthors()
+        /// <summary>
+        /// Extracts author name from "Author (count)" format
+        /// </summary>
+        private static string ExtractAuthorName(string authorFilter)
         {
-            _uiService.Post(() =>
-            {
-                FilteredAuthors.Clear();
-                var searchLower = AuthorSearchText?.ToLower() ?? "";
-
-                foreach (var author in Authors)
-                {
-                    if (string.IsNullOrEmpty(searchLower) ||
-                        author.Contains(searchLower, StringComparison.OrdinalIgnoreCase))
-                    {
-                        FilteredAuthors.Add(author);
-                    }
-                }
-            });
+            var parenIndex = authorFilter.IndexOf('(');
+            return parenIndex > 0
+                ? authorFilter[..parenIndex].Trim()
+                : authorFilter.Trim();
         }
     }
 }

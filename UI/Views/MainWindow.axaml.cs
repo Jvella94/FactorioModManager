@@ -91,7 +91,7 @@ namespace FactorioModManager.Views
         {
             if (sender is Button button && button.DataContext is ModGroupViewModel group)
             {
-                group.IsEditing = false;
+                group.IsRenaming = false;
             }
         }
 

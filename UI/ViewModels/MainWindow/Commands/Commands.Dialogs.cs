@@ -13,25 +13,18 @@ namespace FactorioModManager.ViewModels.MainWindow
             OpenSettingsCommand = ReactiveCommand.CreateFromTask(OpenSettingsAsync);
         }
 
+        /// <summary>
+        /// Opens the settings dialog
+        /// </summary>
         private async Task OpenSettingsAsync()
         {
-            await _uiService.InvokeAsync(async () =>
-            {
-                var dialog = new Views.SettingsWindow(_settingsService);
-                var owner = Avalonia.Application.Current?.ApplicationLifetime
-                    is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
-                    ? desktop.MainWindow : null;
+            var result = await _uiService.ShowSettingsDialogAsync();
 
-                if (owner != null)
-                {
-                    var result = await dialog.ShowDialog<bool>(owner);
-                    if (result)
-                    {
-                        StatusText = "Settings saved";
-                        await RefreshModsAsync();
-                    }
-                }
-            });
+            if (result)
+            {
+                SetStatus("Settings saved");
+                await RefreshModsAsync();
+            }
         }
     }
 }

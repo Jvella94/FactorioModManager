@@ -1,4 +1,4 @@
-﻿using FactorioModManager.Services;
+﻿using FactorioModManager.Models;
 using ReactiveUI;
 using System;
 using System.IO;
@@ -8,11 +8,14 @@ namespace FactorioModManager.ViewModels.MainWindow
 {
     public partial class MainWindowViewModel
     {
+        /// <summary>
+        /// Loads all available versions for a mod
+        /// </summary>
         private void LoadModVersions(ModViewModel mod)
         {
             try
             {
-                var modsDirectory = ModPathHelper.GetModsDirectory();
+                var modsDirectory = _modService.GetModsDirectory();
                 var modFiles = Directory.GetFiles(modsDirectory, $"{mod.Name}_*.zip")
                     .OrderByDescending(f => f)
                     .ToList();
@@ -24,6 +27,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                 {
                     var fileName = Path.GetFileNameWithoutExtension(file);
                     var parts = fileName.Split('_');
+
                     if (parts.Length >= 2)
                     {
                         var version = parts[^1]; // Last part is version
@@ -34,53 +38,63 @@ namespace FactorioModManager.ViewModels.MainWindow
 
                 // Set current version as selected
                 mod.SelectedVersion = mod.Version;
-
+                mod.InstalledCount = mod.AvailableVersions.Count;
                 mod.RaisePropertyChanged(nameof(mod.HasMultipleVersions));
             }
             catch (Exception ex)
             {
-                _logService.LogDebug($"Error loading versions for {mod.Name}: {ex.Message}");
+                _logService.LogError($"Error loading versions for {mod.Name}: {ex.Message}", ex);
             }
         }
 
-        internal void DeleteOldVersion(ModViewModel? mod) // CHANGED: private -> internal
+        /// <summary>
+        /// Deletes an old version of a mod
+        /// </summary>
+        internal void DeleteOldVersion(ModViewModel? mod)
         {
             if (mod == null || string.IsNullOrEmpty(mod.SelectedVersion))
-                return;
-
-            if (mod.SelectedVersion == mod.Version)
             {
-                StatusText = "Cannot delete the currently active version";
+                SetStatus("No version selected", LogLevel.Warning);
                 return;
             }
 
-            _uiService.Post(() =>
+            if (mod.SelectedVersion == mod.Version)
             {
-                try
+                SetStatus("Cannot delete the currently active version", LogLevel.Warning);
+                return;
+            }
+
+            try
+            {
+                var versionIndex = mod.AvailableVersions.IndexOf(mod.SelectedVersion);
+                if (versionIndex >= 0 && versionIndex < mod.VersionFilePaths.Count)
                 {
-                    var versionIndex = mod.AvailableVersions.IndexOf(mod.SelectedVersion);
-                    if (versionIndex >= 0 && versionIndex < mod.VersionFilePaths.Count)
+                    var filePath = mod.VersionFilePaths[versionIndex];
+
+                    if (File.Exists(filePath))
                     {
-                        var filePath = mod.VersionFilePaths[versionIndex];
+                        File.Delete(filePath);
 
-                        if (File.Exists(filePath))
-                        {
-                            File.Delete(filePath);
-                            _logService.Log($"Deleted old version: {Path.GetFileName(filePath)}");
+                        // Reload versions
+                        LoadModVersions(mod);
 
-                            // Reload versions
-                            LoadModVersions(mod);
-
-                            StatusText = $"Deleted {mod.Title} version {mod.SelectedVersion}";
-                        }
+                        SetStatus($"Deleted {mod.Title} version {mod.SelectedVersion}");
+                    }
+                    else
+                    {
+                        SetStatus($"File not found: {filePath}", LogLevel.Warning);
                     }
                 }
-                catch (Exception ex)
+                else
                 {
-                    StatusText = $"Error deleting old version: {ex.Message}";
-                    _logService.Log($"Error: {ex.Message}");
+                    SetStatus("Invalid version index", LogLevel.Warning);
                 }
-            });
+            }
+            catch (Exception ex)
+            {
+                SetStatus($"Error deleting old version: {ex.Message}", LogLevel.Error);
+                _logService.LogError($"Delete version error: {ex.Message}", ex);
+            }
         }
     }
 }

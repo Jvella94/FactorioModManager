@@ -1,4 +1,5 @@
-﻿using FactorioModManager.Services;
+﻿using FactorioModManager.Models;
+using FactorioModManager.Services;
 using ReactiveUI;
 using System;
 using System.Linq;
@@ -27,7 +28,7 @@ namespace FactorioModManager.ViewModels.MainWindow
         private void InitializeModCommands()
         {
             RefreshModsCommand = ReactiveCommand.CreateFromTask(RefreshModsAsync);
-            InstallModCommand = ReactiveCommand.Create(InstallMod);
+            InstallModCommand = ReactiveCommand.CreateFromTask(InstallModAsync);
             OpenModFolderCommand = ReactiveCommand.Create(OpenModFolder);
             ToggleModCommand = ReactiveCommand.Create<ModViewModel>(mod => ToggleMod(mod));
             RemoveModCommand = ReactiveCommand.Create<ModViewModel>(mod => RemoveMod(mod));
@@ -42,130 +43,125 @@ namespace FactorioModManager.ViewModels.MainWindow
             ViewDependentsCommand = ReactiveCommand.CreateFromTask<ModViewModel>(ViewDependentsAsync);
         }
 
+        /// <summary>
+        /// Opens the mods folder in file explorer
+        /// </summary>
         private void OpenModFolder()
         {
-            _uiService.Post(() =>
+            try
             {
-                try
-                {
-                    var path = ModPathHelper.GetModsDirectory();
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName = path,
-                        UseShellExecute = true
-                    });
-                    StatusText = $"Opened: {path}";
-                }
-                catch (Exception ex)
-                {
-                    StatusText = $"Error opening folder: {ex.Message}";
-                }
-            });
+                var path = _modService.GetModsDirectory();
+                _uiService.OpenFolder(path);
+                SetStatus($"Opened: {path}");
+            }
+            catch (Exception ex)
+            {
+                HandleError(ex, $"Error opening mod folder");
+            }
         }
 
+        /// <summary>
+        /// Opens the selected mod's page on the mod portal
+        /// </summary>
         private void OpenModPortal()
         {
-            if (SelectedMod != null)
+            if (SelectedMod == null)
             {
-                try
-                {
-                    var url = Constants.Urls.GetModUrl(SelectedMod.Name);
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName = url,
-                        UseShellExecute = true
-                    });
-                    StatusText = $"Opened mod portal for {SelectedMod.Title}";
-                }
-                catch (Exception ex)
-                {
-                    StatusText = $"Error opening browser: {ex.Message}";
-                }
+                SetStatus("No mod selected", LogLevel.Warning);
+                return;
+            }
+
+            try
+            {
+                var url = Constants.Urls.GetModUrl(SelectedMod.Name);
+                _uiService.OpenUrl(url);
+                SetStatus($"Opened mod portal for {SelectedMod.Title}");
+            }
+            catch (Exception ex)
+            {
+                HandleError(ex, "Error opening mod portal.");
             }
         }
 
+        /// <summary>
+        /// Opens the selected mod's source URL
+        /// </summary>
         private void OpenSourceUrl()
         {
-            if (SelectedMod != null && !string.IsNullOrEmpty(SelectedMod.SourceUrl))
+            if (SelectedMod == null)
             {
-                try
+                SetStatus("No mod selected", LogLevel.Warning);
+                return;
+            }
+
+            if (string.IsNullOrEmpty(SelectedMod.SourceUrl))
+            {
+                SetStatus("No source URL available for this mod", LogLevel.Warning);
+                return;
+            }
+
+            try
+            {
+                _uiService.OpenUrl(SelectedMod.SourceUrl);
+                SetStatus($"Opened source URL for {SelectedMod.Title}");
+            }
+            catch (Exception ex)
+            {
+                HandleError(ex, "Error opening source url");
+            }
+        }
+
+        /// <summary>
+        /// Shows custom update check dialog
+        /// </summary>
+        private async Task CheckUpdatesCustomAsync()
+        {
+            var (success, hours) = await _uiService.ShowUpdateCheckDialogAsync();
+
+            if (success)
+            {
+                await CheckForUpdatesAsync(hours);
+            }
+        }
+
+        /// <summary>
+        /// Shows the install mod dialog
+        /// </summary>
+        private async Task InstallModAsync()
+        {
+            var (success, data, isUrl) = await _uiService.ShowInstallModDialogAsync();
+
+            if (success && data != null)
+            {
+                var installResult = isUrl
+                    ? await InstallModFromUrlAsync(data)
+                    : await InstallModFromFileAsync(data);
+
+                if (installResult.Success)
                 {
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName = SelectedMod.SourceUrl,
-                        UseShellExecute = true
-                    });
-                    StatusText = $"Opened source URL for {SelectedMod.Title}";
+                    await RefreshModsAsync();
                 }
-                catch (Exception ex)
+                else if (installResult.Error != null)
                 {
-                    StatusText = $"Error opening browser: {ex.Message}";
+                    SetStatus(installResult.Error, LogLevel.Error);
                 }
             }
         }
 
-        private async Task CheckUpdatesCustomAsync()
-        {
-            await Task.Run(() =>
-            {
-                _uiService.InvokeAsync(async () =>
-                {
-                    var dialog = new Views.UpdateCheckDialog();
-                    var owner = Avalonia.Application.Current?.ApplicationLifetime
-                        is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
-                        ? desktop.MainWindow : null;
-
-                    if (owner != null)
-                    {
-                        var (Success, Hours) = await dialog.ShowDialog(owner);
-                        if (Success)
-                        {
-                            await CheckForUpdatesAsync(Hours);
-                        }
-                    }
-                });
-            });
-        }
-
-        private async void InstallMod()
-        {
-            await _uiService.InvokeAsync(async () =>
-            {
-                var dialog = new Views.InstallModDialog();
-                var owner = Avalonia.Application.Current?.ApplicationLifetime
-                    is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
-                    ? desktop.MainWindow : null;
-
-                if (owner != null)
-                {
-                    var (Success, Data, IsUrl) = await dialog.ShowDialog(owner);
-                    if (Success && Data != null)
-                    {
-                        var installResult = IsUrl
-                            ? await InstallModFromUrlAsync(Data)
-                            : await InstallModFromFileAsync(Data);
-
-                        if (installResult.Success)
-                        {
-                            await RefreshModsAsync();
-                        }
-                        else if (installResult.Error != null)
-                        {
-                            StatusText = installResult.Error;
-                        }
-                    }
-                }
-            });
-        }
-
+        /// <summary>
+        /// Installs a mod from a local file
+        /// </summary>
         private async Task<Models.Result<bool>> InstallModFromFileAsync(string filePath)
         {
             return await Task.Run(async () =>
             {
-                return await InstallModFromLocalFileAsync(filePath);
+                return await _downloadService.InstallFromLocalFileAsync(filePath);
             });
         }
 
+        /// <summary>
+        /// Installs a mod from a mod portal URL
+        /// </summary>
         private async Task<Models.Result<bool>> InstallModFromUrlAsync(string url)
         {
             return await Task.Run(async () =>
@@ -175,27 +171,26 @@ namespace FactorioModManager.ViewModels.MainWindow
                     var modName = url.Split('/').LastOrDefault();
                     if (string.IsNullOrEmpty(modName))
                     {
-                        _uiService.Post(() =>
+                        await _uiService.InvokeAsync(() =>
                         {
-                            StatusText = "Invalid mod portal URL";
+                            SetStatus("Invalid mod portal URL", LogLevel.Error);
                         });
                         return Models.Result<bool>.Fail("Invalid URL format", Models.ErrorCode.InvalidInput);
                     }
 
-                    _uiService.Post(() =>
+                    await _uiService.InvokeAsync(() =>
                     {
-                        StatusText = $"Fetching {modName} from mod portal...";
+                        SetStatus($"Fetching {modName} from mod portal...");
                     });
 
-                    var apiKey = _settingsService.GetApiKey();
                     var modDetails = await _apiService.GetModDetailsAsync(modName);
 
                     if (modDetails?.Releases == null || modDetails.Releases.Count == 0)
                     {
                         _logService.LogWarning($"Failed to fetch release details for {modName}");
-                        _uiService.Post(() =>
+                        await _uiService.InvokeAsync(() =>
                         {
-                            StatusText = $"Failed to fetch mod details for {modName}";
+                            SetStatus($"Failed to fetch mod details for {modName}", LogLevel.Error);
                         });
                         return Models.Result<bool>.Fail("No release information found",
                             Models.ErrorCode.ApiRequestFailed);
@@ -208,20 +203,21 @@ namespace FactorioModManager.ViewModels.MainWindow
                     if (latestRelease == null || string.IsNullOrEmpty(latestRelease.DownloadUrl))
                     {
                         _logService.LogWarning($"No download URL found for {modName}");
-                        _uiService.Post(() =>
+                        await _uiService.InvokeAsync(() =>
                         {
-                            StatusText = $"No download URL available for {modName}";
+                            SetStatus($"No download URL available for {modName}", LogLevel.Error);
                         });
                         return Models.Result<bool>.Fail("No download URL", Models.ErrorCode.ApiRequestFailed);
                     }
 
                     var modTitle = modDetails.Title ?? modName;
-                    _uiService.Post(() =>
+
+                    await _uiService.InvokeAsync(() =>
                     {
-                        StatusText = $"Downloading {modTitle}...";
+                        SetStatus($"Downloading {modTitle}...");
                     });
 
-                    var downloadResult = await DownloadModFromPortalAsync(
+                    var downloadResult = await _downloadService.DownloadModAsync(
                         modName,
                         modTitle,
                         latestRelease.Version,
@@ -230,9 +226,9 @@ namespace FactorioModManager.ViewModels.MainWindow
 
                     if (downloadResult.Success)
                     {
-                        _uiService.Post(() =>
+                        await _uiService.InvokeAsync(() =>
                         {
-                            StatusText = $"Successfully installed {modTitle}. Refreshing...";
+                            SetStatus($"Successfully installed {modTitle}. Refreshing...");
                         });
                         _logService.Log($"Successfully installed {modTitle} version {latestRelease.Version}");
                     }
@@ -241,12 +237,11 @@ namespace FactorioModManager.ViewModels.MainWindow
                 }
                 catch (Exception ex)
                 {
-                    _logService.LogError($"Error installing mod from URL: {ex.Message}", ex);
-                    _uiService.Post(() =>
+                    await _uiService.InvokeAsync(() =>
                     {
-                        StatusText = $"Error installing mod: {ex.Message}";
+                        HandleError(ex, $"Error installing mod from url {url}");
                     });
-                    return Models.Result<bool>.Fail(ex.Message, Models.ErrorCode.UnexpectedError);
+                    return Result<bool>.Fail(ex.Message, ErrorCode.UnexpectedError);
                 }
             });
         }
