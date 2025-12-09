@@ -71,21 +71,13 @@ namespace FactorioModManager.ViewModels
         public bool HasUpdate
         {
             get => _hasUpdate;
-            set
-            {
-                this.RaiseAndSetIfChanged(ref _hasUpdate, value);
-                this.RaisePropertyChanged(nameof(RowBrush));
-            }
+            set => this.RaiseAndSetIfChanged(ref _hasUpdate, value);
         }
 
         public string? LatestVersion
         {
             get => _latestVersion;
-            set
-            {
-                this.RaiseAndSetIfChanged(ref _latestVersion, value);
-                this.RaisePropertyChanged(nameof(UpdateText));
-            }
+            set => this.RaiseAndSetIfChanged(ref _latestVersion, value);
         }
 
         public string? Category
@@ -109,11 +101,7 @@ namespace FactorioModManager.ViewModels
         public bool IsUnusedInternal
         {
             get => _isUnusedInternal;
-            set
-            {
-                this.RaiseAndSetIfChanged(ref _isUnusedInternal, value);
-                this.RaisePropertyChanged(nameof(RowBrush));
-            }
+            set => this.RaiseAndSetIfChanged(ref _isUnusedInternal, value);
         }
 
         public Bitmap? Thumbnail
@@ -134,11 +122,7 @@ namespace FactorioModManager.ViewModels
         public string? SelectedVersion
         {
             get => _selectedVersion;
-            set
-            {
-                this.RaiseAndSetIfChanged(ref _selectedVersion, value);
-                this.RaisePropertyChanged(nameof(IsOldVersionSelected));
-            }
+            set => this.RaiseAndSetIfChanged(ref _selectedVersion, value);
         }
 
         public bool HasMultipleVersions => AvailableVersions.Count > 1;
@@ -155,14 +139,15 @@ namespace FactorioModManager.ViewModels
 
         public string ModPortalUrl => $"https://mods.factorio.com/mod/{Name}";
 
+        private static readonly IBrush UpdateBrush = new SolidColorBrush(Color.FromRgb(60, 120, 60));
+        private static readonly IBrush UnusedBrush = new SolidColorBrush(Color.FromRgb(255, 140, 0));
+
         public IBrush? RowBrush
         {
             get
             {
-                if (HasUpdate)
-                    return new SolidColorBrush(Color.FromRgb(60, 120, 60));
-                if (IsUnusedInternal)
-                    return new SolidColorBrush(Color.FromRgb(255, 140, 0));
+                if (HasUpdate) return UpdateBrush;
+                if (IsUnusedInternal) return UnusedBrush;
                 return null;
             }
         }
@@ -203,6 +188,24 @@ namespace FactorioModManager.ViewModels
         {
             get => _filePath;
             set => this.RaiseAndSetIfChanged(ref _filePath, value);
+        }
+
+        public ModViewModel()
+        {
+            this.WhenAnyValue(
+                  x => x.HasUpdate,
+                  x => x.IsUnusedInternal)
+                  .Subscribe(_ => this.RaisePropertyChanged(nameof(RowBrush)));
+
+            this.WhenAnyValue(
+                  x => x.HasUpdate,
+                  x => x.LatestVersion)
+                  .Subscribe(_ => this.RaisePropertyChanged(nameof(UpdateText)));
+
+            this.WhenAnyValue(
+                x => x.SelectedVersion,
+                x => x.Version)
+                .Subscribe(_ => this.RaisePropertyChanged(nameof(IsOldVersionSelected)));
         }
     }
 }

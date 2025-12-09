@@ -1,5 +1,8 @@
 ﻿using ReactiveUI;
+using System;
 using System.Collections.Generic;
+using System.Reactive;
+using System.Reactive.Linq;
 
 namespace FactorioModManager.ViewModels
 {
@@ -22,21 +25,13 @@ namespace FactorioModManager.ViewModels
         public int EnabledCount
         {
             get => _enabledCount;
-            set
-            {
-                this.RaiseAndSetIfChanged(ref _enabledCount, value);
-                this.RaisePropertyChanged(nameof(StatusText));
-            }
+            set => this.RaiseAndSetIfChanged(ref _enabledCount, value);
         }
 
         public int TotalCount
         {
             get => _totalCount;
-            set
-            {
-                this.RaiseAndSetIfChanged(ref _totalCount, value);
-                this.RaisePropertyChanged(nameof(StatusText));
-            }
+            set => this.RaiseAndSetIfChanged(ref _totalCount, value);
         }
 
         public string StatusText => $"{EnabledCount}/{TotalCount} enabled";
@@ -51,6 +46,15 @@ namespace FactorioModManager.ViewModels
         {
             get => _editName;
             set => this.RaiseAndSetIfChanged(ref _editName, value);
+        }
+
+        public ModGroupViewModel()
+        {
+            this.WhenAnyValue(
+                x => x.EnabledCount,
+                x => x.TotalCount)
+                .Select(_ => Unit.Default)
+                .Subscribe(_ => this.RaisePropertyChanged(nameof(StatusText)));
         }
     }
 }

@@ -102,7 +102,16 @@ namespace FactorioModManager.ViewModels
                     return;
                 }
                 var fullDownloadUrl = Constants.Urls.GetModDownloadUrl(downloadUrl, username, token);
-                await _modService.DownloadVersionAsync(ModName, release.Version, fullDownloadUrl);  // ✅ Uses ModName
+
+                var progress = new Progress<(long bytesDownloaded, long? totalBytes)>(p =>
+                {
+                    if (p.totalBytes.HasValue)
+                    {
+                        release.DownloadProgress = (p.bytesDownloaded * 100.0) / p.totalBytes.Value;
+                    }
+                });
+
+                await _modService.DownloadVersionAsync(ModName, release.Version, fullDownloadUrl, progress);
 
                 // Verify exact file exists now
                 var expectedFile = Path.Combine(_modService.GetModsDirectory(), $"{ModName}_{release.Version}.zip");
@@ -131,9 +140,6 @@ namespace FactorioModManager.ViewModels
             {
                 release.IsInstalled = installedVersions.Contains(release.Version);
             }
-            _logService.Log($"Updated {Releases.Count} releases for {ModName}");
-            // Option 1: Raise event or use messenger service
-            // Option 2: Refresh via ModService
             _modService.RefreshInstalledVersions(ModName);
         }
     }
