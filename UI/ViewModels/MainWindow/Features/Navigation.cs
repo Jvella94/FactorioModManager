@@ -40,7 +40,6 @@ namespace FactorioModManager.ViewModels.MainWindow
             _navigationHistory.Add(newMod);
             _navigationIndex = _navigationHistory.Count - 1;
 
-            // ✅ ADD LIMIT
             const int MaxHistorySize = 50;
             if (_navigationHistory.Count > MaxHistorySize)
             {
@@ -90,32 +89,26 @@ namespace FactorioModManager.ViewModels.MainWindow
         private void NavigateToDependency(string dependency)
         {
             var dependencyName = DependencyHelper.ExtractDependencyName(dependency);
-
             if (string.IsNullOrEmpty(dependencyName))
             {
                 SetStatus("Invalid dependency", LogLevel.Warning);
                 return;
             }
 
-            // Skip game dependencies
             if (DependencyHelper.IsGameDependency(dependencyName))
             {
                 SetStatus($"{dependencyName} is a base game dependency");
                 return;
             }
 
-            // Try to find installed mod
-            var targetMod = _modsCache.Items.FirstOrDefault(m => m.Name.Equals(dependencyName, StringComparison.OrdinalIgnoreCase));
-
+            var targetMod = _allMods.FirstOrDefault(m => m.Name.Equals(dependencyName, StringComparison.OrdinalIgnoreCase));
             if (targetMod != null)
             {
-                // Navigate to installed mod
                 SelectedMod = targetMod;
                 SetStatus($"Navigated to {targetMod.Title}");
             }
             else
             {
-                // Open mod portal for uninstalled dependency
                 OpenDependencyInPortal(dependencyName, dependency);
             }
         }
@@ -129,10 +122,8 @@ namespace FactorioModManager.ViewModels.MainWindow
             {
                 var url = Urls.GetModUrl(dependencyName);
                 _uiService.OpenUrl(url);
-
                 var isOptional = DependencyHelper.IsOptionalDependency(dependency);
                 var depType = isOptional ? "optional" : "required";
-
                 SetStatus($"Opened mod portal for {depType} dependency: {dependencyName}");
             }
             catch (Exception ex)

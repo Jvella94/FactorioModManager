@@ -254,7 +254,7 @@
                 <Separator />
 
                 <!-- Thumbnail -->
-                <Image Source="{Binding Thumbnail, TargetNullValue={x:Null}}"
+                <Image Source="{Binding Thumbnail}"
                        Width="200" Height="200"
                        Stretch="Uniform" />
 

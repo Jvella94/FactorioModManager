@@ -42,6 +42,7 @@ namespace FactorioModManager.ViewModels
         private string? _groupName;
         private bool _isUnusedInternal;
         private Bitmap? _thumbnail;
+        private static readonly Bitmap PlaceholderBitmap = Constants.LoadPlaceholderThumbnail();
         private string? _selectedVersion;
         private string? _filePath;
         private int _installedCount;
@@ -125,7 +126,7 @@ namespace FactorioModManager.ViewModels
 
         public Bitmap? Thumbnail
         {
-            get => _thumbnail;
+            get => _thumbnail ?? PlaceholderBitmap;
             set => this.RaiseAndSetIfChanged(ref _thumbnail, value);
         }
 
@@ -240,7 +241,12 @@ namespace FactorioModManager.ViewModels
                 AvailableVersions.CollectionChanged -= OnAvailableVersionsChanged;
 
                 _disposables?.Dispose();
-                _thumbnail?.Dispose();
+                // Only dispose if it's not the shared placeholder
+                if (_thumbnail != null && _thumbnail != PlaceholderBitmap)
+                {
+                    _thumbnail?.Dispose();
+                }
+                _thumbnail = null;
             }
 
             base.Dispose(disposing);

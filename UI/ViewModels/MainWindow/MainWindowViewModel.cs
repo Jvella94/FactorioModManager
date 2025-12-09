@@ -1,12 +1,9 @@
-﻿using DynamicData;
-using DynamicData.Binding;
-using FactorioModManager.Models;
+﻿using FactorioModManager.Models;
 using FactorioModManager.Services;
 using FactorioModManager.Services.API;
 using FactorioModManager.Services.Infrastructure;
 using ReactiveUI;
 using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Reactive.Disposables;
@@ -17,18 +14,17 @@ namespace FactorioModManager.ViewModels.MainWindow
 {
     public partial class MainWindowViewModel : ViewModelBase
     {
-        // ✅ ADD THIS: Store all subscriptions
         private readonly CompositeDisposable _disposables = [];
 
-        // ✅ NEW: Source cache for mods
-        private readonly SourceCache<ModViewModel, string> _modsCache;
+        // ✅ Simple collections instead of DynamicData
+        private readonly ObservableCollection<ModViewModel> _allMods = [];
 
-        private ReadOnlyObservableCollection<ModViewModel> _filteredMods = null!;
-        private ReadOnlyObservableCollection<string> _authors = null!;
-        private ReadOnlyObservableCollection<string> _filteredAuthors = null!;
+        private readonly ObservableCollection<ModViewModel> _filteredMods = [];
+        private readonly ObservableCollection<string> _authors = [];
+        private readonly ObservableCollection<string> _filteredAuthors = [];
 
-        private ObservableCollection<ModGroupViewModel> _groups;
-        private ObservableCollection<ModViewModel> _selectedMods;
+        private ObservableCollection<ModGroupViewModel> _groups = [];
+        private ObservableCollection<ModViewModel> _selectedMods = [];
 
         private ModViewModel? _selectedMod;
         private ModGroupViewModel? _selectedGroup;
@@ -51,8 +47,6 @@ namespace FactorioModManager.ViewModels.MainWindow
         private readonly IDownloadService _downloadService;
         private readonly IErrorMessageService _errorMessageService;
 
-        private readonly Dictionary<string, int> _authorModCounts = [];
-
         public MainWindowViewModel(
             IModService modService,
             IModGroupService groupService,
@@ -74,73 +68,41 @@ namespace FactorioModManager.ViewModels.MainWindow
             _downloadService = downloadService;
             _errorMessageService = errorMessageService;
 
-            // ✅ Initialize source cache (keyed by mod name)
-            _modsCache = new SourceCache<ModViewModel, string>(mod => mod.Name);
-
-            _groups = [];
-            _selectedMods = [];
-
-            SetupDynamicData();
+            SetupReactiveFiltering();
             InitializeCommands();
         }
 
         /// <summary>
-        /// Sets up DynamicData reactive pipelines
+        /// Sets up reactive filtering with throttling
         /// </summary>
-        /// <summary>
-        /// Sets up DynamicData reactive pipelines
-        /// </summary>
-        private void SetupDynamicData()
+        private void SetupReactiveFiltering()
         {
-            // ✅ Filtered and sorted mods pipeline - ADD ObserveOn BEFORE SortAndBind
-            _modsCache
-                .Connect()
-                .Filter(this.WhenAnyValue(
+            // Throttle search text changes
+            this.WhenAnyValue(
                     x => x.SearchText,
                     x => x.ShowDisabled,
                     x => x.SelectedAuthorFilter,
                     x => x.SelectedGroup,
                     x => x.FilterBySelectedGroup)
-                    .Throttle(TimeSpan.FromMilliseconds(Constants.Throttle.SearchMs))
-                    .Select(_ => CreateModFilterPredicate()))
+                .Throttle(TimeSpan.FromMilliseconds(150))
                 .ObserveOn(RxApp.MainThreadScheduler)
-                .SortAndBind(
-                    out _filteredMods,
-                    SortExpressionComparer<ModViewModel>.Descending(m => m.LastUpdated ?? DateTime.MinValue))
-                .DisposeMany()
-                .Subscribe(_ =>
-                {
-                    this.RaisePropertyChanged(nameof(ModCountText));
-                })
+                .Subscribe(_ => ApplyModFilter())
                 .DisposeWith(_disposables);
 
-            // ✅ Authors pipeline - ADD ObserveOn BEFORE SortAndBind
-            _modsCache
-                .Connect()
-                .Transform(mod => mod.Author)
-                .Filter(author => !string.IsNullOrEmpty(author))
-                .GroupWithImmutableState(author => author!)
-                .Transform(group => $"{group.Key} ({group.Count})")
+            // Throttle author search
+            this.WhenAnyValue(x => x.AuthorSearchText)
+                .Throttle(TimeSpan.FromMilliseconds(100))
                 .ObserveOn(RxApp.MainThreadScheduler)
-                .SortAndBind(
-                    out _authors,
-                    SortExpressionComparer<string>.Descending(a => ExtractAuthorCount(a)))
-                .Subscribe()
+                .Subscribe(_ => ApplyAuthorFilter())
                 .DisposeWith(_disposables);
 
-            // ✅ Filtered authors pipeline - ADD ObserveOn BEFORE Bind
-            Observable.Return(_authors)
-                .Select(_ => _authors.AsObservableChangeSet())
-                .Switch()
-                .Filter(this.WhenAnyValue(x => x.AuthorSearchText)
-                    .Throttle(TimeSpan.FromMilliseconds(Constants.Throttle.AuthorSearchMs))
-                    .Select(searchText => CreateAuthorFilterPredicate(searchText)))
+            // Update HasSelectedMod
+            this.WhenAnyValue(x => x.SelectedMod)
                 .ObserveOn(RxApp.MainThreadScheduler)
-                .Bind(out _filteredAuthors)
-                .Subscribe()
+                .Subscribe(_ => this.RaisePropertyChanged(nameof(HasSelectedMod)))
                 .DisposeWith(_disposables);
 
-            // ✅ Sync author search with selected author
+            // Sync author search with selected author
             this.WhenAnyValue(x => x.SelectedAuthorFilter)
                 .ObserveOn(RxApp.MainThreadScheduler)
                 .Subscribe(author =>
@@ -151,101 +113,110 @@ namespace FactorioModManager.ViewModels.MainWindow
                     }
                 })
                 .DisposeWith(_disposables);
+        }
 
-            // ✅ Update HasSelectedMod
-            this.WhenAnyValue(x => x.SelectedMod)
-                .ObserveOn(RxApp.MainThreadScheduler) // ✅ Ensure UI thread
-                .Subscribe(_ => this.RaisePropertyChanged(nameof(HasSelectedMod)))
-                .DisposeWith(_disposables);
-
-            // ✅ Update ModCountSummary when mods change - Already has ObserveOn, keep it
-            _modsCache
-                .Connect()
-                .WhenPropertyChanged(m => m.IsEnabled)
-                .Merge(_modsCache.Connect().WhenPropertyChanged(m => m.HasUpdate))
-                .Throttle(TimeSpan.FromMilliseconds(100))
-                .ObserveOn(RxApp.MainThreadScheduler)
-                .Subscribe(_ =>
+        /// <summary>
+        /// Apply filtering to mods collection
+        /// </summary>
+        /// <summary>
+        /// Apply filtering to mods collection
+        /// </summary>
+        private void ApplyModFilter()
+        {
+            var filtered = _allMods
+                .Where(mod =>
                 {
-                    this.RaisePropertyChanged(nameof(ModCountSummary));
-                    this.RaisePropertyChanged(nameof(UnusedInternalCount));
-                    this.RaisePropertyChanged(nameof(HasUnusedInternals));
-                    this.RaisePropertyChanged(nameof(UnusedInternalWarning));
+                    if (!_showDisabled && !mod.IsEnabled)
+                        return false;
+
+                    if (!string.IsNullOrEmpty(_searchText) &&
+                        !mod.Title.Contains(_searchText, StringComparison.OrdinalIgnoreCase))
+                        return false;
+
+                    if (!string.IsNullOrEmpty(_selectedAuthorFilter))
+                    {
+                        var authorName = ExtractAuthorName(_selectedAuthorFilter);
+                        if (mod.Author != authorName)
+                            return false;
+                    }
+
+                    if (_filterBySelectedGroup && _selectedGroup != null)
+                    {
+                        if (!_selectedGroup.ModNames.Contains(mod.Title))
+                            return false;
+                    }
+
+                    return true;
                 })
-                .DisposeWith(_disposables);
-        }
+                .OrderByDescending(m => m.LastUpdated ?? DateTime.MinValue)
+                .ToList();
 
-        private static int ExtractAuthorCount(string authorWithCount)
-        {
-            var lastParenIndex = authorWithCount.LastIndexOf('(');
-            if (lastParenIndex < 0)
-                return 0;
+            // ✅ Preserve selection
+            var currentSelection = SelectedMod;
+            var wasInFiltered = currentSelection != null && _filteredMods.Contains(currentSelection);
 
-            var countPart = authorWithCount[(lastParenIndex + 1)..].TrimEnd(')');
-
-            if (int.TryParse(countPart, out var count))
-                return count;
-
-            return 0;
-        }
-
-        /// <summary>
-        /// Creates filter predicate for mods based on current settings
-        /// </summary>
-        private Func<ModViewModel, bool> CreateModFilterPredicate()
-        {
-            var searchText = SearchText;
-            var showDisabled = ShowDisabled;
-            var selectedAuthorFilter = SelectedAuthorFilter;
-            var selectedGroup = SelectedGroup;
-            var filterByGroup = FilterBySelectedGroup;
-
-            return mod =>
+            _filteredMods.Clear();
+            foreach (var mod in filtered)
             {
-                if (!showDisabled && !mod.IsEnabled)
-                    return false;
+                _filteredMods.Add(mod);
+            }
 
-                if (!string.IsNullOrEmpty(searchText) &&
-                    !mod.Title.Contains(searchText, StringComparison.OrdinalIgnoreCase))
-                    return false;
+            // ✅ Restore selection if the mod is still in filtered results
+            if (currentSelection != null && filtered.Contains(currentSelection))
+            {
+                // Don't trigger OnModSelected again, just restore the selection
+                _selectedMod = currentSelection;
+                this.RaisePropertyChanged(nameof(SelectedMod));
+            }
+            else if (currentSelection != null && wasInFiltered)
+            {
+                // Selection was filtered out, clear it
+                _selectedMod = null;
+                this.RaisePropertyChanged(nameof(SelectedMod));
+            }
 
-                if (!string.IsNullOrEmpty(selectedAuthorFilter))
-                {
-                    var authorName = ExtractAuthorName(selectedAuthorFilter);
-                    if (mod.Author != authorName)
-                        return false;
-                }
-
-                if (filterByGroup && selectedGroup != null)
-                {
-                    if (!selectedGroup.ModNames.Contains(mod.Title))
-                        return false;
-                }
-
-                return true;
-            };
+            this.RaisePropertyChanged(nameof(ModCountText));
+            this.RaisePropertyChanged(nameof(ModCountSummary));
         }
 
         /// <summary>
-        /// Creates filter predicate for authors
+        /// Apply filtering to authors collection
         /// </summary>
-        private static Func<string, bool> CreateAuthorFilterPredicate(string? searchText)
+        private void ApplyAuthorFilter()
         {
-            if (string.IsNullOrEmpty(searchText))
-                return _ => true;
+            if (string.IsNullOrEmpty(_authorSearchText))
+            {
+                _filteredAuthors.Clear();
+                foreach (var author in _authors)
+                {
+                    _filteredAuthors.Add(author);
+                }
+                return;
+            }
 
-            var searchLower = searchText.ToLower();
-            return author => author.Contains(searchLower, StringComparison.OrdinalIgnoreCase);
+            var filtered = _authors
+                .Where(a => a.Contains(_authorSearchText, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            _filteredAuthors.Clear();
+            foreach (var author in filtered)
+            {
+                _filteredAuthors.Add(author);
+            }
         }
 
-        // ✅ Properties now expose DynamicData collections
-        public ReadOnlyObservableCollection<ModViewModel> FilteredMods => _filteredMods;
+        private static string ExtractAuthorName(string authorFilter)
+        {
+            var parenIndex = authorFilter.IndexOf('(');
+            return parenIndex > 0 ? authorFilter[..parenIndex].Trim() : authorFilter.Trim();
+        }
 
-        public ReadOnlyObservableCollection<string> Authors => _authors;
-        public ReadOnlyObservableCollection<string> FilteredAuthors => _filteredAuthors;
+        // Properties
+        public ObservableCollection<ModViewModel> FilteredMods => _filteredMods;
 
-        // ✅ Expose all mods count
-        public int AllModsCount => _modsCache.Count;
+        public ObservableCollection<string> Authors => _authors;
+        public ObservableCollection<string> FilteredAuthors => _filteredAuthors;
+        public int AllModsCount => _allMods.Count;
 
         public ObservableCollection<ModGroupViewModel> Groups
         {
@@ -266,7 +237,6 @@ namespace FactorioModManager.ViewModels.MainWindow
             {
                 var oldMod = _selectedMod;
                 this.RaiseAndSetIfChanged(ref _selectedMod, value);
-
                 if (value != null && oldMod != value)
                 {
                     OnModSelected(value);
@@ -323,18 +293,15 @@ namespace FactorioModManager.ViewModels.MainWindow
         {
             get
             {
-                var allMods = _modsCache.Items.ToList();
-                var enabled = allMods.Count(m => m.IsEnabled);
-                var total = allMods.Count;
-                var updates = allMods.Count(m => m.HasUpdate);
+                var enabled = _allMods.Count(m => m.IsEnabled);
+                var total = _allMods.Count;
+                var updates = _allMods.Count(m => m.HasUpdate);
                 return $"Enabled: {enabled}/{total} | Updates: {updates}";
             }
         }
 
         public string UnusedInternalWarning => $"⚠ {UnusedInternalCount} unused internal dependencies";
-
-        public int UnusedInternalCount => _modsCache.Items.Count(m => m.IsUnusedInternal);
-
+        public int UnusedInternalCount => _allMods.Count(m => m.IsUnusedInternal);
         public bool HasUnusedInternals => UnusedInternalCount > 0;
 
         /// <summary>
@@ -351,11 +318,8 @@ namespace FactorioModManager.ViewModels.MainWindow
         /// </summary>
         private void HandleError(Exception ex, string context)
         {
-            // Get user-friendly message
             var userMessage = _errorMessageService.GetUserFriendlyMessage(ex, context);
             SetStatus(userMessage, LogLevel.Error);
-
-            // Log technical details
             var technicalMessage = _errorMessageService.GetTechnicalMessage(ex);
             _logService.LogError(technicalMessage, ex);
         }
@@ -364,30 +328,19 @@ namespace FactorioModManager.ViewModels.MainWindow
         {
             if (disposing)
             {
-                // 1. Stop all reactive subscriptions first
                 _disposables?.Dispose();
-
-                // 2. Clear navigation history (prevents potential re-selections)
                 _navigationHistory.Clear();
-
-                // 3. Clear selected mods collection
                 SelectedMods.Clear();
 
-                // 4. Dispose child ViewModels
-                foreach (var mod in _modsCache.Items)
-                {
-                    mod?.Dispose();
-                }
+                // Don't dispose mods here - let GC handle it
+                _allMods.Clear();
+                _filteredMods.Clear();
 
                 foreach (var group in Groups)
                 {
                     group?.Dispose();
                 }
-
-                // 5. Finally dispose the cache itself
-                _modsCache?.Dispose();
             }
-
             base.Dispose(disposing);
         }
     }

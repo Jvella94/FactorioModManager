@@ -47,13 +47,7 @@ namespace FactorioModManager.Views
 
         private async void ShowAbout_Click(object? sender, RoutedEventArgs e)
         {
-            var aboutMessage = "Factorio Mod Manager\nVersion 1.0.0\n\n" +
-                             "A modern mod manager for Factorio.\n\n" +
-                             "Features:\n" +
-                             "• Manage and organize mods\n" +
-                             "• Check for updates\n" +
-                             "• Group management\n" +
-                             "• Download from Mod Portal";
+            var aboutMessage = Constants.AboutMessage;
 
             var dialog = new Dialogs.MessageBoxDialog("About", aboutMessage);
             await dialog.ShowDialog(this);

@@ -21,11 +21,9 @@ namespace FactorioModManager.ViewModels.MainWindow
                 try
                 {
                     _logService.Log("Checking for already-downloaded updates...");
-
                     var modsDirectory = _modService.GetModsDirectory();
 
-                    // ✅ Use _modsCache.Items instead of Mods
-                    var modsWithUpdates = _modsCache.Items
+                    var modsWithUpdates = _allMods
                         .Where(m => m.HasUpdate && !string.IsNullOrEmpty(m.LatestVersion))
                         .ToList();
 
@@ -33,27 +31,20 @@ namespace FactorioModManager.ViewModels.MainWindow
                         return;
 
                     var clearedCount = 0;
-
                     foreach (var mod in modsWithUpdates)
                     {
-                        // Check if the latest version file already exists
                         var latestVersionFileName = $"{mod.Name}_{mod.LatestVersion}.zip";
                         var latestVersionPath = Path.Combine(modsDirectory, latestVersionFileName);
 
                         if (File.Exists(latestVersionPath))
                         {
-                            // Update was already downloaded externally
                             _logService.Log($"Found already-downloaded update for {mod.Title}: {mod.LatestVersion}");
-
-                            // Clear the update flag
                             _metadataService.ClearUpdate(mod.Name);
-
                             _uiService.Post(() =>
                             {
                                 mod.HasUpdate = false;
                                 mod.LatestVersion = null;
                             });
-
                             clearedCount++;
                         }
                     }
@@ -61,7 +52,6 @@ namespace FactorioModManager.ViewModels.MainWindow
                     if (clearedCount > 0)
                     {
                         _logService.Log($"Cleared update flags for {clearedCount} already-downloaded mod(s)");
-
                         _uiService.Post(() =>
                         {
                             this.RaisePropertyChanged(nameof(ModCountSummary));
@@ -86,8 +76,7 @@ namespace FactorioModManager.ViewModels.MainWindow
 
             foreach (var depName in mandatoryDeps)
             {
-                // ✅ Use _modsCache.Items instead of Mods
-                if (!_modsCache.Items.Any(m => m.Name.Equals(depName, StringComparison.OrdinalIgnoreCase)))
+                if (!_allMods.Any(m => m.Name.Equals(depName, StringComparison.OrdinalIgnoreCase)))
                 {
                     missingDeps.Add(depName);
                 }
@@ -112,19 +101,16 @@ namespace FactorioModManager.ViewModels.MainWindow
             if (mod == null || !mod.HasUpdate || string.IsNullOrEmpty(mod.LatestVersion))
                 return;
 
-            // Check dependencies first
             if (!CheckMandatoryDependencies(mod))
                 return;
 
             var modName = mod.Name;
-
             await Task.Run(async () =>
             {
                 try
                 {
                     _logService.Log($"Starting update for {mod.Title} from {mod.Version} to {mod.LatestVersion}");
 
-                    // Set downloading state
                     await _uiService.InvokeAsync(() =>
                     {
                         mod.IsDownloading = true;
@@ -134,7 +120,6 @@ namespace FactorioModManager.ViewModels.MainWindow
                     });
 
                     var modDetails = await _apiService.GetModDetailsAsync(mod.Name);
-
                     if (modDetails?.Releases == null)
                     {
                         _logService.Log($"Failed to fetch release details for {mod.Name}", LogLevel.Error);
@@ -161,13 +146,12 @@ namespace FactorioModManager.ViewModels.MainWindow
                         return;
                     }
 
-                    // Use the common download method with progress reporting
                     var result = await DownloadModFromPortalAsync(
                         mod.Name,
                         mod.Title,
                         latestRelease.Version,
                         latestRelease.DownloadUrl,
-                        mod // Pass mod for progress reporting
+                        mod
                     );
 
                     if (!result.Success || !result.Value)
@@ -179,14 +163,11 @@ namespace FactorioModManager.ViewModels.MainWindow
                         return;
                     }
 
-                    // Delete old versions if setting is enabled
                     var modsDirectory = _modService.GetModsDirectory();
                     var newFilePath = Path.Combine(modsDirectory, $"{mod.Name}_{latestRelease.Version}.zip");
                     _downloadService.DeleteOldVersions(mod.Name, newFilePath);
 
                     _logService.Log($"Successfully updated {mod.Title} to version {latestRelease.Version}");
-
-                    // Clear the update flag
                     _metadataService.UpdateLatestVersion(mod.Name, latestRelease.Version, hasUpdate: false);
 
                     _uiService.Post(() =>
@@ -196,26 +177,16 @@ namespace FactorioModManager.ViewModels.MainWindow
                         SetStatus($"Update complete for {mod.Title}. Refreshing...");
                     });
 
-                    // Refresh mods list
                     await Task.Delay(500);
                     await RefreshModsAsync();
 
-                    // Reselect the updated mod
                     await _uiService.InvokeAsync(() =>
                     {
-                        // ✅ Use _modsCache.Items instead of Mods
-                        var updatedMod = _modsCache.Items.FirstOrDefault(m => m.Name == modName);
+                        var updatedMod = _allMods.FirstOrDefault(m => m.Name == modName);
                         if (updatedMod != null)
                         {
                             updatedMod.SelectedVersion = updatedMod.Version;
                             SelectedMod = updatedMod;
-
-                            if (!FilteredMods.Contains(updatedMod))
-                            {
-                                // Filtered mods are automatically updated by DynamicData
-                                _logService.Log($"Updated mod {updatedMod.Title} not in filtered list");
-                            }
-
                             SetStatus($"Successfully updated {updatedMod.Title} to {updatedMod.Version}");
                             _logService.Log($"Reselected updated mod: {updatedMod.Title}");
                         }
@@ -230,7 +201,6 @@ namespace FactorioModManager.ViewModels.MainWindow
                 {
                     _logService.Log($"Error updating {mod?.Title}: {ex.Message}", LogLevel.Error);
                     _logService.LogError($"Update error details: {ex.Message}", ex);
-
                     _uiService.Post(() =>
                     {
                         if (mod != null)
@@ -250,7 +220,6 @@ namespace FactorioModManager.ViewModels.MainWindow
         internal async Task CheckForUpdatesAsync(int hoursAgo)
         {
             _logService.Log($"Checking for updates from the last {hoursAgo} hour(s)...");
-
             await _uiService.InvokeAsync(() =>
             {
                 SetStatus("Fetching recently updated mods...");
@@ -259,7 +228,6 @@ namespace FactorioModManager.ViewModels.MainWindow
             try
             {
                 var recentlyUpdatedModNames = await _apiService.GetRecentlyUpdatedModsAsync(hoursAgo);
-
                 if (recentlyUpdatedModNames.Count == 0)
                 {
                     await _uiService.InvokeAsync(() =>
@@ -269,8 +237,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                     return;
                 }
 
-                // ✅ Use _modsCache.Items instead of Mods
-                var modsSnapshot = _modsCache.Items.ToList();
+                var modsSnapshot = _allMods.ToList();
                 var installedRecentlyUpdated = modsSnapshot
                     .Where(m => recentlyUpdatedModNames.Contains(m.Name))
                     .ToList();
@@ -283,7 +250,6 @@ namespace FactorioModManager.ViewModels.MainWindow
                 foreach (var mod in installedRecentlyUpdated)
                 {
                     currentIndex++;
-
                     await _uiService.InvokeAsync(() =>
                     {
                         SetStatus($"Checking updates for ({currentIndex}/{installedRecentlyUpdated.Count}): {mod.Title}");
@@ -292,7 +258,6 @@ namespace FactorioModManager.ViewModels.MainWindow
                     try
                     {
                         var details = await _apiService.GetModDetailsAsync(mod.Name);
-
                         if (details?.Releases != null && details.Releases.Count > 0)
                         {
                             var latestRelease = details.Releases
@@ -302,17 +267,14 @@ namespace FactorioModManager.ViewModels.MainWindow
                             if (latestRelease != null)
                             {
                                 var latestVersion = latestRelease.Version;
-
                                 if (VersionHelper.IsNewerVersion(latestVersion, mod.Version))
                                 {
                                     _metadataService.UpdateLatestVersion(mod.Name, latestVersion, hasUpdate: true);
-
                                     await _uiService.InvokeAsync(() =>
                                     {
                                         mod.HasUpdate = true;
                                         mod.LatestVersion = latestVersion;
                                     });
-
                                     updateCount++;
                                     _logService.Log($"Update available for {mod.Title}: {mod.Version} → {latestVersion}");
                                 }
@@ -323,7 +285,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                             }
                         }
 
-                        await Task.Delay(100); // Rate limiting
+                        await Task.Delay(100);
                     }
                     catch (Exception ex)
                     {
@@ -372,7 +334,6 @@ namespace FactorioModManager.ViewModels.MainWindow
                 try
                 {
                     var details = await _apiService.GetModDetailsAsync(SelectedMod.Name);
-
                     if (details?.Releases != null && details.Releases.Count > 0)
                     {
                         var latestRelease = details.Releases
@@ -382,11 +343,9 @@ namespace FactorioModManager.ViewModels.MainWindow
                         if (latestRelease != null)
                         {
                             var latestVersion = latestRelease.Version;
-
                             if (VersionHelper.IsNewerVersion(latestVersion, SelectedMod.Version))
                             {
                                 _metadataService.UpdateLatestVersion(SelectedMod.Name, latestVersion, hasUpdate: true);
-
                                 await _uiService.InvokeAsync(() =>
                                 {
                                     SelectedMod.HasUpdate = true;
@@ -398,7 +357,6 @@ namespace FactorioModManager.ViewModels.MainWindow
                             else
                             {
                                 _metadataService.UpdateLatestVersion(SelectedMod.Name, latestVersion, hasUpdate: false);
-
                                 await _uiService.InvokeAsync(() =>
                                 {
                                     SelectedMod.HasUpdate = false;
@@ -420,7 +378,6 @@ namespace FactorioModManager.ViewModels.MainWindow
                 catch (Exception ex)
                 {
                     _logService.LogError($"Error checking update for {SelectedMod.Name}: {ex.Message}", ex);
-
                     await _uiService.InvokeAsync(() =>
                     {
                         SetStatus($"Error checking update for {SelectedMod.Title}", LogLevel.Error);

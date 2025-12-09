@@ -1,4 +1,4 @@
-﻿using DynamicData;
+﻿using ReactiveUI;
 using System.Linq;
 
 namespace FactorioModManager.ViewModels.MainWindow
@@ -19,7 +19,8 @@ namespace FactorioModManager.ViewModels.MainWindow
                 UpdateGroupStatus(group);
             }
 
-            // ✅ DynamicData automatically updates FilteredMods and ModCountSummary
+            this.RaisePropertyChanged(nameof(ModCountSummary));
+            ApplyModFilter(); // Reapply filter if needed
             SetStatus($"{mod.Title} {(mod.IsEnabled ? "enabled" : "disabled")}");
         }
 
@@ -28,9 +29,8 @@ namespace FactorioModManager.ViewModels.MainWindow
             if (mod == null)
                 return;
 
-            // ✅ Remove from cache (DynamicData handles the rest)
-            _modsCache.Remove(mod.Name);
-
+            _allMods.Remove(mod);
+            ApplyModFilter(); // Reapply filter
             SetStatus($"Removed {mod.Title}");
         }
     }

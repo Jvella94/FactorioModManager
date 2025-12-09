@@ -1,4 +1,7 @@
-﻿using NuGet.Versioning;
+﻿using Avalonia;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
+using NuGet.Versioning;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -11,6 +14,33 @@ namespace FactorioModManager
     /// </summary>
     public static class Constants
     {
+        public const string AboutMessage = "Factorio Mod Manager\nVersion 1.0.0\n\n" +
+                                     "A modern mod manager for Factorio.\n\n" +
+                                     "Features:\n" +
+                                     "• Manage and organize mods\n" +
+                                     "• Check for updates\n" +
+                                     "• Group management\n" +
+                                     "• Download from Mod Portal";
+
+        private static readonly Lazy<Bitmap> _lazyPlaceholder = new(() =>
+        {
+            try
+            {
+                var uri = new Uri("avares://FactorioModManager/Assets/FMM.png");
+                return new Bitmap(AssetLoader.Open(uri));
+            }
+            catch (Exception)
+            {
+                return new WriteableBitmap(
+                    new PixelSize(1, 1),
+                    new Vector(96, 96),
+                    PixelFormat.Bgra8888,
+                    AlphaFormat.Premul);
+            }
+        });
+
+        public static Bitmap LoadPlaceholderThumbnail() => _lazyPlaceholder.Value;
+
         /// <summary>
         /// Official Factorio game dependencies
         /// </summary>

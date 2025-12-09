@@ -20,7 +20,6 @@ namespace FactorioModManager.ViewModels.MainWindow
             }
 
             _isRefreshing = true;
-
             await Task.Run(async () =>
             {
                 await _uiService.InvokeAsync(() =>
@@ -36,10 +35,8 @@ namespace FactorioModManager.ViewModels.MainWindow
 
                     await _uiService.InvokeAsync(() =>
                     {
-                        // ✅ Use DynamicData cache instead of ObservableCollection
                         UpdateModsCache(latestMods, loadedGroups);
                         UpdateGroupsCollection(loadedGroups);
-
                         SetStatus($"Loaded {AllModsCount} unique mods and {Groups.Count} groups");
                     });
 
@@ -72,7 +69,7 @@ namespace FactorioModManager.ViewModels.MainWindow
         }
 
         /// <summary>
-        /// ✅ NEW: Updates the mods cache with loaded data
+        /// Updates the mods cache with loaded data
         /// </summary>
         private void UpdateModsCache(
             List<(ModInfo Info, bool IsEnabled, DateTime? LastUpdated, string? ThumbnailPath, string FilePath)> latestMods,
@@ -108,18 +105,40 @@ namespace FactorioModManager.ViewModels.MainWindow
                 }
             }
 
-            // ✅ Update cache (this triggers reactive pipeline automatically)
-            _modsCache.Edit(updater =>
+            // ✅ Simple collection update - no disposal during active rendering
+            _allMods.Clear();
+            foreach (var mod in modViewModels)
             {
-                // ✅ Dispose old ViewModels before clearing
-                foreach (var oldMod in updater.Items.ToList())
-                {
-                    oldMod?.Dispose();
-                }
+                _allMods.Add(mod);
+            }
 
-                updater.Clear();
-                updater.AddOrUpdate(modViewModels);
-            });
+            // Update authors list
+            UpdateAuthorsList();
+
+            // Trigger filter
+            ApplyModFilter();
+        }
+
+        /// <summary>
+        /// Updates the authors list based on current mods
+        /// </summary>
+        private void UpdateAuthorsList()
+        {
+            var authorCounts = _allMods
+                .Where(m => !string.IsNullOrEmpty(m.Author))
+                .GroupBy(m => m.Author)
+                .Select(g => ($"{g.Key} ({g.Count()})", g.Count()))
+                .OrderByDescending(x => x.Item2)
+                .Select(x => x.Item1)
+                .ToList();
+
+            _authors.Clear();
+            foreach (var author in authorCounts)
+            {
+                _authors.Add(author);
+            }
+
+            ApplyAuthorFilter();
         }
 
         private ModViewModel CreateModViewModel(
@@ -128,7 +147,7 @@ namespace FactorioModManager.ViewModels.MainWindow
             DateTime? lastUpdated,
             string? thumbnailPath,
             string filePath,
-            List<Models.ModGroup> loadedGroups)
+            List<ModGroup> loadedGroups)
         {
             var modVm = new ModViewModel
             {
@@ -159,13 +178,9 @@ namespace FactorioModManager.ViewModels.MainWindow
 
         private void UpdateGroupsCollection(List<ModGroup> loadedGroups)
         {
-            // ✅ Dispose old group VMs first
-            foreach (var oldGroup in Groups)
-            {
-                oldGroup?.Dispose();
-            }
-
+            // Clear groups (don't dispose - they'll be GC'd)
             Groups.Clear();
+
             foreach (var group in loadedGroups)
             {
                 var groupVm = new ModGroupViewModel
@@ -182,32 +197,33 @@ namespace FactorioModManager.ViewModels.MainWindow
         {
             if (string.IsNullOrEmpty(mod.ThumbnailPath))
             {
-                mod.Thumbnail = null;
+                // Already returns placeholder from getter
                 return;
             }
 
             try
             {
                 var thumbnail = await _modService.LoadThumbnailAsync(mod.ThumbnailPath);
-
                 await _uiService.InvokeAsync(() =>
                 {
-                    mod.Thumbnail = thumbnail;
+                    mod.Thumbnail = thumbnail ?? LoadPlaceholderThumbnail();
                 });
             }
             catch (Exception ex)
             {
                 _logService.LogError($"Error loading thumbnail for {mod.Name}: {ex.Message}", ex);
+                // Thumbnail getter will return placeholder automatically
             }
         }
 
         private async Task CheckForUpdatesIfNeededAsync()
         {
             var lastCheck = _settingsService.GetLastUpdateCheck();
-
             if (!lastCheck.HasValue || (DateTime.UtcNow - lastCheck.Value).TotalHours >= 1)
             {
-                if (lastCheck.HasValue) _logService.Log($"Checking for updates on Portal since {lastCheck.Value}");
+                if (lastCheck.HasValue)
+                    _logService.Log($"Checking for updates on Portal since {lastCheck.Value}");
+
                 var hours = lastCheck.HasValue ? (DateTime.UtcNow - lastCheck.Value).Hours : 1;
                 _settingsService.SetLastUpdateCheck(DateTime.UtcNow);
                 await CheckForUpdatesAsync(hours);
@@ -223,18 +239,17 @@ namespace FactorioModManager.ViewModels.MainWindow
             }
 
             var targetName = mod.Name;
-
             if (string.IsNullOrWhiteSpace(targetName))
                 return;
 
-            // ✅ Query from cache
-            var dependents = _modsCache.Items
+            // ✅ Query from _allMods collection
+            var dependents = _allMods
                 .Where(m => m.Dependencies != null &&
-                    m.Dependencies.Any(dep =>
-                    {
-                        var depName = DependencyHelper.ExtractDependencyName(dep);
-                        return depName.Equals(targetName, StringComparison.OrdinalIgnoreCase);
-                    }))
+                           m.Dependencies.Any(dep =>
+                           {
+                               var depName = DependencyHelper.ExtractDependencyName(dep);
+                               return depName.Equals(targetName, StringComparison.OrdinalIgnoreCase);
+                           }))
                 .OrderBy(m => m.Title)
                 .ToList();
 
@@ -260,7 +275,7 @@ namespace FactorioModManager.ViewModels.MainWindow
         private async Task FetchMissingMetadataAsync()
         {
             // Take a snapshot to avoid collection modification issues
-            var modsSnapshot = _modsCache.Items.ToList();
+            var modsSnapshot = _allMods.ToList();
             var modsNeedingMetadata = modsSnapshot.Where(m =>
                 _metadataService.NeedsCategoryCheck(m.Name) ||
                 _metadataService.NeedsSourceUrlCheck(m.Name)).ToList();
@@ -274,11 +289,9 @@ namespace FactorioModManager.ViewModels.MainWindow
             });
 
             var currentIndex = 0;
-
             foreach (var mod in modsNeedingMetadata)
             {
                 currentIndex++;
-
                 await _uiService.InvokeAsync(() =>
                 {
                     SetStatus($"Fetching metadata ({currentIndex}/{modsNeedingMetadata.Count}): {mod.Title}");
@@ -287,13 +300,11 @@ namespace FactorioModManager.ViewModels.MainWindow
                 try
                 {
                     var details = await _apiService.GetModDetailsFullAsync(mod.Name);
-
                     if (details != null)
                     {
                         if (_metadataService.NeedsCategoryCheck(mod.Name))
                         {
                             _metadataService.UpdateCategory(mod.Name, details.Category);
-
                             await _uiService.InvokeAsync(() =>
                             {
                                 mod.Category = details.Category;
@@ -303,7 +314,6 @@ namespace FactorioModManager.ViewModels.MainWindow
                         if (_metadataService.NeedsSourceUrlCheck(mod.Name))
                         {
                             _metadataService.UpdateSourceUrl(mod.Name, details.SourceUrl);
-
                             await _uiService.InvokeAsync(() =>
                             {
                                 mod.SourceUrl = details.SourceUrl;

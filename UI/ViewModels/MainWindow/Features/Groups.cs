@@ -19,10 +19,8 @@ namespace FactorioModManager.ViewModels.MainWindow
                 ModNames = []
             };
 
-            // ✅ Save to service
             _groupService.AddGroup(newGroup);
 
-            // Update UI
             var groupVm = new ModGroupViewModel
             {
                 Name = newGroup.Name,
@@ -30,7 +28,6 @@ namespace FactorioModManager.ViewModels.MainWindow
             };
             UpdateGroupStatus(groupVm);
             Groups.Add(groupVm);
-
             SetStatus($"Created group: {groupName}");
         }
 
@@ -43,10 +40,9 @@ namespace FactorioModManager.ViewModels.MainWindow
                 return;
 
             var enableGroup = group.EnabledCount < group.TotalCount;
-
             foreach (var modName in group.ModNames)
             {
-                var mod = _modsCache.Items.FirstOrDefault(m => m.Title == modName);
+                var mod = _allMods.FirstOrDefault(m => m.Title == modName);
                 if (mod != null && mod.IsEnabled != enableGroup)
                 {
                     mod.IsEnabled = enableGroup;
@@ -56,7 +52,6 @@ namespace FactorioModManager.ViewModels.MainWindow
 
             this.RaisePropertyChanged(nameof(ModCountSummary));
             UpdateGroupStatus(group);
-
             SetStatus($"Group '{group.Name}' {(enableGroup ? "enabled" : "disabled")}");
         }
 
@@ -79,11 +74,8 @@ namespace FactorioModManager.ViewModels.MainWindow
 
             SelectedGroup.ModNames.Add(SelectedMod.Title);
             SelectedMod.GroupName = SelectedGroup.Name;
-
-            // ✅ Save changes
             SaveGroupChanges(SelectedGroup);
             UpdateGroupStatus(SelectedGroup);
-
             SetStatus($"Added '{SelectedMod.Title}' to group '{SelectedGroup.Name}'");
         }
 
@@ -99,7 +91,6 @@ namespace FactorioModManager.ViewModels.MainWindow
             }
 
             var addedCount = 0;
-
             foreach (var mod in SelectedMods.ToList())
             {
                 if (!SelectedGroup.ModNames.Contains(mod.Title))
@@ -141,10 +132,8 @@ namespace FactorioModManager.ViewModels.MainWindow
 
             SelectedGroup.ModNames.Remove(SelectedMod.Title);
             SelectedMod.GroupName = null;
-
             SaveGroupChanges(SelectedGroup);
             UpdateGroupStatus(SelectedGroup);
-
             SetStatus($"Removed '{SelectedMod.Title}' from group '{SelectedGroup.Name}'");
         }
 
@@ -160,7 +149,6 @@ namespace FactorioModManager.ViewModels.MainWindow
             }
 
             var removedCount = 0;
-
             foreach (var mod in SelectedMods.ToList())
             {
                 if (SelectedGroup.ModNames.Contains(mod.Title))
@@ -191,12 +179,10 @@ namespace FactorioModManager.ViewModels.MainWindow
             if (group == null)
                 return;
 
-            // ✅ Use DeleteGroup from service
             _groupService.DeleteGroup(group.Name);
             Groups.Remove(group);
 
-            // Clear group name from mods
-            foreach (var mod in _modsCache.Items.Where(m => m.GroupName == group.Name))
+            foreach (var mod in _allMods.Where(m => m.GroupName == group.Name))
             {
                 mod.GroupName = null;
             }
@@ -233,14 +219,12 @@ namespace FactorioModManager.ViewModels.MainWindow
                 return;
             }
 
-            // Check for duplicate names
             if (Groups.Any(g => g.Name.Equals(newName, System.StringComparison.OrdinalIgnoreCase) && g != group))
             {
                 SetStatus($"A group named '{newName}' already exists", LogLevel.Warning);
                 return;
             }
 
-            // ✅ Create updated group with new name
             var updatedGroup = new Models.ModGroup
             {
                 Name = newName,
@@ -249,14 +233,11 @@ namespace FactorioModManager.ViewModels.MainWindow
                 Color = null
             };
 
-            // ✅ Use UpdateGroup(oldName, newGroup) from service
             _groupService.UpdateGroup(oldName, updatedGroup);
-
             group.Name = newName;
             group.IsRenaming = false;
 
-            // Update mods that reference this group
-            foreach (var mod in _modsCache.Items.Where(m => m.GroupName == oldName))
+            foreach (var mod in _allMods.Where(m => m.GroupName == oldName))
             {
                 mod.GroupName = newName;
             }
@@ -269,8 +250,7 @@ namespace FactorioModManager.ViewModels.MainWindow
         /// </summary>
         private void UpdateGroupStatus(ModGroupViewModel group)
         {
-            var modsInGroup = _modsCache.Items.Where(m => group.ModNames.Contains(m.Title)).ToList();
-
+            var modsInGroup = _allMods.Where(m => group.ModNames.Contains(m.Title)).ToList();
             group.TotalCount = modsInGroup.Count;
             group.EnabledCount = modsInGroup.Count(m => m.IsEnabled);
         }
@@ -288,7 +268,6 @@ namespace FactorioModManager.ViewModels.MainWindow
                 Color = null
             };
 
-            // ✅ Use UpdateGroup(oldName, newGroup) - oldName is same as current name
             _groupService.UpdateGroup(group.Name, modelGroup);
         }
     }
