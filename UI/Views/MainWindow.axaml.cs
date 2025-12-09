@@ -22,15 +22,13 @@ namespace FactorioModManager.Views
 
         public MainWindow()
         {
-            InitializeComponent();
-            _mouseNavHandler = new MouseNavigationHandler(this);
-
             // Set DataContext from DI
             DataContext = ServiceContainer.Instance.Resolve<MainWindowViewModel>();
-
+            _mouseNavHandler = new MouseNavigationHandler(this);
             using var stream = AssetLoader.Open(
                 new Uri("avares://FactorioModManager/Assets/FMM.png"));
             Icon = new WindowIcon(new Bitmap(stream));
+            InitializeComponent();
         }
 
         private async void Window_Loaded(object? sender, RoutedEventArgs e)

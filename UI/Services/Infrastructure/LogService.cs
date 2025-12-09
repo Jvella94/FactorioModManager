@@ -113,10 +113,16 @@ namespace FactorioModManager.Services.Infrastructure
                 if (!File.Exists(_logFilePath))
                     return;
 
-                var lines = File.ReadAllLines(_logFilePath);
-                var recentLines = lines.TakeLast(MAX_MEMORY_LOGS);
+                using var fileStream = new FileStream(
+                  _logFilePath,
+                  FileMode.Open,
+                  FileAccess.Read,
+                  FileShare.ReadWrite); // Allow other processes/threads to write
 
-                foreach (var line in recentLines)
+                using var reader = new StreamReader(fileStream);
+
+                string? line;
+                while ((line = reader.ReadLine()) != null)
                 {
                     var entry = ParseLogLine(line);
                     if (entry != null)
@@ -125,9 +131,9 @@ namespace FactorioModManager.Services.Infrastructure
                     }
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // Ignore failures loading old logs
+                LogError($"Could not load logs from log file {_logFilePath}", ex);
             }
         }
 

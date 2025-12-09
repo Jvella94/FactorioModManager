@@ -11,7 +11,8 @@
         Title="Factorio Mod Manager"
         Width="1500" Height="850"
         MinWidth="1000" MinHeight="700"
-        Loaded="Window_Loaded">
+        Loaded="Window_Loaded"
+        x:Name="RootWindow">
 
   <Window.Resources>
     <converter:IsNotGameDependencyConverter x:Key="IsNotGameDependencyConverter" />
@@ -230,147 +231,160 @@
 
         <ScrollViewer>
           <Grid>
-            <StackPanel Spacing="10" IsVisible="{Binding HasSelectedMod}">
+            <!-- Real details only when a mod is selected -->
+            <Grid IsVisible="{Binding ElementName=RootWindow, Path=DataContext.HasSelectedMod}">
+              <!-- DataContext = SelectedMod for property bindings -->
+              <Grid.DataContext>
+                <Binding Path="SelectedMod" />
+              </Grid.DataContext>
 
-              <!-- Navigation buttons - Previous wider, Next narrower -->
-              <Grid ColumnDefinitions="*,80">
-                <Button Grid.Column="0" Content="◀ Previous" Command="{Binding NavigateBackCommand}" />
-                <Button Grid.Column="1" Content="Next ▶" Command="{Binding NavigateForwardCommand}" Margin="5,0,0,0" />
-              </Grid>
+              <StackPanel Spacing="10">
 
-              <Separator />
+                <!-- Navigation buttons - Previous wider, Next narrower -->
+                <Grid ColumnDefinitions="*,80">
+                  <Button Grid.Column="0"
+                          Content="◀ Previous"
+                          Command="{Binding ElementName=RootWindow, Path=DataContext.NavigateBackCommand}" />
+                  <Button Grid.Column="1"
+                          Content="Next ▶"
+                          Command="{Binding ElementName=RootWindow, Path=DataContext.NavigateForwardCommand}"
+                          Margin="5,0,0,0" />
+                </Grid>
 
-              <!-- Thumbnail -->
-              <Image Source="{Binding SelectedMod.Thumbnail, TargetNullValue={x:Null}}"
-                     Width="200" Height="200"
-                     Stretch="Uniform" />
-              <!--IsVisible="{Binding SelectedMod.Thumbnail, Converter={x:Static ObjectConverters.IsNotNull}}" />-->
-
-              <TextBlock Text="{Binding SelectedMod.Title, TargetNullValue={x:Null}}"
-                         FontSize="18" FontWeight="Bold"
-                         TextWrapping="Wrap" />
-
-              <TextBlock Text="{Binding SelectedMod.Version, TargetNullValue={x:Null}}"
-                         Foreground="#888" />
-
-              <!-- Version selector -->
-              <StackPanel Spacing="5" IsVisible="{Binding SelectedMod.HasMultipleVersions}">
-                <TextBlock Text="Installed Versions:" FontWeight="Bold" />
-                <ComboBox ItemsSource="{Binding SelectedMod.AvailableVersions}"
-                          SelectedItem="{Binding SelectedMod.SelectedVersion}"
-                          HorizontalAlignment="Stretch" />
-
-                <!-- Delete old version button (only shown for non-current versions) -->
-                <Button Content="Delete This Version"
-                        Command="{Binding DeleteOldVersionCommand}"
-                        CommandParameter="{Binding SelectedMod}"
-                        HorizontalAlignment="Stretch"
-                        Background="#8B0000"
-                        IsVisible="{Binding SelectedMod.IsOldVersionSelected}" />
-              </StackPanel>
-
-              <TextBlock Text="{Binding SelectedMod.UpdateText}"
-                         Foreground="LightGreen"
-                         FontWeight="Bold"
-                         IsVisible="{Binding SelectedMod.HasUpdate}" />
-
-              <!-- Update button -->
-              <Button Content="⬇ Download and Install Update"
-                      Command="{Binding DownloadUpdateCommand}"
-                      CommandParameter="{Binding SelectedMod}"
-                      HorizontalAlignment="Stretch"
-                      Background="#2D5016"
-                      IsVisible="{Binding SelectedMod.HasUpdate}" />
-
-              <!-- Download Progress (ADD THIS) -->
-              <StackPanel Spacing="5" IsVisible="{Binding SelectedMod.IsDownloading}">
-                <ProgressBar IsIndeterminate="{Binding !SelectedMod.HasDownloadProgress}"
-                             Value="{Binding SelectedMod.DownloadProgress}"
-                             Maximum="100"
-                             Height="6"
-                             Foreground="#4CAF50" />
-
-                <TextBlock Text="{Binding SelectedMod.DownloadStatusText}"
-                           FontSize="12"
-                           Foreground="#888"
-                           TextAlignment="Center" />
-              </StackPanel>
-
-              <TextBlock Text="⚠ Unused Internal Mod"
-                         Foreground="Orange"
-                         FontWeight="Bold"
-                         IsVisible="{Binding SelectedMod.IsUnusedInternal}" />
-
-              <Separator />
-
-              <TextBlock Text="Author:" FontWeight="Bold" />
-              <TextBlock Text="{Binding SelectedMod.Author, TargetNullValue={x:Null}}" />
-
-              <TextBlock Text="Category:" FontWeight="Bold" />
-              <TextBlock Text="{Binding SelectedMod.Category, TargetNullValue={x:Null}}" />
-
-              <TextBlock Text="Group:" FontWeight="Bold" />
-              <TextBlock Text="{Binding SelectedMod.GroupName, TargetNullValue={x:Null}}" />
-
-              <TextBlock Text="Description:" FontWeight="Bold" Margin="0,10,0,0" />
-              <TextBlock Text="{Binding SelectedMod.Description, TargetNullValue={x:Null}}"
-                         TextWrapping="Wrap" />
-
-              <TextBlock Text="Dependencies:" FontWeight="Bold" Margin="0,10,0,0" />
-              <ItemsControl ItemsSource="{Binding SelectedMod.Dependencies}">
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate>
-                    <Button Content="{Binding}"
-                            Command="{Binding $parent[Window].((vmmw:MainWindowViewModel)DataContext).NavigateToDependencyCommand}"
-                            CommandParameter="{Binding}"
-                            Margin="5,2,0,2"
-                            HorizontalAlignment="Left">
-                      <Button.IsEnabled>
-                        <MultiBinding Converter="{x:Static BoolConverters.And}">
-                          <Binding Path="." Converter="{StaticResource IsNotGameDependencyConverter}" />
-                        </MultiBinding>
-                      </Button.IsEnabled>
-                    </Button>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-
-              <StackPanel Orientation="Vertical" Spacing="10" Margin="0,20,15,0">
-                <Button Content="Open Mod File"
-                        Click="OpenModFile"
-                        HorizontalAlignment="Stretch" />
-                <Button Content="View Mods That Depend On This"
-                       Command="{Binding ViewDependentsCommand}"
-                       CommandParameter="{Binding SelectedMod}"
-                       HorizontalAlignment="Stretch" />
-                <Button Content="View on Mod Portal"
-                        Command="{Binding OpenModPortalCommand}"
-                        HorizontalAlignment="Stretch" />
-                <Button Content="View Source Code"
-                        Command="{Binding OpenSourceUrlCommand}"
-                        HorizontalAlignment="Stretch"
-                        IsEnabled="{Binding SelectedMod.SourceUrl, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                <Button Content="Check for Update"
-                        Command="{Binding CheckSingleModUpdateCommand}"
-                        HorizontalAlignment="Stretch" />
-                <Button Content="View Changelog"
-                        Command="{Binding OpenChangelogCommand}"
-                        HorizontalAlignment="Stretch" />
-                <Button Content="View Version History"
-                        Command="{Binding OpenVersionHistoryCommand}"
-                        HorizontalAlignment="Stretch" />
                 <Separator />
-                <Button Content="Enable/Disable"
-                        Command="{Binding ToggleModCommand}"
-                        CommandParameter="{Binding SelectedMod}"
-                        HorizontalAlignment="Stretch" />
-                <Button Content="Remove"
-                        Command="{Binding RemoveModCommand}"
-                        CommandParameter="{Binding SelectedMod}"
-                        HorizontalAlignment="Stretch" />
+
+                <!-- Thumbnail -->
+                <Image Source="{Binding Thumbnail, TargetNullValue={x:Null}}"
+                       Width="200" Height="200"
+                       Stretch="Uniform" />
+
+                <TextBlock Text="{Binding Title, TargetNullValue={x:Null}}"
+                           FontSize="18" FontWeight="Bold"
+                           TextWrapping="Wrap" />
+
+                <TextBlock Text="{Binding Version, TargetNullValue={x:Null}}"
+                           Foreground="#888" />
+
+                <!-- Version selector -->
+                <StackPanel Spacing="5" IsVisible="{Binding HasMultipleVersions}">
+                  <TextBlock Text="Installed Versions:" FontWeight="Bold" />
+                  <ComboBox ItemsSource="{Binding AvailableVersions}"
+                            SelectedItem="{Binding SelectedVersion}"
+                            HorizontalAlignment="Stretch" />
+
+                  <!-- Delete old version button (only shown for non-current versions) -->
+                  <Button Content="Delete This Version"
+                          Command="{Binding ElementName=RootWindow, Path=DataContext.DeleteOldVersionCommand}"
+                          CommandParameter="{Binding}"
+                          HorizontalAlignment="Stretch"
+                          Background="#8B0000"
+                          IsVisible="{Binding IsOldVersionSelected}" />
+                </StackPanel>
+
+                <TextBlock Text="{Binding UpdateText}"
+                           Foreground="LightGreen"
+                           FontWeight="Bold"
+                           IsVisible="{Binding HasUpdate}" />
+
+                <!-- Update button -->
+                <Button Content="⬇ Download and Install Update"
+                        Command="{Binding ElementName=RootWindow, Path=DataContext.DownloadUpdateCommand}"
+                        CommandParameter="{Binding}"
+                        HorizontalAlignment="Stretch"
+                        Background="#2D5016"
+                        IsVisible="{Binding HasUpdate}" />
+
+                <!-- Download Progress -->
+                <StackPanel Spacing="5" IsVisible="{Binding IsDownloading}">
+                  <ProgressBar IsIndeterminate="{Binding !HasDownloadProgress}"
+                               Value="{Binding DownloadProgress}"
+                               Maximum="100"
+                               Height="6"
+                               Foreground="#4CAF50" />
+
+                  <TextBlock Text="{Binding DownloadStatusText}"
+                             FontSize="12"
+                             Foreground="#888"
+                             TextAlignment="Center" />
+                </StackPanel>
+
+                <TextBlock Text="⚠ Unused Internal Mod"
+                           Foreground="Orange"
+                           FontWeight="Bold"
+                           IsVisible="{Binding IsUnusedInternal}" />
+
+                <Separator />
+
+                <TextBlock Text="Author:" FontWeight="Bold" />
+                <TextBlock Text="{Binding Author, TargetNullValue={x:Null}}" />
+
+                <TextBlock Text="Category:" FontWeight="Bold" />
+                <TextBlock Text="{Binding Category, TargetNullValue={x:Null}}" />
+
+                <TextBlock Text="Group:" FontWeight="Bold" />
+                <TextBlock Text="{Binding GroupName, TargetNullValue={x:Null}}" />
+
+                <TextBlock Text="Description:" FontWeight="Bold" Margin="0,10,0,0" />
+                <TextBlock Text="{Binding Description, TargetNullValue={x:Null}}"
+                           TextWrapping="Wrap" />
+
+                <TextBlock Text="Dependencies:" FontWeight="Bold" Margin="0,10,0,0" />
+                <ItemsControl ItemsSource="{Binding Dependencies}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Button Content="{Binding}"
+                              Command="{Binding ElementName=RootWindow, Path=DataContext.NavigateToDependencyCommand}"
+                              CommandParameter="{Binding}"
+                              Margin="5,2,0,2"
+                              HorizontalAlignment="Left">
+                        <Button.IsEnabled>
+                          <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="." Converter="{StaticResource IsNotGameDependencyConverter}" />
+                          </MultiBinding>
+                        </Button.IsEnabled>
+                      </Button>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <StackPanel Orientation="Vertical" Spacing="10" Margin="0,20,15,0">
+                  <Button Content="Open Mod File"
+                          Click="OpenModFile"
+                          HorizontalAlignment="Stretch" />
+                  <Button Content="View Mods That Depend On This"
+                          Command="{Binding ElementName=RootWindow, Path=DataContext.ViewDependentsCommand}"
+                          CommandParameter="{Binding}"
+                          HorizontalAlignment="Stretch" />
+                  <Button Content="View on Mod Portal"
+                          Command="{Binding ElementName=RootWindow, Path=DataContext.OpenModPortalCommand}"
+                          HorizontalAlignment="Stretch" />
+                  <Button Content="View Source Code"
+                          Command="{Binding ElementName=RootWindow, Path=DataContext.OpenSourceUrlCommand}"
+                          HorizontalAlignment="Stretch"
+                          IsEnabled="{Binding SourceUrl, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                  <Button Content="Check for Update"
+                          Command="{Binding ElementName=RootWindow, Path=DataContext.CheckSingleModUpdateCommand}"
+                          HorizontalAlignment="Stretch" />
+                  <Button Content="View Changelog"
+                          Command="{Binding ElementName=RootWindow, Path=DataContext.OpenChangelogCommand}"
+                          HorizontalAlignment="Stretch" />
+                  <Button Content="View Version History"
+                          Command="{Binding ElementName=RootWindow, Path=DataContext.OpenVersionHistoryCommand}"
+                          HorizontalAlignment="Stretch" />
+                  <Separator />
+                  <Button Content="Enable/Disable"
+                          Command="{Binding ElementName=RootWindow, Path=DataContext.ToggleModCommand}"
+                          CommandParameter="{Binding}"
+                          HorizontalAlignment="Stretch" />
+                  <Button Content="Remove"
+                          Command="{Binding ElementName=RootWindow, Path=DataContext.RemoveModCommand}"
+                          CommandParameter="{Binding}"
+                          HorizontalAlignment="Stretch" />
+                </StackPanel>
               </StackPanel>
-            </StackPanel>
-            <!-- Show placeholder when nothing selected -->
+            </Grid>
+
+            <!-- Placeholder when nothing selected -->
             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
                         IsVisible="{Binding !HasSelectedMod}">
               <TextBlock Text="🔍 No mod selected"
