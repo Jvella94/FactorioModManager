@@ -16,6 +16,7 @@ namespace FactorioModManager.Services.Infrastructure
         private StreamWriter _logWriter;
         private readonly Timer _flushTimer;
         private const int MAX_MEMORY_LOGS = 1000;
+        private bool _disposed;
 
         public LogService()
         {
@@ -26,7 +27,6 @@ namespace FactorioModManager.Services.Infrastructure
 
             _logFilePath = Path.Combine(appDataPath, "application.log");
 
-            // Keep file open with buffered writer
             _logWriter = new StreamWriter(
                 path: _logFilePath,
                 append: true,
@@ -45,9 +45,18 @@ namespace FactorioModManager.Services.Infrastructure
 
         public void Dispose()
         {
+            if (_disposed)
+                return;
+
+            _disposed = true;
+
             _flushTimer?.Dispose();
-            _logWriter?.Flush();
-            _logWriter?.Dispose();
+
+            lock (_fileLock)
+            {
+                _logWriter?.Flush();
+                _logWriter?.Dispose();
+            }
         }
 
         public void Log(string message, LogLevel level = LogLevel.Info)
@@ -63,25 +72,36 @@ namespace FactorioModManager.Services.Infrastructure
 
         private void LogInternal(string message, LogLevel level)
         {
+            if (_disposed) return;
+
             var entry = new LogEntry(DateTime.UtcNow, message, level);
 
-            // Keep only recent logs in memory
             _logQueue.Enqueue(entry);
             while (_logQueue.Count > MAX_MEMORY_LOGS)
             {
                 _logQueue.TryDequeue(out _);
             }
 
-            // Write to buffer (not flushed immediately)
-            var line = $"[{entry.Timestamp:yyyy-MM-dd HH:mm:ss}] [{entry.Level}] {entry.Message}";
-            _logWriter.WriteLine(line);
+            try
+            {
+                lock (_fileLock)
+                {
+                    if (_disposed) return;
+                    var line = $"[{entry.Timestamp:yyyy-MM-dd HH:mm:ss}] [{entry.Level}] {entry.Message}";
+                    _logWriter?.WriteLine(line);
+                }
+            }
+            catch { }
         }
 
         private void FlushLogs()
         {
             try
             {
-                _logWriter.Flush();
+                lock (_fileLock)
+                {
+                    _logWriter?.Flush();
+                }
             }
             catch { /* Ignore */ }
         }
@@ -93,20 +113,15 @@ namespace FactorioModManager.Services.Infrastructure
                 if (!File.Exists(_logFilePath))
                     return;
 
-                lock (_fileLock)
+                var lines = File.ReadAllLines(_logFilePath);
+                var recentLines = lines.TakeLast(MAX_MEMORY_LOGS);
+
+                foreach (var line in recentLines)
                 {
-                    var lines = File.ReadAllLines(_logFilePath);
-
-                    // ✅ Load only recent logs to respect MAX_MEMORY_LOGS limit
-                    var recentLines = lines.TakeLast(MAX_MEMORY_LOGS);
-
-                    foreach (var line in recentLines)
+                    var entry = ParseLogLine(line);
+                    if (entry != null)
                     {
-                        var entry = ParseLogLine(line);
-                        if (entry != null)
-                        {
-                            _logQueue.Enqueue(entry); // ✅ Add to _logQueue instead of _logs
-                        }
+                        _logQueue.Enqueue(entry);
                     }
                 }
             }
@@ -162,18 +177,29 @@ namespace FactorioModManager.Services.Infrastructure
         {
             try
             {
-                // ✅ Clear _logQueue instead of _logs
                 while (_logQueue.TryDequeue(out _)) { }
 
-                // Clear file
                 lock (_fileLock)
                 {
+                    // ✅ Close writer, clear file, reopen writer
+                    _logWriter?.Flush();
+                    _logWriter?.Dispose();
+
                     File.WriteAllText(_logFilePath, string.Empty);
+
+                    _logWriter = new StreamWriter(
+                        path: _logFilePath,
+                        append: true,
+                        encoding: System.Text.Encoding.UTF8,
+                        bufferSize: 4096)
+                    {
+                        AutoFlush = false
+                    };
                 }
             }
             catch (Exception ex)
             {
-                // If clearing fails, log error (best effort)
+                // Log will recreate writer if needed
                 Log($"Failed to clear logs: {ex.Message}", LogLevel.Error);
             }
         }
