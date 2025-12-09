@@ -1,0 +1,37 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  
+  <Style>
+    <Style.Resources>
+      <!-- Background Colors -->
+      <SolidColorBrush x:Key="DialogBackgroundBrush">#1E1E1E</SolidColorBrush>
+      <SolidColorBrush x:Key="DialogBackgroundHoverBrush">#2D2D2D</SolidColorBrush>
+      <SolidColorBrush x:Key="DialogBackgroundPressedBrush">#3D3D3D</SolidColorBrush>
+      
+      <!-- Foreground Colors -->
+      <SolidColorBrush x:Key="DialogForegroundBrush">White</SolidColorBrush>
+      <SolidColorBrush x:Key="DialogForegroundSecondaryBrush">#CCCCCC</SolidColorBrush>
+      
+      <!-- Accent Colors -->
+      <SolidColorBrush x:Key="PrimaryBrush">#007ACC</SolidColorBrush>
+      <SolidColorBrush x:Key="PrimaryHoverBrush">#1C86D1</SolidColorBrush>
+      <SolidColorBrush x:Key="PrimaryPressedBrush">#005A9E</SolidColorBrush>
+      
+      <!-- Status Colors -->
+      <SolidColorBrush x:Key="ErrorBrush">#E51400</SolidColorBrush>
+      <SolidColorBrush x:Key="SuccessBrush">#16C60C</SolidColorBrush>
+      <SolidColorBrush x:Key="WarningBrush">#FFA500</SolidColorBrush>
+      
+      <!-- Dimensions -->
+      <x:Double x:Key="DialogSpacing">15</x:Double>
+      <x:Double x:Key="DialogPadding">20</x:Double>
+      <x:Double x:Key="DialogBorderRadius">4</x:Double>
+      
+      <!-- Font Sizes -->
+      <x:Double x:Key="DialogTitleFontSize">16</x:Double>
+      <x:Double x:Key="DialogLabelFontSize">14</x:Double>
+      <x:Double x:Key="DialogBodyFontSize">13</x:Double>
+      <x:Double x:Key="DialogSmallFontSize">12</x:Double>
+    </Style.Resources>
+  </Style>
+</Styles>

@@ -1,0 +1,32 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  
+  <!-- Base Dialog Window -->
+  <Style Selector="Window.dialog">
+    <Setter Property="Background" Value="{StaticResource DialogBackgroundBrush}"/>
+    <Setter Property="WindowStartupLocation" Value="CenterOwner"/>
+    <Setter Property="CanResize" Value="False"/>
+    <Setter Property="ShowInTaskbar" Value="False"/>
+    <Setter Property="MinWidth" Value="400"/>
+    <Setter Property="MaxWidth" Value="800"/>
+    <Setter Property="ExtendClientAreaToDecorationsHint" Value="True"/>
+  </Style>
+  
+  <!-- Small Dialog Variant -->
+  <Style Selector="Window.dialog.small">
+    <Setter Property="MinWidth" Value="300"/>
+    <Setter Property="Width" Value="400"/>
+  </Style>
+  
+  <!-- Large Dialog Variant -->
+  <Style Selector="Window.dialog.large">
+    <Setter Property="MinWidth" Value="600"/>
+    <Setter Property="Width" Value="800"/>
+  </Style>
+  
+  <!-- Full-height Dialog -->
+  <Style Selector="Window.dialog.full-height">
+    <Setter Property="Height" Value="700"/>
+    <Setter Property="CanResize" Value="True"/>
+  </Style>
+</Styles>

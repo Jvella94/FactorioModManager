@@ -1,0 +1,90 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  
+  <!-- Base Dialog Button -->
+  <Style Selector="Button.dialog-button">
+    <Setter Property="MinWidth" Value="80"/>
+    <Setter Property="Height" Value="32"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="Padding" Value="12,6"/>
+  </Style>
+  
+  <!-- Hover State -->
+  <Style Selector="Button.dialog-button:pointerover">
+    <Setter Property="Background" Value="{StaticResource DialogBackgroundHoverBrush}"/>
+  </Style>
+  
+  <!-- Pressed State -->
+  <Style Selector="Button.dialog-button:pressed">
+    <Setter Property="Background" Value="{StaticResource DialogBackgroundPressedBrush}"/>
+  </Style>
+  
+  <!-- Focus State (Keyboard Navigation) -->
+  <Style Selector="Button.dialog-button:focus-visible">
+    <Setter Property="BorderBrush" Value="{StaticResource PrimaryBrush}"/>
+    <Setter Property="BorderThickness" Value="2"/>
+  </Style>
+  
+  <!-- Disabled State -->
+  <Style Selector="Button.dialog-button:disabled">
+    <Setter Property="Opacity" Value="0.5"/>
+    <Setter Property="Cursor" Value="Arrow"/>
+  </Style>
+  
+  <!-- Primary Button (Action Button) -->
+  <Style Selector="Button.dialog-button.primary">
+    <Setter Property="Background" Value="{StaticResource PrimaryBrush}"/>
+    <Setter Property="Foreground" Value="White"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+  </Style>
+  
+  <Style Selector="Button.dialog-button.primary:pointerover">
+    <Setter Property="Background" Value="{StaticResource PrimaryHoverBrush}"/>
+  </Style>
+  
+  <Style Selector="Button.dialog-button.primary:pressed">
+    <Setter Property="Background" Value="{StaticResource PrimaryPressedBrush}"/>
+  </Style>
+  
+  <!-- Danger Button (Delete, Remove, etc.) -->
+  <Style Selector="Button.dialog-button.danger">
+    <Setter Property="Background" Value="{StaticResource ErrorBrush}"/>
+    <Setter Property="Foreground" Value="White"/>
+  </Style>
+  
+  <Style Selector="Button.dialog-button.danger:pointerover">
+    <Setter Property="Background" Value="#FF5555"/>
+  </Style>
+  
+  <Style Selector="Button.dialog-button.danger:pressed">
+    <Setter Property="Background" Value="#CC0000"/>
+  </Style>
+  
+  <!-- Success Button -->
+  <Style Selector="Button.dialog-button.success">
+    <Setter Property="Background" Value="{StaticResource SuccessBrush}"/>
+    <Setter Property="Foreground" Value="White"/>
+  </Style>
+  
+  <Style Selector="Button.dialog-button.success:pointerover">
+    <Setter Property="Background" Value="#1ED616"/>
+  </Style>
+  
+  <!-- Link Button (Text-only) -->
+  <Style Selector="Button.dialog-button.link">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Foreground" Value="{StaticResource PrimaryBrush}"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="MinWidth" Value="0"/>
+  </Style>
+  
+  <Style Selector="Button.dialog-button.link:pointerover">
+    <Setter Property="Foreground" Value="{StaticResource PrimaryHoverBrush}"/>
+    <Setter Property="Background" Value="Transparent"/>
+  </Style>
+  
+  <!-- Wide Button -->
+  <Style Selector="Button.dialog-button.wide">
+    <Setter Property="MinWidth" Value="120"/>
+  </Style>
+</Styles>

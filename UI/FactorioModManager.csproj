@@ -29,10 +29,6 @@
     </PackageReference>
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Styles\" />
-  </ItemGroup>
-
   <PropertyGroup>
     <ApplicationIcon>Assets/FMM.ico</ApplicationIcon>
   </PropertyGroup>

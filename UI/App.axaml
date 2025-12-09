@@ -8,7 +8,18 @@
   <Application.Styles>
     <FluentTheme />
     <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml" />
-    <StyleInclude Source="avares://FactorioModManager/Styles/DialogStyles.axaml" />
+  </Application.Styles>
+
+  <Application.Styles>
+    <!-- Import Theme Colors First -->
+    <StyleInclude Source="/Styles/Themes/Dialog.axaml" />
+
+    <!-- Import Dialog Styles -->
+    <StyleInclude Source="/Styles/Dialog/Windows.axaml" />
+    <StyleInclude Source="/Styles/Dialog/Text.axaml" />
+    <StyleInclude Source="/Styles/Dialog/Controls.axaml" />
+    <StyleInclude Source="/Styles/Dialog/Buttons.axaml" />
+    <StyleInclude Source="/Styles/Dialog/Layout.axaml" />
   </Application.Styles>
 
   <Application.Resources>
