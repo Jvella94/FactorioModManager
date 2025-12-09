@@ -4,6 +4,7 @@ using ReactiveUI;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.Reactive.Disposables;
 using System.Reactive.Disposables.Fluent;
 using System.Reactive.Linq;
@@ -223,14 +224,21 @@ namespace FactorioModManager.ViewModels
                 .DisposeWith(_disposables);
 
             // ✅ Notify when collection changes
-            AvailableVersions.CollectionChanged += (_, __) =>
-                this.RaisePropertyChanged(nameof(HasMultipleVersions));
+            AvailableVersions.CollectionChanged += OnAvailableVersionsChanged;
+        }
+
+        private void OnAvailableVersionsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            this.RaisePropertyChanged(nameof(HasMultipleVersions));
         }
 
         protected override void Dispose(bool disposing)
         {
             if (disposing)
             {
+                // ✅ Unsubscribe from event
+                AvailableVersions.CollectionChanged -= OnAvailableVersionsChanged;
+
                 _disposables?.Dispose();
                 _thumbnail?.Dispose();
             }

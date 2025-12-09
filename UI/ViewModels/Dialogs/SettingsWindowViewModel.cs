@@ -2,6 +2,8 @@
 using ReactiveUI;
 using System;
 using System.Reactive;
+using System.Reactive.Disposables;
+using System.Reactive.Disposables.Fluent;
 using System.Reactive.Linq;
 
 namespace FactorioModManager.ViewModels.Dialogs
@@ -9,6 +11,7 @@ namespace FactorioModManager.ViewModels.Dialogs
     public class SettingsWindowViewModel : ViewModelBase
     {
         private readonly ISettingsService _settingsService;
+        private readonly CompositeDisposable _disposables = [];
 
         private string? _modsPath;
         private string? _apiKey;
@@ -78,7 +81,8 @@ namespace FactorioModManager.ViewModels.Dialogs
 
             // ✅ Clear validation error when path changes
             this.WhenAnyValue(x => x.ModsPath)
-                .Subscribe(_ => ValidationError = null);
+              .Subscribe(_ => ValidationError = null)
+              .DisposeWith(_disposables);
         }
 
         internal bool Validate()
@@ -114,6 +118,16 @@ namespace FactorioModManager.ViewModels.Dialogs
             _settingsService.SetUsername(string.IsNullOrWhiteSpace(Username) ? null : Username);
             _settingsService.SetToken(string.IsNullOrWhiteSpace(Token) ? null : Token);
             _settingsService.SetKeepOldModFiles(KeepOldModFiles);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _disposables?.Dispose();
+            }
+
+            base.Dispose(disposing);
         }
     }
 }
