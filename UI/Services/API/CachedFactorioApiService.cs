@@ -23,7 +23,7 @@ namespace FactorioModManager.Services.API
 
         public async Task<ModDetailsShortDTO?> GetModDetailsAsync(string modName)
         {
-            // Check cache first
+            // Check cache WITHOUT holding lock across API call
             await _semaphore.WaitAsync();
             try
             {
@@ -39,7 +39,7 @@ namespace FactorioModManager.Services.API
             }
             finally
             {
-                _semaphore.Release();
+                _semaphore.Release(); // Release BEFORE slow API call
             }
 
             var result = await _inner.GetModDetailsAsync(modName);

@@ -10,12 +10,13 @@ namespace FactorioModManager.Services.Infrastructure
 {
     public class LogService : ILogService
     {
-        // private static readonly Lazy<LogService> _instance = new(() => new LogService());
-        // public static LogService Instance => _instance.Value;
-
         private readonly ConcurrentBag<LogEntry> _logs = [];
         private readonly string _logFilePath;
         private readonly Lock _fileLock = new();
+        private readonly ConcurrentQueue<LogEntry> _logQueue = new();
+        private readonly StreamWriter _logWriter;
+        private readonly Timer _flushTimer;
+        private const int MAX_MEMORY_LOGS = 1000;
 
         public LogService()
         {
@@ -26,7 +27,24 @@ namespace FactorioModManager.Services.Infrastructure
             Directory.CreateDirectory(appDataPath);
             _logFilePath = Path.Combine(appDataPath, "application.log");
 
+            // Keep file open with buffered writer
+            _logWriter = new StreamWriter(path: _logFilePath, append: true, encoding: System.Text.Encoding.UTF8, bufferSize: 4096)
+            {
+                AutoFlush = false
+            };
+
+            // Flush every 2 seconds
+            _flushTimer = new Timer(_ => FlushLogs(), null,
+                TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2));
+
             LoadLogsFromFile();
+        }
+
+        public void Dispose()
+        {
+            _flushTimer?.Dispose();
+            _logWriter?.Flush();
+            _logWriter?.Dispose();
         }
 
         public void Log(string message, LogLevel level = LogLevel.Info)
@@ -42,15 +60,27 @@ namespace FactorioModManager.Services.Infrastructure
 
         private void LogInternal(string message, LogLevel level)
         {
-            var entry = new LogEntry
-            (
-                Timestamp: DateTime.UtcNow,
-                Level: level,
-                Message: message
-            );
+            var entry = new LogEntry(DateTime.UtcNow, message, level);
 
-            _logs.Add(entry);
-            WriteToFile(entry);
+            // Keep only recent logs in memory
+            _logQueue.Enqueue(entry);
+            while (_logQueue.Count > MAX_MEMORY_LOGS)
+            {
+                _logQueue.TryDequeue(out _);
+            }
+
+            // Write to buffer (not flushed immediately)
+            var line = $"[{entry.Timestamp:yyyy-MM-dd HH:mm:ss}] [{entry.Level}] {entry.Message}";
+            _logWriter.WriteLine(line);
+        }
+
+        private void FlushLogs()
+        {
+            try
+            {
+                _logWriter.Flush();
+            }
+            catch { /* Ignore */ }
         }
 
         private void WriteToFile(LogEntry entry)

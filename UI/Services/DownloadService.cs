@@ -5,6 +5,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace FactorioModManager.Services
@@ -23,7 +24,8 @@ namespace FactorioModManager.Services
             string modTitle,
             string version,
             string downloadUrl,
-            IProgress<(long bytesDownloaded, long? totalBytes)>? progress = null)
+            IProgress<(long bytesDownloaded, long? totalBytes)>? progress = null,
+            CancellationToken cancellationToken = default)
         {
             try
             {
@@ -41,8 +43,7 @@ namespace FactorioModManager.Services
                 var fileName = $"{modName}_{version}.zip";
                 var filePath = Path.Combine(modsDirectory, fileName);
 
-                var downloadResult = await DownloadFileWithProgressAsync(
-                    authenticatedUrl, filePath, token, progress);
+                var downloadResult = await DownloadFileAsync(authenticatedUrl, filePath, progress, cancellationToken);
 
                 if (!downloadResult.Success)
                     return downloadResult;
@@ -181,47 +182,46 @@ namespace FactorioModManager.Services
             }
         }
 
-        private async Task<Result<bool>> DownloadFileWithProgressAsync(
-            string url,
-            string destinationPath,
-            string tokenForLogging,
-            IProgress<(long bytesDownloaded, long? totalBytes)>? progress)
+        public async Task<Result<bool>> DownloadFileAsync(
+      string url,
+      string destinationPath,
+      IProgress<(long, long?)>? progress = null,
+      CancellationToken cancellationToken = default)
         {
             try
             {
-                _logService.Log($"Downloading from {url.Replace(tokenForLogging, "***")}");
-
-                using var response = await _httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+                using var response = await _httpClient.GetAsync(url,
+                    HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
                 if (!response.IsSuccessStatusCode)
-                {
-                    _logService.LogWarning($"Download failed: {response.StatusCode}");
                     return Result<bool>.Fail($"HTTP {response.StatusCode}", ErrorCode.DownloadFailed);
-                }
 
-                var totalBytes = response.Content.Headers.ContentLength ?? -1;
-                using var contentStream = await response.Content.ReadAsStreamAsync();
-                using var fileStream = new FileStream(destinationPath, FileMode.Create, FileAccess.Write,
-                    FileShare.None, Constants.UI.BufferSize, true);
+                var totalBytes = response.Content.Headers.ContentLength;
+                using var contentStream = await response.Content.ReadAsStreamAsync(cancellationToken);
+                using var fileStream = new FileStream(destinationPath, FileMode.Create,
+                    FileAccess.Write, FileShare.None, 8192, useAsync: true);
 
-                var buffer = new byte[Constants.UI.BufferSize];
+                var buffer = new byte[8192];
                 long totalRead = 0;
                 int bytesRead;
 
-                while ((bytesRead = await contentStream.ReadAsync(buffer)) > 0)
+                while ((bytesRead = await contentStream.ReadAsync(buffer, cancellationToken)) > 0)
                 {
-                    await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead));
+                    await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken);
                     totalRead += bytesRead;
-
-                    progress?.Report((totalRead, totalBytes > 0 ? totalBytes : null));
+                    progress?.Report((totalRead, totalBytes));
                 }
 
-                _logService.Log($"Downloaded {totalRead} bytes to {Path.GetFileName(destinationPath)}");
                 return Result<bool>.Ok(true);
+            }
+            catch (OperationCanceledException)
+            {
+                if (File.Exists(destinationPath))
+                    File.Delete(destinationPath);
+                throw;
             }
             catch (Exception ex)
             {
-                _logService.LogError($"Error during file download: {ex.Message}", ex);
                 return Result<bool>.Fail(ex.Message, ErrorCode.NetworkError);
             }
         }

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 
 namespace FactorioModManager.Services
 {
@@ -26,17 +27,31 @@ namespace FactorioModManager.Services
 
     public class ModMetadataService : IModMetadataService
     {
+        private bool _isDirty = false;
+        private readonly Timer _saveTimer;
         private readonly string _metadataPath;
         private Dictionary<string, ModMetadata> _cache = [];
-        private static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = true };
         private readonly ILogService _logService;
 
         public ModMetadataService(ILogService logService)
         {
+            _logService = logService;
+            // Auto-save every 5 seconds if dirty
+            _saveTimer = new Timer(AutoSave, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
             var modsDir = ModPathHelper.GetModsDirectory();
             _metadataPath = Path.Combine(modsDir, "mod-metadata.json");
             LoadMetadata();
-            _logService = logService;
+        }
+
+        private void MarkDirty() => _isDirty = true;
+
+        private void AutoSave(object? state)
+        {
+            if (_isDirty)
+            {
+                SaveMetadata();
+                _isDirty = false;
+            }
         }
 
         private void LoadMetadata()
@@ -69,7 +84,7 @@ namespace FactorioModManager.Services
                 {
                     Metadata = [.. _cache.Values]
                 };
-                var json = JsonSerializer.Serialize(collection, SerializerOptions);
+                var json = JsonSerializer.Serialize(collection, Constants.JsonHelper.IndentedOnly);
                 File.WriteAllText(_metadataPath, json);
             }
             catch (Exception ex)
@@ -88,7 +103,6 @@ namespace FactorioModManager.Services
             return metadata;
         }
 
-        // ADDED: Ensure all loaded mods have metadata entries
         public void EnsureModsExist(IEnumerable<string> modNames)
         {
             bool needsSave = false;
@@ -112,7 +126,9 @@ namespace FactorioModManager.Services
             var metadata = GetOrCreate(modName);
             metadata.Category = category;
             metadata.LastChecked = DateTime.UtcNow;
-            SaveMetadata();
+            MarkDirty();
+
+            _logService.LogDebug($"Saved category for {modName}: {category ?? "(none)"}");
         }
 
         public void UpdateSourceUrl(string modName, string? sourceUrl, bool wasChecked = true)
@@ -121,7 +137,7 @@ namespace FactorioModManager.Services
             metadata.SourceUrl = sourceUrl;
             metadata.SourceUrlChecked = wasChecked;
             metadata.LastChecked = DateTime.UtcNow;
-            SaveMetadata();
+            MarkDirty();
 
             _logService.LogDebug($"Saved source URL for {modName}: {sourceUrl ?? "(none)"}");
         }
@@ -191,13 +207,11 @@ namespace FactorioModManager.Services
             return _cache.TryGetValue(modName, out var metadata) ? metadata.LatestVersion : null;
         }
 
-        // ADDED: Get update status
         public bool GetHasUpdate(string modName)
         {
             return _cache.TryGetValue(modName, out var metadata) && metadata.HasUpdate;
         }
 
-        // ADDED: Clear update flag (after successful update)
         public void ClearUpdate(string modName)
         {
             if (_cache.TryGetValue(modName, out var metadata))
@@ -209,7 +223,6 @@ namespace FactorioModManager.Services
             }
         }
 
-        // ADDED: Mark multiple mods as updated (batch operation)
         public void UpdateLatestVersion(string modName, string version, bool hasUpdate)
         {
             var metadata = GetOrCreate(modName);
@@ -219,7 +232,6 @@ namespace FactorioModManager.Services
             SaveMetadata();
         }
 
-        // ADDED: Clear all update flags (useful for forcing fresh update check)
         public void ClearAllUpdates()
         {
             foreach (var metadata in _cache.Values)
@@ -229,5 +241,10 @@ namespace FactorioModManager.Services
             SaveMetadata();
             _logService.LogDebug("Cleared all update flags");
         }
+
+        // Add explicit save for critical operations
+        public void SaveNow() => SaveMetadata();
+
+        public void Dispose() => _saveTimer?.Dispose();
     }
 }

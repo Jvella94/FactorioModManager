@@ -19,7 +19,6 @@ namespace FactorioModManager.Services
     {
         private readonly string _settingsPath;
         private readonly Settings _settings;
-        private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
         private readonly ILogService _logService;
 
         public SettingsService(ILogService logService)
@@ -122,7 +121,7 @@ namespace FactorioModManager.Services
         {
             try
             {
-                var json = JsonSerializer.Serialize(_settings, JsonOptions);
+                var json = JsonSerializer.Serialize(_settings, Constants.JsonHelper.IndentedOnly);
                 File.WriteAllText(_settingsPath, json);
             }
             catch (Exception ex)

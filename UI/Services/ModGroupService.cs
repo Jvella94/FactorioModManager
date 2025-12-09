@@ -11,7 +11,6 @@ namespace FactorioModManager.Services
     public class ModGroupService : IModGroupService
     {
         private readonly string _groupsFilePath;
-        private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
         private readonly ILogService _logService;
 
         public ModGroupService(ILogService logService)
@@ -45,7 +44,7 @@ namespace FactorioModManager.Services
             try
             {
                 var collection = new ModGroupCollection { Groups = groups };
-                var json = JsonSerializer.Serialize(collection, JsonOptions);
+                var json = JsonSerializer.Serialize(collection, Constants.JsonHelper.IndentedOnly);
                 File.WriteAllText(_groupsFilePath, json);
             }
             catch (Exception ex)

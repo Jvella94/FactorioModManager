@@ -1,5 +1,6 @@
 ﻿using FactorioModManager.Models;
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace FactorioModManager.Services
@@ -14,7 +15,8 @@ namespace FactorioModManager.Services
             string modTitle,
             string version,
             string downloadUrl,
-            IProgress<(long bytesDownloaded, long? totalBytes)>? progress = null);
+            IProgress<(long bytesDownloaded, long? totalBytes)>? progress = null,
+            CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Verifies a downloaded mod file is valid
@@ -30,5 +32,7 @@ namespace FactorioModManager.Services
         /// Deletes old versions of a mod (if setting enabled)
         /// </summary>
         void DeleteOldVersions(string modName, string currentVersionFile);
+
+        Task<Result<bool>> DownloadFileAsync(string url, string destinationPath, IProgress<(long, long?)>? progress = null, CancellationToken cancellationToken = default);
     }
 }

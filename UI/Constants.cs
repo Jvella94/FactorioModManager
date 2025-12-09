@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 
 namespace FactorioModManager
 {
@@ -239,6 +240,20 @@ namespace FactorioModManager
                     .Select(ExtractDependencyName)
                     .Where(name => !string.IsNullOrEmpty(name) && !IsGameDependency(name))];
             }
+        }
+
+        public static class JsonHelper
+        {
+            public static readonly JsonSerializerOptions CamelCase = new()
+            {
+                WriteIndented = true,
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            };
+
+            public static readonly JsonSerializerOptions IndentedOnly = new()
+            {
+                WriteIndented = true,
+            };
         }
     }
 }

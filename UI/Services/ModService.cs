@@ -13,11 +13,12 @@ using System.Threading.Tasks;
 
 namespace FactorioModManager.Services
 {
-    public class ModService : IModService
+    public class ModService(
+        ILogService logService,
+        ISettingsService settingsService) : IModService
     {
-        private readonly ILogService _logService;
-        private readonly ISettingsService _settingsService;
-        private readonly HttpClient _httpClient;
+        private readonly ILogService _logService = logService;
+        private readonly ISettingsService _settingsService = settingsService;
 
         // ✅ Version cache
         private readonly Dictionary<string, List<string>> _versionCache = [];
@@ -29,16 +30,6 @@ namespace FactorioModManager.Services
         private int _thumbnailCacheHits = 0;
 
         private int _thumbnailCacheMisses = 0;
-
-        public ModService(
-            ILogService logService,
-            ISettingsService settingsService,
-            HttpClient httpClient)
-        {
-            _logService = logService;
-            _settingsService = settingsService;
-            _httpClient = httpClient;
-        }
 
         public string GetModsDirectory()
         {
@@ -305,31 +296,12 @@ namespace FactorioModManager.Services
             var modsDirectory = GetModsDirectory();
             var fileName = $"{modName}_{version}.zip";
             var filePath = Path.Combine(modsDirectory, fileName);
-
             try
             {
                 _logService.Log($"Downloading {fileName} from {downloadUrl}");
-
-                using var response = await _httpClient.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead);
-                response.EnsureSuccessStatusCode();
-
-                var totalBytes = response.Content.Headers.ContentLength ?? -1;
-                using var contentStream = await response.Content.ReadAsStreamAsync();
-                using var fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write,
-                    FileShare.None, Constants.UI.BufferSize, true);
-
-                var buffer = new byte[Constants.UI.BufferSize];
-                long totalRead = 0;
-                int bytesRead;
-
-                while ((bytesRead = await contentStream.ReadAsync(buffer)) > 0)
-                {
-                    await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead));
-                    totalRead += bytesRead;
-                    progress?.Report((totalRead, totalBytes > 0 ? totalBytes : null));
-                }
-
-                _logService.Log($"Successfully downloaded {fileName} ({totalRead} bytes)");
+                var downloadService = ServiceContainer.Instance.Resolve<IDownloadService>();
+                await downloadService.DownloadFileAsync(modName, filePath, progress);
+                _logService.Log($"Successfully downloaded {fileName}");
 
                 // ✅ Clear version cache
                 _versionCache.Remove(modName);
@@ -397,13 +369,7 @@ namespace FactorioModManager.Services
                     })]
                 };
 
-                var options = new JsonSerializerOptions
-                {
-                    WriteIndented = true,
-                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-                };
-
-                var json = JsonSerializer.Serialize(modList, options);
+                var json = JsonSerializer.Serialize(modList, Constants.JsonHelper.CamelCase);
                 File.WriteAllText(modListPath, json);
             }
             catch (Exception ex)
