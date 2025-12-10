@@ -1,10 +1,9 @@
-using FactorioModManager.Models;
 using FactorioModManager.Services.Settings;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace FactorioModManager.Domain
+namespace FactorioModManager.Models.Domain
 {
     public interface IModDependencyValidator
     {
@@ -116,7 +115,7 @@ namespace FactorioModManager.Domain
                     case "space-age":
                     case "quality":
                     case "elevated-rails":
-                        if (!_settingsService.GetHasSpaceAgeDlc())
+                        if (!_settingsService.GetHasSpaceAgeDLC())
                         {
                             if (!missingBuiltIn.Contains("Space Age DLC"))
                                 missingBuiltIn.Add("Space Age DLC (includes Quality & Elevated Rails)");
