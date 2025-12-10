@@ -1,5 +1,5 @@
 using FactorioModManager.Models;
-using FactorioModManager.Services;
+using FactorioModManager.Services.Settings;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,9 +9,13 @@ namespace FactorioModManager.Domain
     public interface IModDependencyValidator
     {
         ValidationResult ValidateDependencies(ModInfo mod, IEnumerable<ModInfo> installedMods);
+
         List<string> GetMissingMandatoryDeps(ModInfo mod, IEnumerable<ModInfo> installedMods);
+
         List<string> GetIncompatibleMods(ModInfo mod, IEnumerable<ModInfo> installedMods);
+
         List<string> GetDisabledDependencies(ModInfo mod, IEnumerable<ModInfo> installedMods, Dictionary<string, bool> enabledStates);
+
         List<string> GetMissingBuiltInDependencies(ModInfo mod);
     }
 

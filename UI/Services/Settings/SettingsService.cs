@@ -3,7 +3,7 @@ using System;
 using System.IO;
 using System.Text.Json;
 
-namespace FactorioModManager.Services
+namespace FactorioModManager.Services.Settings
 {
     public interface ISettingsService
     {
@@ -51,7 +51,14 @@ namespace FactorioModManager.Services
         bool GetHasSpaceAgeDlc();
 
         void SetHasSpaceAgeDlc(bool value);
+
+        string? GetFactorioDataPath();
+
+        void SetFactorioDataPath(string? path);
+
+        public event Action? FactorioPathChanged;
     }
+
     public class AppSettings
     {
         public string? FactorioModsPath { get; set; }
@@ -65,6 +72,7 @@ namespace FactorioModManager.Services
         public bool CheckForAppUpdates { get; set; } = true;
         public string? FactorioVersion { get; set; }
         public bool HasSpaceAgeDlc { get; set; }
+        public string? FactorioDataPath { get; set; }
     }
 
     public class SettingsService : ISettingsService
@@ -258,6 +266,7 @@ namespace FactorioModManager.Services
         {
             _settings.FactorioExePath = path;
             SaveSettings();
+            FactorioPathChanged?.Invoke();
         }
 
         public DateTime? GetLastAppUpdateCheck() => _settings.LastAppUpdateCheck;
@@ -291,5 +300,15 @@ namespace FactorioModManager.Services
             _settings.HasSpaceAgeDlc = value;
             SaveSettings();
         }
+
+        public string? GetFactorioDataPath() => _settings.FactorioDataPath;
+
+        public void SetFactorioDataPath(string? path)
+        {
+            _settings.FactorioDataPath = path;
+            SaveSettings();
+        }
+
+        public event Action? FactorioPathChanged;
     }
 }

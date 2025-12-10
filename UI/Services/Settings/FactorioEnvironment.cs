@@ -8,12 +8,22 @@ namespace FactorioModManager.Services.Settings
     public interface IFactorioEnvironment
     {
         string? GetExecutablePath();
+
         void SetExecutablePath(string path);
+
         string? GetVersion();
+
         void SetVersion(string? version);
+
         bool HasSpaceAgeDlc();
+
         void SetHasSpaceAgeDlc(bool value);
+
         void DetectEnvironment();
+
+        string? GetFactorioDataPath();
+
+        void SetFactorioDataPath(string? path);
     }
 
     public class FactorioEnvironment : IFactorioEnvironment

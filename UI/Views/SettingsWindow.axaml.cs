@@ -3,6 +3,7 @@ using Avalonia.Platform.Storage;
 using FactorioModManager.Models;
 using FactorioModManager.Services;
 using FactorioModManager.Services.Infrastructure;
+using FactorioModManager.Services.Settings;
 using FactorioModManager.ViewModels.Dialogs;
 using FactorioModManager.Views.Base;
 using System;
@@ -152,7 +153,7 @@ namespace FactorioModManager.Views
                 FactorioPathStatus.Foreground = Avalonia.Media.Brushes.Gray;
                 FactorioPathStatus.Text = "ℹ Path will be auto-detected when launching Factorio";
             }
-            else if (File.Exists(path))
+            else if (IsValidPath(path))
             {
                 FactorioPathStatus.Foreground = Avalonia.Media.Brushes.LightGreen;
                 FactorioPathStatus.Text = $"✓ Valid executable found";
@@ -160,8 +161,13 @@ namespace FactorioModManager.Views
             else
             {
                 FactorioPathStatus.Foreground = Avalonia.Media.Brushes.Red;
-                FactorioPathStatus.Text = "❌ File does not exist at this path";
+                FactorioPathStatus.Text = "❌ File does not exist sat this path";
             }
+        }
+
+        private static bool IsValidPath(string path)
+        {
+            return !string.IsNullOrEmpty(path) && Path.IsPathFullyQualified(path) && File.Exists(path);
         }
     }
 }

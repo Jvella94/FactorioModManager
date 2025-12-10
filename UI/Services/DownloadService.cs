@@ -1,5 +1,6 @@
 ﻿using FactorioModManager.Models;
 using FactorioModManager.Services.Infrastructure;
+using FactorioModManager.Services.Settings;
 using System;
 using System.IO;
 using System.IO.Compression;

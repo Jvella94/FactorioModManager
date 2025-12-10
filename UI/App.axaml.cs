@@ -5,6 +5,7 @@ using Avalonia.Markup.Xaml;
 using FactorioModManager.Services;
 using FactorioModManager.Services.Infrastructure;
 using FactorioModManager.Services.Mods;
+using FactorioModManager.Services.Settings;
 using FactorioModManager.Views;
 using Microsoft.Extensions.DependencyInjection;
 using System;

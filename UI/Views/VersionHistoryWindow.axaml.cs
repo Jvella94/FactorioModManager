@@ -1,7 +1,7 @@
 ﻿using FactorioModManager.Models.DTO;
-using FactorioModManager.Services;
 using FactorioModManager.Services.Infrastructure;
 using FactorioModManager.Services.Mods;
+using FactorioModManager.Services.Settings;
 using FactorioModManager.ViewModels.Dialogs;
 using FactorioModManager.Views.Base;
 using System.Collections.Generic;

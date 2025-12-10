@@ -1,4 +1,4 @@
-﻿using FactorioModManager.Services;
+﻿using FactorioModManager.Services.Settings;
 using ReactiveUI;
 using System;
 using System.Reactive;

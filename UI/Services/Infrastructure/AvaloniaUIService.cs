@@ -1,5 +1,6 @@
 ﻿using Avalonia.Controls;
 using Avalonia.Threading;
+using FactorioModManager.Services.Settings;
 using FactorioModManager.Views.Dialogs;
 using System;
 using System.Diagnostics;

@@ -1,8 +1,8 @@
 ﻿using Avalonia.Controls;
 using FactorioModManager.Models.DTO;
-using FactorioModManager.Services;
 using FactorioModManager.Services.Infrastructure;
 using FactorioModManager.Services.Mods;
+using FactorioModManager.Services.Settings;
 using ReactiveUI;
 using System;
 using System.Collections.ObjectModel;
