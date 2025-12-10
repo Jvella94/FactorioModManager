@@ -1,5 +1,6 @@
 ﻿using FactorioModManager.Models.API;
 using FactorioModManager.Models.DTO;
+using FactorioModManager.Models.Mapping;
 using FactorioModManager.Services.Infrastructure;
 using System;
 using System.Collections.Generic;

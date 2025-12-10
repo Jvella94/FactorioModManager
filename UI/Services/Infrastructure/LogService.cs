@@ -80,7 +80,12 @@ namespace FactorioModManager.Services.Infrastructure
         {
             if (_disposed) return;
 
-            var entry = new LogEntry(DateTime.UtcNow, message, level);
+            var entry = new LogEntry
+            {
+                Timestamp = DateTime.UtcNow,
+                Message = message,
+                Level = level
+            };
 
             _logQueue.Enqueue(entry);
             while (_logQueue.Count > _maxMemoryLogs)
@@ -169,7 +174,12 @@ namespace FactorioModManager.Services.Infrastructure
 
                 var message = line[(levelEnd + 1)..].Trim();
 
-                return new LogEntry(ts, message, level);
+                return new LogEntry
+                {
+                    Timestamp = DateTime.UtcNow,
+                    Message = message,
+                    Level = level
+                };
             }
             catch (Exception ex)
             {

@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json.Serialization;
 
 namespace FactorioModManager.Models
@@ -16,11 +17,7 @@ namespace FactorioModManager.Models
         [JsonPropertyName("mods")]
         public List<string> ModNames
         {
-            get
-            {
-                _modNames.Sort();
-                return _modNames;
-            }
+            get => [.. _modNames.OrderBy(name => name)];
             set => _modNames = value;
         }
 

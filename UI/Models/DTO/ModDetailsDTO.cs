@@ -1,7 +1,5 @@
-﻿using FactorioModManager.Models.API;
-using System;
+﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace FactorioModManager.Models.DTO
 {
@@ -30,41 +28,4 @@ namespace FactorioModManager.Models.DTO
          string DownloadUrl,
          string FactorioVersion
      );
-
-    public static class ModDetailsExtensions
-    {
-        public static ModDetailsShortDTO ToShortDTO(this ModDetailsShort details)
-        {
-            return new ModDetailsShortDTO(
-                Name: details.Name,
-                Title: details.Title,
-                Category: details.Category,
-                DownloadsCount: details.DownloadsCount,
-                Releases: [.. details.Releases.Select(r => r.ToDTO())]);
-        }
-
-        public static ReleaseDTO ToDTO(this ModRelease release)
-        {
-            return new ReleaseDTO(
-                Version: release.Version,
-                ReleasedAt: release.ReleasedAt,
-                DownloadUrl: release.DownloadUrl,
-                FactorioVersion: release.InfoJson?.FactorioVersion ?? "2.0"
-            );
-        }
-
-        public static ModDetailsFullDTO ToFullDTO(this ModDetailsFull details)
-        {
-            return new ModDetailsFullDTO(
-               Name: details.Name,
-               Title: details.Title,
-               Category: details.Category,
-               DownloadsCount: details.DownloadsCount,
-               Releases: [.. details.Releases.Select(r => r.ToDTO())],
-               Changelog: details.Changelog,
-               SourceUrl: details.SourceUrl,
-               Homepage: details.Homepage
-            );
-        }
-    }
 }

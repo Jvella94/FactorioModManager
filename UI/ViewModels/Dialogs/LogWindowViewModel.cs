@@ -14,7 +14,7 @@ namespace FactorioModManager.ViewModels.Dialogs
         private readonly ILogService _logService;
         private readonly CompositeDisposable _disposables = [];
 
-        private ObservableCollection<FormattedLogEntry> _logs;
+        private ObservableCollection<LogEntry> _logs;
         private bool _isLoading = true;
 
         public bool IsLoading
@@ -23,7 +23,7 @@ namespace FactorioModManager.ViewModels.Dialogs
             private set => this.RaiseAndSetIfChanged(ref _isLoading, value);
         }
 
-        public ObservableCollection<FormattedLogEntry> Logs
+        public ObservableCollection<LogEntry> Logs
         {
             get => _logs;
             private set => this.RaiseAndSetIfChanged(ref _logs, value);
@@ -83,7 +83,7 @@ namespace FactorioModManager.ViewModels.Dialogs
             foreach (var log in rawLogs)
             {
                 // ✅ Convert raw log to formatted entry
-                Logs.Add(new FormattedLogEntry(log));
+                Logs.Add(log);
             }
 
             this.RaisePropertyChanged(nameof(LogCountText));
