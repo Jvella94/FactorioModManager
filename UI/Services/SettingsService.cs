@@ -5,7 +5,54 @@ using System.Text.Json;
 
 namespace FactorioModManager.Services
 {
-    public class Settings
+    public interface ISettingsService
+    {
+        string GetModsPath();
+
+        void SetModsPath(string path);
+
+        string? GetApiKey();
+
+        void SetApiKey(string? apiKey);
+
+        string? GetUsername();
+
+        void SetUsername(string? username);
+
+        string? GetToken();
+
+        void SetToken(string? token);
+
+        bool GetKeepOldModFiles();
+
+        void SetKeepOldModFiles(bool keep);
+
+        DateTime? GetLastModUpdateCheck();
+
+        void SetLastModUpdateCheck(DateTime dateTime);
+
+        string? GetFactorioExecutablePath();
+
+        void SetFactorioExecutablePath(string path);
+
+        DateTime? GetLastAppUpdateCheck();
+
+        void SetLastAppUpdateCheck(DateTime timestamp);
+
+        bool GetCheckForAppUpdates();
+
+        void SetCheckForAppUpdates(bool enabled);
+
+        // Factorio version & DLC info
+        string? GetFactorioVersion();
+
+        void SetFactorioVersion(string? version);
+
+        bool GetHasSpaceAgeDlc();
+
+        void SetHasSpaceAgeDlc(bool value);
+    }
+    public class AppSettings
     {
         public string? FactorioModsPath { get; set; }
         public string? ApiKey { get; set; }
@@ -23,7 +70,7 @@ namespace FactorioModManager.Services
     public class SettingsService : ISettingsService
     {
         private readonly string _settingsPath;
-        private readonly Settings _settings;
+        private readonly AppSettings _settings;
         private readonly ILogService _logService;
 
         public SettingsService(ILogService logService)
@@ -36,13 +83,13 @@ namespace FactorioModManager.Services
             _logService = logService;
         }
 
-        private Settings LoadSettings()
+        private AppSettings LoadSettings()
         {
             if (!File.Exists(_settingsPath))
             {
                 // Try to load defaults from Factorio's player-data.json
                 var (Username, Token) = LoadFactorioDefaults();
-                return new Settings
+                return new AppSettings
                 {
                     FactorioModsPath = FolderPathHelper.GetModsDirectory(),
                     Username = Username,
@@ -53,7 +100,7 @@ namespace FactorioModManager.Services
             try
             {
                 var json = File.ReadAllText(_settingsPath);
-                var settings = JsonSerializer.Deserialize<Settings>(json) ?? new Settings();
+                var settings = JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
 
                 // If mods path is not set, use default
                 if (string.IsNullOrEmpty(settings.FactorioModsPath))
@@ -75,7 +122,7 @@ namespace FactorioModManager.Services
             {
                 _logService.LogError("Failed to load settings, using defaults", ex);
                 var (Username, Token) = LoadFactorioDefaults();
-                return new Settings
+                return new AppSettings
                 {
                     FactorioModsPath = FolderPathHelper.GetModsDirectory(),
                     Username = Username,

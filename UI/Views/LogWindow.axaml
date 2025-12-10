@@ -54,7 +54,7 @@
 
         <ItemsControl ItemsSource="{Binding Logs}">
           <ItemsControl.ItemTemplate>
-            <DataTemplate x:DataType="m:FormattedLogEntry">
+            <DataTemplate x:DataType="m:LogEntry">
               <StackPanel Orientation="Horizontal" Margin="5,2">
                 <TextBlock Text="{Binding Timestamp}"
                            Foreground="Gray"

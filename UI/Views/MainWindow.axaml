@@ -475,7 +475,43 @@
     <!-- Status Bar -->
     <Border Grid.Row="3" BorderBrush="#333" BorderThickness="0,1,0,0"
             Background="#2B2B2B" Padding="10">
-      <TextBlock Text="{Binding StatusText}" />
+      <Grid ColumnDefinitions="*,Auto">
+        <!-- Status text on the left -->
+        <TextBlock Grid.Column="0"
+                   Text="{Binding StatusText}"
+                   VerticalAlignment="Center" />
+
+        <!-- Factorio version and Space Age icon on the right -->
+        <StackPanel Grid.Column="1"
+                    Orientation="Horizontal"
+                    Spacing="10"
+                    VerticalAlignment="Center"
+                    IsVisible="{Binding HasFactorioVersion}">
+
+          <!-- Factorio Version -->
+          <TextBlock Text="{Binding FactorioVersionText}"
+                     Foreground="#888"
+                     FontSize="15"
+                     VerticalAlignment="Center" />
+          
+          <!-- Factorio Icon -->
+          <Image Source="/Assets/base.png"
+                     Width="20"
+                     Height="20"
+                     VerticalAlignment="Center"
+                     ToolTip.Tip="Space Age DLC Detected"
+                     IsVisible="{Binding FactorioVersionText}" />
+
+
+          <!-- Space Age Icon -->
+          <Image Source="/Assets/space-age.png"
+                    Width="20"
+                    Height="20"
+                    VerticalAlignment="Center"
+                    ToolTip.Tip="Space Age DLC Detected"
+                    IsVisible="{Binding HasSpaceAgeDlc}" />
+        </StackPanel>
+      </Grid>
     </Border>
   </Grid>
 </Window>

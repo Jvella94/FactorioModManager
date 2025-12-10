@@ -203,7 +203,8 @@ namespace FactorioModManager.ViewModels.MainWindow
 
             try
             {
-                var thumbnail = await _modService.LoadThumbnailAsync(mod.ThumbnailPath);
+                // ✅ FIX: Use IThumbnailCache instead of IModService
+                var thumbnail = await _thumbnailCache.LoadThumbnailAsync(mod.ThumbnailPath);
                 await _uiService.InvokeAsync(() =>
                 {
                     mod.Thumbnail = thumbnail ?? LoadPlaceholderThumbnail();
@@ -288,6 +289,10 @@ namespace FactorioModManager.ViewModels.MainWindow
                 DependencyHelper.GetIncompatibleDependencies(m.Dependencies)
                     .Any(d => d.Equals(mod.Name, StringComparison.OrdinalIgnoreCase)))];
 
+        /// <summary>
+        /// Classifies dependencies into installed (enabled/disabled) and missing,
+        /// filtering out game dependencies that can't be installed from the portal
+        /// </summary>
         private (List<ModViewModel> installedEnabled,
          List<ModViewModel> installedDisabled,
          List<string> missing) ClassifyDependencies(IReadOnlyList<string> dependencyNames)
@@ -298,6 +303,12 @@ namespace FactorioModManager.ViewModels.MainWindow
 
             foreach (var depName in dependencyNames)
             {
+                // ✅ FIX: Skip game dependencies (base, space-age, quality, elevated-rails)
+                if (DependencyHelper.IsGameDependency(depName))
+                {
+                    continue;
+                }
+
                 var dep = FindModByName(depName);
                 if (dep == null)
                 {

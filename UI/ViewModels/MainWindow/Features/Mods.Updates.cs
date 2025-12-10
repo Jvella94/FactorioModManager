@@ -1,4 +1,5 @@
 ﻿using FactorioModManager.Models;
+using FactorioModManager.Services;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
@@ -21,7 +22,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                 try
                 {
                     _logService.Log("Checking for already-downloaded updates...");
-                    var modsDirectory = _modService.GetModsDirectory();
+                    var modsDirectory = FolderPathHelper.GetModsDirectory();
 
                     var modsWithUpdates = _allMods
                         .Where(m => m.HasUpdate && !string.IsNullOrEmpty(m.LatestVersion))
@@ -153,7 +154,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                         return;
                     }
 
-                    var modsDirectory = _modService.GetModsDirectory();
+                    var modsDirectory = FolderPathHelper.GetModsDirectory();
                     var newFilePath = Path.Combine(modsDirectory, $"{mod.Name}_{latestRelease.Version}.zip");
                     _downloadService.DeleteOldVersions(mod.Name, newFilePath);
 

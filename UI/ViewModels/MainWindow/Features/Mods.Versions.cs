@@ -1,4 +1,5 @@
 ﻿using FactorioModManager.Models;
+using FactorioModManager.Services;
 using ReactiveUI;
 using System;
 using System.IO;
@@ -15,7 +16,7 @@ namespace FactorioModManager.ViewModels.MainWindow
         {
             try
             {
-                var modsDirectory = _modService.GetModsDirectory();
+                var modsDirectory = FolderPathHelper.GetModsDirectory();
                 var modFiles = Directory.GetFiles(modsDirectory, $"{mod.Name}_*.zip")
                     .OrderByDescending(f => f)
                     .ToList();

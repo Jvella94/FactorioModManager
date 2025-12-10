@@ -2,6 +2,7 @@
 using FactorioModManager.Models.DTO;
 using FactorioModManager.Services;
 using FactorioModManager.Services.Infrastructure;
+using FactorioModManager.Services.Mods;
 using ReactiveUI;
 using System;
 using System.Collections.ObjectModel;
@@ -15,7 +16,7 @@ namespace FactorioModManager.ViewModels.Dialogs
 {
     public class VersionHistoryViewModel : ViewModelBase
     {
-        private readonly IModService _modService;
+        private readonly IModVersionManager _versionManager;
         private readonly ISettingsService _settingsService;
         private readonly ILogService _logService;
         private readonly IUIService _uiService;
@@ -30,7 +31,7 @@ namespace FactorioModManager.ViewModels.Dialogs
         public ReactiveCommand<Unit, Unit> CancelCommand { get; }
 
         public VersionHistoryViewModel(
-            IModService modService,
+            IModVersionManager versionManager,
             ISettingsService settingsService,
             ILogService logService,
             IUIService uiService,
@@ -39,7 +40,7 @@ namespace FactorioModManager.ViewModels.Dialogs
             System.Collections.Generic.List<ReleaseDTO> releases,
             Window? parentWindow = null)
         {
-            _modService = modService;
+            _versionManager = versionManager;
             _settingsService = settingsService;
             _logService = logService;
             _uiService = uiService;
@@ -49,7 +50,7 @@ namespace FactorioModManager.ViewModels.Dialogs
 
             Releases = new ObservableCollection<VersionHistoryReleaseViewModel>(
                 releases.OrderByDescending(r => r.ReleasedAt)
-                    .Select(r => new VersionHistoryReleaseViewModel(r, modService, modName))
+                    .Select(r => new VersionHistoryReleaseViewModel(r, versionManager, modName))
             );
 
             // Subscribe to changes in installed status to update CanDelete
@@ -131,7 +132,7 @@ namespace FactorioModManager.ViewModels.Dialogs
 
                 // Run deletion on background thread
                 await Task.Run(() =>
-                    _modService.DeleteVersion(ModName, release.Version),
+                    _versionManager.DeleteVersion(ModName, release.Version),
                     cancellationToken);
 
                 release.IsInstalled = false;
@@ -187,7 +188,7 @@ namespace FactorioModManager.ViewModels.Dialogs
                     }
                 });
 
-                await _modService.DownloadVersionAsync(
+                await _versionManager.DownloadVersionAsync(
                     ModName,
                     release.Version,
                     fullDownloadUrl,
@@ -214,13 +215,13 @@ namespace FactorioModManager.ViewModels.Dialogs
 
         private void RefreshInstalledStates()
         {
-            var installedVersions = _modService.GetInstalledVersions(ModName);
+            var installedVersions = _versionManager.GetInstalledVersions(ModName);
             foreach (var release in Releases)
             {
                 release.IsInstalled = installedVersions.Contains(release.Version);
             }
 
-            _modService.RefreshInstalledVersions(ModName);
+            _versionManager.RefreshVersionCache(ModName);
         }
 
         protected override void Dispose(bool disposing)

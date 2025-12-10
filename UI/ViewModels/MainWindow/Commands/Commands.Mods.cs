@@ -54,7 +54,7 @@ namespace FactorioModManager.ViewModels.MainWindow
         {
             try
             {
-                var path = _modService.GetModsDirectory();
+                var path = FolderPathHelper.GetModsDirectory();
                 _uiService.OpenFolder(path);
                 SetStatus($"Opened: {path}");
             }
@@ -228,12 +228,12 @@ namespace FactorioModManager.ViewModels.MainWindow
                         return downloadResult;
 
                     // At this point the mod zip exists locally; get its ModInfo
-                    var modsDirectory = _modService.GetModsDirectory();
+                    var modsDirectory = FolderPathHelper.GetModsDirectory();
                     var downloadedPath = System.IO.Path.Combine(
                         modsDirectory,
                         $"{modName}_{latestRelease.Version}.zip");
 
-                    var modInfo = _modService.ReadModInfoFromFile(downloadedPath);
+                    var modInfo = _modService.ReadModInfo(downloadedPath);
                     if (modInfo == null)
                     {
                         await _uiService.InvokeAsync(() =>
@@ -244,7 +244,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                     }
 
                     // Resolve dependencies using local ModInfo (workaround for API not providing them)
-                    var resolution = await ResolveInstallDependenciesAsync(modInfo);
+                    var resolution = await _modDependencyResolver.ResolveForInstallAsync(modInfo, _allMods);
                     if (!resolution.Proceed)
                         return Result.Fail("Installation cancelled by user due to dependencies.", ErrorCode.OperationCancelled);
 
@@ -309,48 +309,14 @@ namespace FactorioModManager.ViewModels.MainWindow
         /// </summary>
         private void LaunchFactorio()
         {
-            try
+            var result = _factorioLauncher.Launch();
+            if (result.Success)
             {
-                var factorioPath = _settingsService.GetFactorioExecutablePath();
-
-                // If path is not configured, try to auto-detect it
-                if (string.IsNullOrEmpty(factorioPath))
-                {
-                    factorioPath = FolderPathHelper.DetectFactorioExecutable();
-
-                    if (string.IsNullOrEmpty(factorioPath))
-                    {
-                        SetStatus("Factorio path not configured and could not be auto-detected. Please set it in Settings.", LogLevel.Warning);
-                        _logService.Log("Factorio executable path not configured and auto-detection failed", LogLevel.Warning);
-                        return;
-                    }
-
-                    // Save the detected path for future use
-                    _settingsService.SetFactorioExecutablePath(factorioPath);
-                    _logService.Log($"Auto-detected and saved Factorio path: {factorioPath}", LogLevel.Info);
-                }
-
-                if (!System.IO.File.Exists(factorioPath))
-                {
-                    SetStatus($"Factorio executable not found at: {factorioPath}. Please update in Settings.", LogLevel.Error);
-                    _logService.LogError("Factorio executable not found", new System.IO.FileNotFoundException("Factorio not found", factorioPath));
-                    return;
-                }
-
-                var processInfo = new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = factorioPath,
-                    UseShellExecute = true,
-                    WorkingDirectory = System.IO.Path.GetDirectoryName(factorioPath) ?? string.Empty
-                };
-
-                System.Diagnostics.Process.Start(processInfo);
-                SetStatus($"Launched Factorio");
-                _logService.Log($"Launched Factorio: {factorioPath}", LogLevel.Info);
+                SetStatus("Launched Factorio");
             }
-            catch (Exception ex)
+            else
             {
-                HandleError(ex, "Error launching Factorio");
+                SetStatus(result.Error ?? "Failed to launch Factorio", LogLevel.Error);
             }
         }
 

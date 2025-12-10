@@ -2,6 +2,7 @@
 using FactorioModManager.Services;
 using FactorioModManager.Services.API;
 using FactorioModManager.Services.Infrastructure;
+using FactorioModManager.Services.Mods;
 using ReactiveUI;
 using System;
 using System.Collections.ObjectModel;
@@ -51,6 +52,12 @@ namespace FactorioModManager.ViewModels.MainWindow
         private readonly IDownloadService _downloadService;
         private readonly IErrorMessageService _errorMessageService;
         private readonly IAppUpdateChecker _appUpdateChecker;
+        private readonly IModUpdateService _modUpdateService;
+        private readonly IModDependencyResolver _modDependencyResolver;
+        private readonly IModVersionManager _modVersionManager;
+        private readonly IFactorioLauncher _factorioLauncher;
+        private readonly IErrorMapper _errorMapper;
+        private readonly IThumbnailCache _thumbnailCache;
 
         public MainWindowViewModel(
             IModService modService,
@@ -62,7 +69,13 @@ namespace FactorioModManager.ViewModels.MainWindow
             ILogService logService,
             IDownloadService downloadService,
             IErrorMessageService errorMessageService,
-            IAppUpdateChecker appUpdateChecker)
+            IAppUpdateChecker appUpdateChecker,
+            IModUpdateService modUpdateService,
+            IModDependencyResolver modDependencyResolver,
+            IModVersionManager modVersionManager,
+            IFactorioLauncher factorioLauncher,
+            IErrorMapper errorMapper,
+            IThumbnailCache thumbnailCache)
         {
             _modService = modService;
             _groupService = groupService;
@@ -74,9 +87,14 @@ namespace FactorioModManager.ViewModels.MainWindow
             _downloadService = downloadService;
             _errorMessageService = errorMessageService;
             _appUpdateChecker = appUpdateChecker;
-
+            _modUpdateService = modUpdateService;
+            _modDependencyResolver = modDependencyResolver;
+            _modVersionManager = modVersionManager;
+            _factorioLauncher = factorioLauncher;
+            _errorMapper = errorMapper;
             SetupReactiveFiltering();
             InitializeCommands();
+            _thumbnailCache = thumbnailCache;
         }
 
         /// <summary>
@@ -242,7 +260,7 @@ namespace FactorioModManager.ViewModels.MainWindow
             return parenIndex > 0 ? authorFilter[..parenIndex].Trim() : authorFilter.Trim();
         }
 
-        private async void InitializeStartupTasks()
+        public async void InitializeStartupTasks()
         {
             DetectFactorioVersionAndDLC();
 
@@ -265,26 +283,48 @@ namespace FactorioModManager.ViewModels.MainWindow
                 if (string.IsNullOrEmpty(exePath) || !File.Exists(exePath))
                     return;
 
-                // Version [web:49]
+                // Version
                 try
                 {
                     var fvi = FileVersionInfo.GetVersionInfo(exePath);
-                    _settingsService.SetFactorioVersion(fvi.FileVersion);
-                    _logService.Log($"Detected Factorio version: {fvi.FileVersion}");
+                    _settingsService.SetFactorioVersion(fvi.ProductVersion);
+                    _logService.Log($"Detected Factorio version: {fvi.ProductVersion}");
+
+                    // ✅ Notify UI that version changed
+                    this.RaisePropertyChanged(nameof(FactorioVersion));
+                    this.RaisePropertyChanged(nameof(FactorioVersionText));
+                    this.RaisePropertyChanged(nameof(HasFactorioVersion));
                 }
                 catch (Exception ex)
                 {
                     _logService.LogWarning($"Failed to read Factorio file version: {ex.Message}");
                 }
 
-                // DLC detection via data folders [web:38][web:53]
-                var rootDir = Path.GetDirectoryName(exePath);
+                // ✅ FIX: DLC detection - navigate to correct data directory
+                // Factorio structure:
+                //   - Executable: <FactorioRoot>\bin\x64\factorio.exe
+                //   - Data:       <FactorioRoot>\data\
+                var exeDir = Path.GetDirectoryName(exePath);
+                if (string.IsNullOrEmpty(exeDir))
+                    return;
+
+                // Navigate up from bin\x64 to root, then to data
+                // e.g., C:\Program Files\Factorio\bin\x64 -> C:\Program Files\Factorio\data
+                var binFolder = Path.GetDirectoryName(exeDir); // bin
+                if (string.IsNullOrEmpty(binFolder))
+                    return;
+
+                var rootDir = Path.GetDirectoryName(binFolder); // Factorio root
                 if (string.IsNullOrEmpty(rootDir))
                     return;
 
                 var dataDir = Path.Combine(rootDir, "data");
+
                 if (!Directory.Exists(dataDir))
+                {
+                    _logService.LogWarning($"Factorio data directory not found at: {dataDir}");
                     return;
+                }
 
                 // If any of the DLC module folders exist, treat Space Age DLC as present
                 bool hasSpaceAgeDlc =
@@ -293,7 +333,10 @@ namespace FactorioModManager.ViewModels.MainWindow
                     Directory.Exists(Path.Combine(dataDir, "elevated-rails"));
 
                 _settingsService.SetHasSpaceAgeDlc(hasSpaceAgeDlc);
-                _logService.Log($"Detected Space Age DLC bundle: {hasSpaceAgeDlc}");
+                _logService.Log($"Detected Space Age DLC bundle: {hasSpaceAgeDlc} (checked in {dataDir})");
+
+                // ✅ Notify UI that DLC status changed
+                this.RaisePropertyChanged(nameof(HasSpaceAgeDlc));
             }
             catch (Exception ex)
             {
@@ -360,6 +403,33 @@ namespace FactorioModManager.ViewModels.MainWindow
                 }
             }
         }
+
+        /// <summary>
+        /// Gets the detected Factorio version
+        /// </summary>
+        public string? FactorioVersion => _settingsService.GetFactorioVersion();
+
+        /// <summary>
+        /// Gets whether Space Age DLC is detected
+        /// </summary>
+        public bool HasSpaceAgeDlc => _settingsService.GetHasSpaceAgeDlc();
+
+        /// <summary>
+        /// Gets the formatted Factorio version display text
+        /// </summary>
+        public string FactorioVersionText
+        {
+            get
+            {
+                var version = FactorioVersion;
+                return string.IsNullOrEmpty(version) ? "" : $"{version}";
+            }
+        }
+
+        /// <summary>
+        /// Gets whether to show Factorio version info in status bar
+        /// </summary>
+        public bool HasFactorioVersion => !string.IsNullOrEmpty(FactorioVersion);
 
         public ModGroupViewModel? SelectedGroup
         {

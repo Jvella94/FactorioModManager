@@ -1,5 +1,5 @@
 ﻿using FactorioModManager.Models.DTO;
-using FactorioModManager.Services;
+using FactorioModManager.Services.Mods;
 using ReactiveUI;
 using System;
 
@@ -7,7 +7,7 @@ namespace FactorioModManager.ViewModels.Dialogs
 {
     public class VersionHistoryReleaseViewModel : ViewModelBase
     {
-        private readonly IModService _modService;
+        private readonly IModVersionManager _modVersionManager;
         private bool _isInstalling;
         private double _downloadProgress;
         private bool _isInstalled;
@@ -52,11 +52,11 @@ namespace FactorioModManager.ViewModels.Dialogs
         // Button is enabled if: downloading OR (deleting AND canDelete)
         public bool CanDeleteOrDownload => !IsInstalled || CanDelete;
 
-        public VersionHistoryReleaseViewModel(ReleaseDTO release, IModService modService, string modName)
+        public VersionHistoryReleaseViewModel(ReleaseDTO release, IModVersionManager modVersionManager, string modName)
         {
             Release = release;
-            _modService = modService;
-            IsInstalled = _modService.GetInstalledVersions(modName).Contains(release.Version);
+            _modVersionManager = modVersionManager;
+            IsInstalled = _modVersionManager.GetInstalledVersions(modName).Contains(release.Version);
         }
     }
 }

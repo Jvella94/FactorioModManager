@@ -12,12 +12,10 @@ using FactorioModManager.ViewModels;
 using FactorioModManager.ViewModels.MainWindow;
 using System;
 using System.Collections.ObjectModel;
-using System.Collections.Specialized;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reactive.Linq;
-using System.Threading.Tasks;
 
 namespace FactorioModManager.Views
 {
@@ -41,6 +39,7 @@ namespace FactorioModManager.Views
             if (DataContext is MainWindowViewModel vm)
             {
                 await vm.RefreshModsCommand.Execute();
+                vm.InitializeStartupTasks();
             }
         }
 

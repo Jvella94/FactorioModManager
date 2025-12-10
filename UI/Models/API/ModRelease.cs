@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
 namespace FactorioModManager.Models.API
@@ -25,6 +26,18 @@ namespace FactorioModManager.Models.API
         public string? Sha1 { get; set; }
 
         [JsonPropertyName("info_json")]
-        public ModInfo? InfoJson { get; set; }
+        public ModReleaseInfo? InfoJson { get; set; }
+    }
+
+    /// <summary>
+    /// Mod info embedded in a release
+    /// </summary>
+    public class ModReleaseInfo
+    {
+        [JsonPropertyName("factorio_version")]
+        public string FactorioVersion { get; set; } = string.Empty;
+
+        [JsonPropertyName("dependencies")]
+        public List<string>? Dependencies { get; set; }
     }
 }

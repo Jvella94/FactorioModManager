@@ -1,6 +1,7 @@
 ﻿using FactorioModManager.Models.DTO;
 using FactorioModManager.Services;
 using FactorioModManager.Services.Infrastructure;
+using FactorioModManager.Services.Mods;
 using FactorioModManager.ViewModels.Dialogs;
 using FactorioModManager.Views.Base;
 using System.Collections.Generic;
@@ -17,7 +18,7 @@ namespace FactorioModManager.Views
         public VersionHistoryWindow(string modTitle, string modName, List<ReleaseDTO> releases) : this()
         {
             var vm = new VersionHistoryViewModel(
-               ServiceContainer.Instance.Resolve<IModService>(),
+               ServiceContainer.Instance.Resolve<IModVersionManager>(),
                ServiceContainer.Instance.Resolve<ISettingsService>(),
                ServiceContainer.Instance.Resolve<ILogService>(),
                ServiceContainer.Instance.Resolve<IUIService>(),
