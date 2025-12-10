@@ -66,8 +66,9 @@ namespace FactorioModManager.Services
 
                 return settings;
             }
-            catch
+            catch (Exception ex)
             {
+                _logService.LogError("Failed to load settings, using defaults", ex);
                 var (Username, Token) = LoadFactorioDefaults();
                 return new Settings
                 {

@@ -43,7 +43,7 @@ namespace FactorioModManager.ViewModels.MainWindow
             }
             catch (Exception ex)
             {
-                _logService.LogError($"Error loading versions for {mod.Name}: {ex.Message}", ex);
+                HandleError(ex, $"Error loading versions for {mod.Name}: {ex.Message}");
             }
         }
 
@@ -92,8 +92,7 @@ namespace FactorioModManager.ViewModels.MainWindow
             }
             catch (Exception ex)
             {
-                SetStatus($"Error deleting old version: {ex.Message}", LogLevel.Error);
-                _logService.LogError($"Delete version error: {ex.Message}", ex);
+                HandleError(ex, $"Error deleting old version: {ex.Message}");
             }
         }
     }

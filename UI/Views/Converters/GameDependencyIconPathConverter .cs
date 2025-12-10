@@ -1,6 +1,7 @@
 ﻿using Avalonia.Data.Converters;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
+using FactorioModManager.Services.Infrastructure;
 using System;
 using System.Globalization;
 
@@ -32,10 +33,12 @@ namespace FactorioModManager.Views.Converters
             try
             {
                 var assets = AssetLoader.Open(uri);
-                return new Bitmap(assets); // this is an IImage
+                return new Bitmap(assets);
             }
-            catch
+            catch (Exception ex)
             {
+                var logService = ServiceContainer.Instance.Resolve<ILogService>();
+                logService?.LogError($"Failed to load Game Icon Bitmap {ex.Message}", ex);
                 return null;
             }
         }

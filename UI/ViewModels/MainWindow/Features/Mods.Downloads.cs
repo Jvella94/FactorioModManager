@@ -69,7 +69,7 @@ namespace FactorioModManager.ViewModels.MainWindow
             }
             catch (Exception ex)
             {
-                _logService.LogError($"Error downloading {modTitle}: {ex.Message}", ex);
+                HandleError(ex, $"Error downloading {modTitle}: {ex.Message}");
 
                 await _uiService.InvokeAsync(() =>
                 {

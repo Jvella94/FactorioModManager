@@ -24,9 +24,9 @@ namespace FactorioModManager
         private void RegisterServices()
         {
             // Infrastructure
-            RegisterSingleton<ILogService>(new LogService());
-            RegisterSingleton<IUIService>(new AvaloniaUIService(Resolve<ILogService>()));
             RegisterSingleton<IErrorMessageService>(new ErrorMessageService());
+            RegisterSingleton<ILogService>(new LogService(Resolve<IErrorMessageService>()));
+            RegisterSingleton<IUIService>(new AvaloniaUIService(Resolve<ILogService>()));
             var httpClient = new HttpClient
             {
                 Timeout = TimeSpan.FromSeconds(30)

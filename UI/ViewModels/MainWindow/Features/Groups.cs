@@ -1,9 +1,12 @@
-﻿using FactorioModManager.Models;
+﻿using Avalonia.Controls;
+using FactorioModManager.Models;
 using ReactiveUI;
 using System.Linq;
 
 namespace FactorioModManager.ViewModels.MainWindow
 {
+    public record DeleteGroupRequest(ModGroupViewModel Group, Window Owner);
+
     public partial class MainWindowViewModel
     {
         /// <summary>
@@ -12,7 +15,7 @@ namespace FactorioModManager.ViewModels.MainWindow
         private void CreateGroup()
         {
             var groupName = $"New Group {Groups.Count + 1}";
-            var newGroup = new Models.ModGroup
+            var newGroup = new ModGroup
             {
                 Name = groupName,
                 Description = "New mod group",
@@ -24,7 +27,9 @@ namespace FactorioModManager.ViewModels.MainWindow
             var groupVm = new ModGroupViewModel
             {
                 Name = newGroup.Name,
-                ModNames = newGroup.ModNames
+                ModNames = newGroup.ModNames,
+                IsRenaming = true,
+                EditedName = newGroup.Name
             };
             UpdateGroupStatus(groupVm);
             Groups.Add(groupVm);
@@ -171,21 +176,20 @@ namespace FactorioModManager.ViewModels.MainWindow
             }
         }
 
-        /// <summary>
-        /// Deletes a group
-        /// </summary>
-        private void DeleteGroup(ModGroupViewModel? group)
+        private async void DeleteGroupInternal(ModGroupViewModel group, Window owner)
         {
-            if (group == null)
+            var confirm = await _uiService.ShowConfirmationAsync(
+                "Delete Group",
+                $"Are you sure you want to delete the mod group '{group.Name}'?", owner);
+
+            if (!confirm)
                 return;
 
             _groupService.DeleteGroup(group.Name);
             Groups.Remove(group);
 
             foreach (var mod in _allMods.Where(m => m.GroupName == group.Name))
-            {
                 mod.GroupName = null;
-            }
 
             SetStatus($"Deleted group: {group.Name}");
         }

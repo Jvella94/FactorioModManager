@@ -1,18 +1,23 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using FactorioModManager.Infrastructure;
 using FactorioModManager.Services.Infrastructure;
 using FactorioModManager.ViewModels;
 using FactorioModManager.ViewModels.MainWindow;
 using System;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reactive.Linq;
+using System.Threading.Tasks;
 
 namespace FactorioModManager.Views
 {
@@ -152,6 +157,91 @@ namespace FactorioModManager.Views
         {
             _mouseNavHandler?.Dispose();
             base.OnClosed(e);
+        }
+
+        /// <summary>
+        /// Handles focus when renaming groups.
+        /// </summary>
+        /// <param name="sender">The source of the property change event. Must be a StackPanel representing the group edit panel.</param>
+        /// <param name="e">An AvaloniaPropertyChangedEventArgs instance containing information about the changed property, including
+        /// its new value.</param>
+        private void GroupEditPanel_OnPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+        {
+            if (sender is not StackPanel panel)
+                return;
+
+            if (e.Property == IsVisibleProperty &&
+                e.NewValue is bool isVisible &&
+                isVisible)
+            {
+                // Panel just became visible (IsRenaming == true)
+                var textBox = panel.GetVisualDescendants().OfType<TextBox>().FirstOrDefault();
+                if (textBox?.DataContext is ModGroupViewModel groupVm && groupVm.IsRenaming)
+                {
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        textBox.Focus();
+                        textBox.SelectAll();
+                    });
+                }
+            }
+        }
+
+        /// <summary>
+        /// Handles focus when creating groups.
+        /// </summary>
+        /// <param name="sender">The source of the event, expected to be a <see cref="TextBox"/> representing the group name edit box.</param>
+        /// <param name="e">The event data containing information about the visual tree attachment.</param>
+        private void GroupNameEditBox_OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
+        {
+            if (sender is not TextBox textBox)
+                return;
+
+            // DataContext is ModGroupViewModel
+            if (textBox.DataContext is ModGroupViewModel groupVm && groupVm.IsRenaming)
+            {
+                // Defer one tick so layout is fully ready
+                Dispatcher.UIThread.Post(() =>
+                {
+                    textBox.Focus();
+                    textBox.SelectAll();
+                });
+            }
+        }
+
+        private void GroupNameEditBox_OnKeyDown(object? sender, KeyEventArgs e)
+        {
+            if (sender is not TextBox textBox ||
+                textBox.DataContext is not ModGroupViewModel groupVm ||
+                DataContext is not MainWindowViewModel mainVm)
+                return;
+
+            switch (e.Key)
+            {
+                case Key.Enter:
+                    // Call ConfirmRenameGroup via its command if you exposed one,
+                    // or directly if it's internal:
+                    mainVm.ConfirmRenameGroupCommand.Execute(groupVm).Subscribe();
+                    e.Handled = true;
+                    break;
+
+                case Key.Escape:
+                    groupVm.IsRenaming = false;
+                    groupVm.EditedName = groupVm.Name; // reset
+                    e.Handled = true;
+                    break;
+            }
+        }
+
+        private void DeleteGroup_Click(object? sender, RoutedEventArgs e)
+        {
+            if (sender is not Button button ||
+                button.DataContext is not ModGroupViewModel groupVm ||
+                DataContext is not MainWindowViewModel mainVm)
+                return;
+
+            var request = new DeleteGroupRequest(groupVm, this);
+            mainVm.DeleteGroupCommand.Execute(request).Subscribe();
         }
     }
 }

@@ -17,13 +17,13 @@ namespace FactorioModManager.Services.API
         private readonly ILogService _logService = logService ?? throw new ArgumentNullException(nameof(logService));
         private DateTime _lastUpdateTime = DateTime.MinValue;
         private string _lastModName = string.Empty;
-        private const string BaseUrl = "https://mods.factorio.com/api/mods";
+        private const string _baseUrl = "https://mods.factorio.com/api/mods";
 
         public async Task<ModDetailsShortDTO?> GetModDetailsAsync(string modName)
         {
             try
             {
-                var url = $"{BaseUrl}/{modName}?version=2.0&hide_deprecated=true";
+                var url = $"{_baseUrl}/{modName}?version=2.0&hide_deprecated=true";
                 var response = await _httpClient.GetAsync(url);
 
                 if (!response.IsSuccessStatusCode)
@@ -48,7 +48,7 @@ namespace FactorioModManager.Services.API
         {
             try
             {
-                var url = $"{BaseUrl}/{modName}/full?version=2.0&hide_deprecated=true";
+                var url = $"{_baseUrl}/{modName}/full?version=2.0&hide_deprecated=true";
                 var response = await _httpClient.GetAsync(url);
 
                 if (!response.IsSuccessStatusCode)
@@ -80,7 +80,7 @@ namespace FactorioModManager.Services.API
                 var maxPages = 5;
                 for (int page = 1; page <= maxPages; page++)
                 {
-                    var url = $"{BaseUrl}?version=2.0&hide_deprecated=true&sort=updated_at&sort_order=desc&page={page}&page_size={pageSize}";
+                    var url = $"{_baseUrl}?version=2.0&hide_deprecated=true&sort=updated_at&sort_order=desc&page={page}&page_size={pageSize}";
                     var response = await _httpClient.GetAsync(url);
 
                     if (!response.IsSuccessStatusCode)

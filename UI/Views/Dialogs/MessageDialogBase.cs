@@ -16,9 +16,12 @@ namespace FactorioModManager.Views.Dialogs
             Width = width;
             Height = height;
             MinWidth = 400;
-            MinHeight = 160;
+            MinHeight = 120;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
+            SizeToContent = SizeToContent.WidthAndHeight;
             CanResize = false;
+            CanMinimize = false;
+            CanMaximize = false;
             Message = message;
         }
 
@@ -56,7 +59,7 @@ namespace FactorioModManager.Views.Dialogs
                 TextWrapping = TextWrapping.Wrap,
                 Foreground = Brushes.White,
                 FontSize = 14,
-                TextAlignment = TextAlignment.Center,
+                TextAlignment = TextAlignment.Left,
                 LineHeight = 20,
                 Margin = new Thickness(24, 18, 24, 12)
             };

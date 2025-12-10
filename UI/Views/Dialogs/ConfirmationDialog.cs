@@ -41,18 +41,20 @@ namespace FactorioModManager.Views.Dialogs
                 FontWeight = FontWeight.SemiBold,
                 IsDefault = true,
                 Foreground = Brushes.White,
-                Background = new SolidColorBrush(Color.Parse(_yesButtonColor ?? "#4CAF50"))
+                Background = new SolidColorBrush(Color.Parse(_yesButtonColor ?? "#4CAF50")),
+                HorizontalContentAlignment = HorizontalAlignment.Center
             };
 
             var noButton = new Button
             {
                 Content = _noButtonText,
-                Width = 90,
+                Width = 110,
                 Height = 32,
                 FontSize = 13,
                 IsCancel = true,
                 Foreground = Brushes.White,
-                Background = new SolidColorBrush(Color.Parse(_noButtonColor ?? "#3A3A3A"))
+                Background = new SolidColorBrush(Color.Parse(_noButtonColor ?? "#3A3A3A")),
+                HorizontalContentAlignment = HorizontalAlignment.Center
             };
 
             yesButton.Click += (s, e) => CloseWithResult(true);

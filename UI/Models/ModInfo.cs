@@ -9,7 +9,7 @@ namespace FactorioModManager.Models
     /// </summary>
     public class ModInfo
     {
-        private const string PlaceholderTitle = "[MOD DISPLAY NAME]";
+        private const string _placeholderTitle = "[MOD DISPLAY NAME]";
 
         [JsonPropertyName("name")]
         public string Name { get; set; } = string.Empty;
@@ -21,7 +21,7 @@ namespace FactorioModManager.Models
         public string Title { get; init; } = string.Empty;
 
         [JsonIgnore]
-        public string DisplayTitle => Title != PlaceholderTitle ? Title : Name;
+        public string DisplayTitle => Title != _placeholderTitle ? Title : Name;
 
         [JsonPropertyName("author")]
         public string Author { get; set; } = string.Empty;

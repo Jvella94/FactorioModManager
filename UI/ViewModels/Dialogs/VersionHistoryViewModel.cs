@@ -107,7 +107,7 @@ namespace FactorioModManager.ViewModels.Dialogs
             }
             catch (OperationCanceledException)
             {
-                _logService.Log("Operation cancelled");
+                _logService.Log("Delete/Download cancelled");
             }
         }
 
@@ -139,7 +139,7 @@ namespace FactorioModManager.ViewModels.Dialogs
             }
             catch (OperationCanceledException)
             {
-                throw;
+                _logService.Log("Deleting Version Cancelled.");
             }
             catch (Exception ex)
             {

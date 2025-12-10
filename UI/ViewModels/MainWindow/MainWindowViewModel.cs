@@ -320,8 +320,7 @@ namespace FactorioModManager.ViewModels.MainWindow
         {
             var userMessage = _errorMessageService.GetUserFriendlyMessage(ex, context);
             SetStatus(userMessage, LogLevel.Error);
-            var technicalMessage = _errorMessageService.GetTechnicalMessage(ex);
-            _logService.LogError(technicalMessage, ex);
+            _logService.LogError(context, ex);
         }
 
         protected override void Dispose(bool disposing)

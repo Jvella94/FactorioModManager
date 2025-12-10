@@ -1,6 +1,7 @@
 ﻿using Avalonia;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
+using FactorioModManager.Services.Infrastructure;
 using NuGet.Versioning;
 using System;
 using System.Collections.Generic;
@@ -29,8 +30,10 @@ namespace FactorioModManager
                 var uri = new Uri("avares://FactorioModManager/Assets/FMM.png");
                 return new Bitmap(AssetLoader.Open(uri));
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                var loggingservice = ServiceContainer.Instance.Resolve<ILogService>();
+                loggingservice?.LogError($"Issue loading bitmap: {ex.Message}", ex);
                 return new WriteableBitmap(
                     new PixelSize(1, 1),
                     new Vector(96, 96),
@@ -212,7 +215,7 @@ namespace FactorioModManager
 
         public static class DependencyHelper
         {
-            private static readonly HashSet<string> GameDependencies = new(StringComparer.OrdinalIgnoreCase)
+            private static readonly HashSet<string> _gameDependencies = new(StringComparer.OrdinalIgnoreCase)
         {
             "base",
             "space-age",
@@ -257,7 +260,7 @@ namespace FactorioModManager
             /// </summary>
             public static bool IsGameDependency(string dependencyName)
             {
-                return GameDependencies.Contains(dependencyName);
+                return _gameDependencies.Contains(dependencyName);
             }
 
             /// <summary>

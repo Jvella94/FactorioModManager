@@ -14,6 +14,8 @@ namespace FactorioModManager.Services.Infrastructure
 
         void LogError(string message, Exception exception);
 
+        void LogException(Exception exception);
+
         IEnumerable<LogEntry> GetLogs();
 
         string GetLogFilePath();

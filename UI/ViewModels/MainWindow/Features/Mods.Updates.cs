@@ -61,7 +61,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                 }
                 catch (Exception ex)
                 {
-                    _logService.LogError($"Error checking for already-downloaded updates: {ex.Message}", ex);
+                    HandleError(ex, $"Error checking for already-downloaded updates: {ex.Message}");
                 }
             });
         }
@@ -199,7 +199,6 @@ namespace FactorioModManager.ViewModels.MainWindow
                 }
                 catch (Exception ex)
                 {
-                    _logService.Log($"Error updating {mod?.Title}: {ex.Message}", LogLevel.Error);
                     _logService.LogError($"Update error details: {ex.Message}", ex);
                     _uiService.Post(() =>
                     {
@@ -289,7 +288,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                     }
                     catch (Exception ex)
                     {
-                        _logService.LogError($"Error checking updates for {mod.Name}: {ex.Message}", ex);
+                        HandleError(ex, $"Error checking updates for {mod.Name}: {ex.Message}");
                     }
                 }
 
@@ -308,7 +307,7 @@ namespace FactorioModManager.ViewModels.MainWindow
             }
             catch (Exception ex)
             {
-                _logService.Log($"Error during update check: {ex.Message}", LogLevel.Error);
+                SetStatus($"Error during update check: {ex.Message}", LogLevel.Error);
                 _logService.LogError($"Error in CheckForUpdatesAsync: {ex.Message}", ex);
             }
         }

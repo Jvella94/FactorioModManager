@@ -4,19 +4,23 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 namespace FactorioModPortalAnalyzer
 {
     internal class Program
     {
-        private static readonly HttpClient client = new();
-        private const string BASE_URL = "https://mods.factorio.com/api/mods";
-        private const int THROTTLE_DELAY_MS = 500;
-        private const string JSON_FILE = "factorio_2.0_mods_releases.json";
-        private const string CSV_FILE = "factorio_2.0_mods_summary.csv";
+        private static readonly HttpClient _client = new();
+        private const string _bASE_URL = "https://mods.factorio.com/api/mods";
+        private const int _tHROTTLE_DELAY_MS = 500;
+        private const string _jSON_FILE = "factorio_2.0_mods_releases.json";
+        private const string _cSV_FILE = "factorio_2.0_mods_summary.csv";
+
+#pragma warning disable IDE0060 // Remove unused parameter
 
         private static async Task Main(string[] args)
+#pragma warning restore IDE0060 // Remove unused parameter
         {
             Console.WriteLine("Factorio 2.0 Mod Portal Analyzer\n");
 
@@ -25,9 +29,9 @@ namespace FactorioModPortalAnalyzer
                 List<ModReleaseInfo> modReleases;
 
                 // Check if data files exist
-                if (File.Exists(JSON_FILE))
+                if (File.Exists(_jSON_FILE))
                 {
-                    Console.WriteLine($"Found existing data file: {JSON_FILE}");
+                    Console.WriteLine($"Found existing data file: {_jSON_FILE}");
                     Console.WriteLine("\nOptions:");
                     Console.WriteLine("  1 - Load from existing file (fast)");
                     Console.WriteLine("  2 - Fetch fresh data from API (slow)");
@@ -62,15 +66,15 @@ namespace FactorioModPortalAnalyzer
             }
             finally
             {
-                client.Dispose();
+                _client.Dispose();
             }
         }
 
         private static async Task<List<ModReleaseInfo>> LoadFromFile()
         {
-            Console.WriteLine($"\n📂 Loading data from {JSON_FILE}...");
+            Console.WriteLine($"\n📂 Loading data from {_jSON_FILE}...");
 
-            var json = await File.ReadAllTextAsync(JSON_FILE);
+            var json = await File.ReadAllTextAsync(_jSON_FILE);
             var modReleases = JsonSerializer.Deserialize<List<ModReleaseInfo>>(json);
 
             Console.WriteLine($"✅ Loaded {modReleases?.Count ?? 0} mods from cache");
@@ -93,11 +97,11 @@ namespace FactorioModPortalAnalyzer
 
         private static async Task<List<ModInfo>> GetAll20Mods()
         {
-            var url = $"{BASE_URL}?version=2.0&page_size=max";
-            var response = await client.GetStringAsync(url);
+            var url = $"{_bASE_URL}?version=2.0&page_size=max";
+            var response = await _client.GetStringAsync(url);
             var result = JsonSerializer.Deserialize<ModListResponse>(response);
 
-            return result?.results ?? [];
+            return result?.Results ?? [];
         }
 
         private static async Task<List<ModReleaseInfo>> GetModReleases(List<ModInfo> mods)
@@ -108,25 +112,25 @@ namespace FactorioModPortalAnalyzer
             foreach (var mod in mods)
             {
                 count++;
-                Console.WriteLine($"[{count}/{mods.Count}] Fetching releases for {mod.name}");
+                Console.WriteLine($"[{count}/{mods.Count}] Fetching releases for {mod.Name}");
 
                 try
                 {
-                    var url = $"{BASE_URL}/{mod.name}";
-                    var response = await client.GetStringAsync(url);
+                    var url = $"{_bASE_URL}/{mod.Name}";
+                    var response = await _client.GetStringAsync(url);
                     var shortMod = JsonSerializer.Deserialize<ShortModInfo>(response);
                     if (shortMod != null)
                     {
                         modReleases.Add(new ModReleaseInfo
                         {
-                            Name = mod.name,
-                            Title = mod.title ?? shortMod.title,
-                            Owner = mod.owner ?? shortMod.owner,
-                            Downloads = mod.downloads_count,
-                            Releases = shortMod.releases ?? []
+                            Name = mod.Name,
+                            Title = mod.Title ?? shortMod.Title,
+                            Owner = mod.Owner ?? shortMod.Owner,
+                            Downloads = mod.DownloadsCount,
+                            Releases = shortMod.Releases ?? []
                         });
                     }
-                    await Task.Delay(THROTTLE_DELAY_MS);
+                    await Task.Delay(_tHROTTLE_DELAY_MS);
                 }
                 catch (Exception ex)
                 {
@@ -145,17 +149,17 @@ namespace FactorioModPortalAnalyzer
         private static async Task SaveDataset(List<ModReleaseInfo> modReleases, JsonSerializerOptions options)
         {
             Console.WriteLine("\n💾 Saving dataset...");
-            await File.WriteAllTextAsync(JSON_FILE,
+            await File.WriteAllTextAsync(_jSON_FILE,
                 JsonSerializer.Serialize(modReleases, options));
-            Console.WriteLine($"  ✅ {JSON_FILE}");
+            Console.WriteLine($"  ✅ {_jSON_FILE}");
 
             // Save CSV summary
             var csv = new List<string> { "Name,Title,Owner,Downloads,ReleaseCount" };
             csv.AddRange(modReleases.Select(m =>
                 $"\"{m.Name}\",\"{m.Title}\",\"{m.Owner}\",{m.Downloads},{m.Releases.Count}"));
 
-            await File.WriteAllLinesAsync(CSV_FILE, csv);
-            Console.WriteLine($"  ✅ {CSV_FILE}");
+            await File.WriteAllLinesAsync(_cSV_FILE, csv);
+            Console.WriteLine($"  ✅ {_cSV_FILE}");
 
             Console.WriteLine($"\n✅ Dataset saved: {modReleases.Count} mods analyzed");
         }
@@ -193,8 +197,8 @@ namespace FactorioModPortalAnalyzer
             if (allReleases.Count != 0)
             {
                 var dailyCounts = allReleases
-                    .Where(r => !string.IsNullOrEmpty(r.released_at))
-                    .Select(r => DateTime.Parse(r.released_at).Date)
+                    .Where(r => !string.IsNullOrEmpty(r.ReleasedAt))
+                    .Select(r => DateTime.Parse(r.ReleasedAt).Date)
                     .GroupBy(d => d.ToString("yyyy-MM-dd"))
                     .ToDictionary(g => g.Key, g => g.Count());
 
@@ -206,8 +210,8 @@ namespace FactorioModPortalAnalyzer
 
                 // Monthly trends
                 var monthlyCounts = allReleases
-                    .Where(r => !string.IsNullOrEmpty(r.released_at))
-                    .Select(r => DateTime.Parse(r.released_at))
+                    .Where(r => !string.IsNullOrEmpty(r.ReleasedAt))
+                    .Select(r => DateTime.Parse(r.ReleasedAt))
                     .GroupBy(d => d.ToString("yyyy-MM"))
                     .ToDictionary(g => g.Key, g => g.Count());
 
@@ -253,22 +257,41 @@ namespace FactorioModPortalAnalyzer
     // Data models
     public class ModListResponse
     {
-        public List<ModInfo> results { get; set; } = [];
+        [JsonPropertyName("results")]
+        public List<ModInfo> Results { get; set; } = [];
     }
 
     public class ModInfo
     {
-        public string name { get; set; } = "";
-        public string title { get; set; } = "";
-        public string owner { get; set; } = "";
-        public int downloads_count { get; set; }
+        [JsonPropertyName("name")]
+        public string Name { get; set; } = string.Empty;
+
+        [JsonPropertyName("title")]
+        public string Title { get; set; } = string.Empty;
+
+        [JsonPropertyName("owner")]
+        public string Owner { get; set; } = string.Empty;
+
+        [JsonPropertyName("summary")]
+        public string? Summary { get; set; }
+
+        [JsonPropertyName("category")]
+        public string? Category { get; set; }
+
+        [JsonPropertyName("downloads_count")]
+        public int DownloadsCount { get; set; }
     }
 
     public class ShortModInfo
     {
-        public string title { get; set; } = "";
-        public string owner { get; set; } = "";
-        public List<Release> releases { get; set; } = [];
+        [JsonPropertyName("title")]
+        public string Title { get; set; } = string.Empty;
+
+        [JsonPropertyName("owner")]
+        public string Owner { get; set; } = string.Empty;
+
+        [JsonPropertyName("releases")]
+        public List<Release> Releases { get; set; } = [];
     }
 
     public class ModReleaseInfo
@@ -282,7 +305,10 @@ namespace FactorioModPortalAnalyzer
 
     public class Release
     {
-        public string released_at { get; set; } = "";
-        public string version { get; set; } = "";
+        [JsonPropertyName("version")]
+        public string Version { get; set; } = string.Empty;
+
+        [JsonPropertyName("released_at")]
+        public string ReleasedAt { get; set; } = string.Empty;
     }
 }

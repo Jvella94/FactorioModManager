@@ -33,8 +33,9 @@ namespace FactorioModManager.Services
                 var collection = JsonSerializer.Deserialize<ModGroupCollection>(json);
                 return collection?.Groups ?? [];
             }
-            catch
+            catch (Exception ex)
             {
+                _logService.LogError("Failed to load Groups", ex);
                 return [];
             }
         }

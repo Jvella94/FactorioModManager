@@ -323,7 +323,7 @@ namespace FactorioModManager.Services
                     {
                         File.Delete(filePath);
                     }
-                    catch { }
+                    catch { _logService.LogError($"Error deleting {filePath} {ex.Message}", ex); }
                 }
 
                 throw;

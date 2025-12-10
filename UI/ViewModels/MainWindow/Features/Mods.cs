@@ -211,7 +211,7 @@ namespace FactorioModManager.ViewModels.MainWindow
             }
             catch (Exception ex)
             {
-                _logService.LogError($"Error loading thumbnail for {mod.Name}: {ex.Message}", ex);
+                HandleError(ex, $"Error loading thumbnail for {mod.Name}: {ex.Message}");
                 // Thumbnail getter will return placeholder automatically
             }
         }
@@ -329,7 +329,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                 }
                 catch (Exception ex)
                 {
-                    _logService.LogError(_errorMessageService.GetTechnicalMessage(ex), ex);
+                    HandleError(ex, _errorMessageService.GetTechnicalMessage(ex));
                     _metadataService.MarkAsChecked(mod.Name);
                 }
             }

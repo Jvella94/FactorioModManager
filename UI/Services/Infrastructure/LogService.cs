@@ -15,10 +15,11 @@ namespace FactorioModManager.Services.Infrastructure
         private readonly ConcurrentQueue<LogEntry> _logQueue = new();
         private StreamWriter _logWriter;
         private readonly Timer _flushTimer;
-        private const int MAX_MEMORY_LOGS = 1000;
+        private readonly IErrorMessageService _errorMessageService;
+        private const int _maxMemoryLogs = 1000;
         private bool _disposed;
 
-        public LogService()
+        public LogService(IErrorMessageService errorMessageService)
         {
             var appDataPath = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -41,6 +42,7 @@ namespace FactorioModManager.Services.Infrastructure
                 TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2));
 
             LoadLogsFromFile();
+            _errorMessageService = errorMessageService;
         }
 
         public void Dispose()
@@ -68,7 +70,11 @@ namespace FactorioModManager.Services.Infrastructure
 
         public void LogWarning(string message) => LogInternal(message, LogLevel.Warning);
 
-        public void LogError(string message, Exception exception) => LogInternal(message, LogLevel.Error);
+        public void LogError(string message, Exception exception)
+        {
+            LogInternal(message, LogLevel.Error);
+            LogDebug(_errorMessageService.GetTechnicalMessage(exception));
+        }
 
         private void LogInternal(string message, LogLevel level)
         {
@@ -77,7 +83,7 @@ namespace FactorioModManager.Services.Infrastructure
             var entry = new LogEntry(DateTime.UtcNow, message, level);
 
             _logQueue.Enqueue(entry);
-            while (_logQueue.Count > MAX_MEMORY_LOGS)
+            while (_logQueue.Count > _maxMemoryLogs)
             {
                 _logQueue.TryDequeue(out _);
             }
@@ -91,7 +97,7 @@ namespace FactorioModManager.Services.Infrastructure
                     _logWriter?.WriteLine(line);
                 }
             }
-            catch { }
+            catch (Exception ex) { LogError($"Issue Logging Internally: {ex.Message}", ex); }
         }
 
         private void FlushLogs()
@@ -103,7 +109,7 @@ namespace FactorioModManager.Services.Infrastructure
                     _logWriter?.Flush();
                 }
             }
-            catch { /* Ignore */ }
+            catch (Exception ex) { LogError($"Issue Flushing Logs : {ex.Message}", ex); }
         }
 
         private void LoadLogsFromFile()
@@ -137,7 +143,7 @@ namespace FactorioModManager.Services.Infrastructure
             }
         }
 
-        private static LogEntry? ParseLogLine(string line)
+        private LogEntry? ParseLogLine(string line)
         {
             try
             {
@@ -165,8 +171,9 @@ namespace FactorioModManager.Services.Infrastructure
 
                 return new LogEntry(ts, message, level);
             }
-            catch
+            catch (Exception ex)
             {
+                LogError($"Failed to parse log lines {ex.Message}", ex);
                 return null;
             }
         }
@@ -206,7 +213,7 @@ namespace FactorioModManager.Services.Infrastructure
             catch (Exception ex)
             {
                 // Log will recreate writer if needed
-                Log($"Failed to clear logs: {ex.Message}", LogLevel.Error);
+                LogError($"Failed to clear logs: {ex.Message}", ex);
             }
         }
 
@@ -242,11 +249,11 @@ namespace FactorioModManager.Services.Infrastructure
                     };
                 }
 
-                Log("Logs archived", LogLevel.Info);
+                Log("Logs archived");
             }
             catch (Exception ex)
             {
-                Log($"Failed to archive logs: {ex.Message}", LogLevel.Error);
+                LogError($"Failed to archive logs: {ex.Message}", ex);
             }
         }
 
@@ -284,12 +291,17 @@ namespace FactorioModManager.Services.Infrastructure
                     };
                 }
 
-                Log($"Pruned logs older than {daysToKeep} days", LogLevel.Info);
+                Log($"Pruned logs older than {daysToKeep} days");
             }
             catch (Exception ex)
             {
-                Log($"Failed to prune old logs: {ex.Message}", LogLevel.Error);
+                LogError($"Failed to prune old logs: {ex.Message}", ex);
             }
+        }
+
+        public void LogException(Exception exception)
+        {
+            LogDebug(_errorMessageService.GetTechnicalMessage(exception));
         }
     }
 }
