@@ -31,13 +31,9 @@
         <MenuItem Header="_Install Mod" Command="{Binding InstallModCommand}" />
         <MenuItem Header="_Open Mods Folder" Command="{Binding OpenModFolderCommand}" />
         <Separator />
-        <MenuItem Header="_Settings" Command="{Binding OpenSettingsCommand}" />
         <MenuItem Header="_View Logs" Click="OpenLogs" />
-      </MenuItem>
-
-      <MenuItem Header="_View">
-        <MenuItem Header="Show _Disabled Mods" IsChecked="{Binding ShowDisabled}" />
-        <MenuItem Header="Filter by Selected _Group" IsChecked="{Binding FilterBySelectedGroup}" />
+        <Separator />
+        <MenuItem Header="_Settings" Command="{Binding OpenSettingsCommand}" />
       </MenuItem>
 
       <MenuItem Header="Check for Mod _Updates" Command="{Binding CheckUpdatesCustomCommand}" />

@@ -29,8 +29,6 @@ namespace FactorioModManager.ViewModels.MainWindow
         private ModViewModel? _selectedMod;
         private ModGroupViewModel? _selectedGroup;
         private string _searchText = string.Empty;
-        private bool _showDisabled = true;
-        private bool _filterBySelectedGroup = false;
         private string _statusText = "Ready";
         private string? _selectedAuthorFilter;
         private string _authorSearchText = string.Empty;
@@ -80,10 +78,8 @@ namespace FactorioModManager.ViewModels.MainWindow
             // Throttle search text changes
             this.WhenAnyValue(
                     x => x.SearchText,
-                    x => x.ShowDisabled,
                     x => x.SelectedAuthorFilter,
-                    x => x.SelectedGroup,
-                    x => x.FilterBySelectedGroup)
+                    x => x.SelectedGroup)
                 .Throttle(TimeSpan.FromMilliseconds(150))
                 .ObserveOn(RxApp.MainThreadScheduler)
                 .Subscribe(_ => ApplyModFilter())
@@ -151,9 +147,6 @@ namespace FactorioModManager.ViewModels.MainWindow
             var filtered = _allMods
                 .Where(mod =>
                 {
-                    if (!_showDisabled && !mod.IsEnabled)
-                        return false;
-
                     if (!string.IsNullOrEmpty(_searchText) &&
                         !mod.Title.Contains(_searchText, StringComparison.OrdinalIgnoreCase))
                         return false;
@@ -162,12 +155,6 @@ namespace FactorioModManager.ViewModels.MainWindow
                     {
                         var authorName = ExtractAuthorName(_selectedAuthorFilter);
                         if (mod.Author != authorName)
-                            return false;
-                    }
-
-                    if (_filterBySelectedGroup && _selectedGroup != null)
-                    {
-                        if (!_selectedGroup.ModNames.Contains(mod.Title))
                             return false;
                     }
 
@@ -280,18 +267,6 @@ namespace FactorioModManager.ViewModels.MainWindow
         {
             get => _searchText;
             set => this.RaiseAndSetIfChanged(ref _searchText, value);
-        }
-
-        public bool ShowDisabled
-        {
-            get => _showDisabled;
-            set => this.RaiseAndSetIfChanged(ref _showDisabled, value);
-        }
-
-        public bool FilterBySelectedGroup
-        {
-            get => _filterBySelectedGroup;
-            set => this.RaiseAndSetIfChanged(ref _filterBySelectedGroup, value);
         }
 
         public string? SelectedAuthorFilter
