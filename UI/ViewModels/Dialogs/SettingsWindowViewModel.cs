@@ -20,6 +20,14 @@ namespace FactorioModManager.ViewModels.Dialogs
         private bool _keepOldModFiles;
         private string? _validationError;
 
+        private string? _factorioExePath;
+
+        public string? FactorioExePath
+        {
+            get => _factorioExePath;
+            set => this.RaiseAndSetIfChanged(ref _factorioExePath, value);
+        }
+
         public string? ModsPath
         {
             get => _modsPath;
@@ -50,6 +58,22 @@ namespace FactorioModManager.ViewModels.Dialogs
             set => this.RaiseAndSetIfChanged(ref _keepOldModFiles, value);
         }
 
+        private bool _checkForAppUpdates;
+
+        public bool CheckForAppUpdates
+        {
+            get => _checkForAppUpdates;
+            set => this.RaiseAndSetIfChanged(ref _checkForAppUpdates, value);
+        }
+
+        private DateTime? _lastAppUpdateCheck;
+
+        public DateTime? LastAppUpdateCheck
+        {
+            get => _lastAppUpdateCheck;
+            set => this.RaiseAndSetIfChanged(ref _lastAppUpdateCheck, value);
+        }
+
         // ✅ Validation error display
         public string? ValidationError
         {
@@ -70,6 +94,9 @@ namespace FactorioModManager.ViewModels.Dialogs
             Username = _settingsService.GetUsername();
             Token = _settingsService.GetToken();
             KeepOldModFiles = _settingsService.GetKeepOldModFiles();
+            FactorioExePath = _settingsService.GetFactorioExecutablePath();
+            CheckForAppUpdates = _settingsService.GetCheckForAppUpdates();
+            LastAppUpdateCheck = _settingsService.GetLastAppUpdateCheck();
 
             // ✅ SaveCommand with validation
             var canSave = this.WhenAnyValue(x => x.ModsPath)
@@ -80,7 +107,8 @@ namespace FactorioModManager.ViewModels.Dialogs
             CancelCommand = ReactiveCommand.Create(() => { });
 
             // ✅ Clear validation error when path changes
-            this.WhenAnyValue(x => x.ModsPath)
+            this.WhenAnyValue(x => x.ModsPath,
+                x => x.FactorioExePath)
               .Subscribe(_ => ValidationError = null)
               .DisposeWith(_disposables);
         }
@@ -114,10 +142,15 @@ namespace FactorioModManager.ViewModels.Dialogs
             {
                 _settingsService.SetModsPath(ModsPath);
             }
+            if (!string.IsNullOrWhiteSpace(FactorioExePath))
+            {
+                _settingsService.SetFactorioExecutablePath(FactorioExePath);
+            }
 
             _settingsService.SetUsername(string.IsNullOrWhiteSpace(Username) ? null : Username);
             _settingsService.SetToken(string.IsNullOrWhiteSpace(Token) ? null : Token);
             _settingsService.SetKeepOldModFiles(KeepOldModFiles);
+            _settingsService.SetCheckForAppUpdates(CheckForAppUpdates);
         }
 
         protected override void Dispose(bool disposing)

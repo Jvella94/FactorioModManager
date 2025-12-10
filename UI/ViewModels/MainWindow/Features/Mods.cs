@@ -218,14 +218,14 @@ namespace FactorioModManager.ViewModels.MainWindow
 
         private async Task CheckForUpdatesIfNeededAsync()
         {
-            var lastCheck = _settingsService.GetLastUpdateCheck();
+            var lastCheck = _settingsService.GetLastModUpdateCheck();
             if (!lastCheck.HasValue || (DateTime.UtcNow - lastCheck.Value).TotalHours >= 1)
             {
                 if (lastCheck.HasValue)
                     _logService.Log($"Checking for updates on Portal since {lastCheck.Value}");
 
                 var hours = lastCheck.HasValue ? (DateTime.UtcNow - lastCheck.Value).Hours : 1;
-                _settingsService.SetLastUpdateCheck(DateTime.UtcNow);
+                _settingsService.SetLastModUpdateCheck(DateTime.UtcNow);
                 await CheckForUpdatesAsync(hours);
             }
         }

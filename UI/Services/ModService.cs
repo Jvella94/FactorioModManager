@@ -39,7 +39,7 @@ namespace FactorioModManager.Services
             var customPath = _settingsService.GetModsPath();
             return !string.IsNullOrEmpty(customPath)
                 ? customPath
-                : ModPathHelper.GetModsDirectory();
+                : FolderPathHelper.GetModsDirectory();
         }
 
         public List<(ModInfo Info, bool IsEnabled, DateTime? LastUpdated, string? ThumbnailPath, string FilePath)> LoadAllMods()

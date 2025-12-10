@@ -11,8 +11,11 @@ namespace FactorioModManager.Services
         public string? ApiKey { get; set; }
         public string? Username { get; set; }
         public string? Token { get; set; }
-        public DateTime? LastUpdateCheck { get; set; }
+        public DateTime? LastModUpdateCheck { get; set; }
         public bool KeepOldModFiles { get; set; } = false;
+        public string? FactorioExePath { get; set; }
+        public DateTime? LastAppUpdateCheck { get; set; }
+        public bool CheckForAppUpdates { get; set; } = true;
     }
 
     public class SettingsService : ISettingsService
@@ -39,7 +42,7 @@ namespace FactorioModManager.Services
                 var (Username, Token) = LoadFactorioDefaults();
                 return new Settings
                 {
-                    FactorioModsPath = ModPathHelper.GetModsDirectory(),
+                    FactorioModsPath = FolderPathHelper.GetModsDirectory(),
                     Username = Username,
                     Token = Token
                 };
@@ -53,7 +56,7 @@ namespace FactorioModManager.Services
                 // If mods path is not set, use default
                 if (string.IsNullOrEmpty(settings.FactorioModsPath))
                 {
-                    settings.FactorioModsPath = ModPathHelper.GetModsDirectory();
+                    settings.FactorioModsPath = FolderPathHelper.GetModsDirectory();
                 }
 
                 // If username/token not set, try to load from Factorio
@@ -72,7 +75,7 @@ namespace FactorioModManager.Services
                 var (Username, Token) = LoadFactorioDefaults();
                 return new Settings
                 {
-                    FactorioModsPath = ModPathHelper.GetModsDirectory(),
+                    FactorioModsPath = FolderPathHelper.GetModsDirectory(),
                     Username = Username,
                     Token = Token
                 };
@@ -83,7 +86,7 @@ namespace FactorioModManager.Services
         {
             try
             {
-                var playerDataPath = ModPathHelper.GetPlayerDataPath();
+                var playerDataPath = FolderPathHelper.GetPlayerDataPath();
 
                 if (File.Exists(playerDataPath))
                 {
@@ -133,7 +136,7 @@ namespace FactorioModManager.Services
 
         public string GetModsPath()
         {
-            return _settings.FactorioModsPath ?? ModPathHelper.GetModsDirectory();
+            return _settings.FactorioModsPath ?? FolderPathHelper.GetModsDirectory();
         }
 
         public void SetModsPath(string path)
@@ -175,14 +178,14 @@ namespace FactorioModManager.Services
             SaveSettings();
         }
 
-        public DateTime? GetLastUpdateCheck()
+        public DateTime? GetLastModUpdateCheck()
         {
-            return _settings.LastUpdateCheck;
+            return _settings.LastModUpdateCheck;
         }
 
-        public void SetLastUpdateCheck(DateTime dateTime)
+        public void SetLastModUpdateCheck(DateTime dateTime)
         {
-            _settings.LastUpdateCheck = dateTime;
+            _settings.LastModUpdateCheck = dateTime;
             SaveSettings();
         }
 
@@ -194,6 +197,33 @@ namespace FactorioModManager.Services
         public void SetKeepOldModFiles(bool keepOldFiles)
         {
             _settings.KeepOldModFiles = keepOldFiles;
+            SaveSettings();
+        }
+
+        public string? GetFactorioExecutablePath()
+        {
+            return _settings.FactorioExePath;
+        }
+
+        public void SetFactorioExecutablePath(string path)
+        {
+            _settings.FactorioExePath = path;
+            SaveSettings();
+        }
+
+        public DateTime? GetLastAppUpdateCheck() => _settings.LastAppUpdateCheck;
+
+        public void SetLastAppUpdateCheck(DateTime timestamp)
+        {
+            _settings.LastAppUpdateCheck = timestamp;
+            SaveSettings();
+        }
+
+        public bool GetCheckForAppUpdates() => _settings.CheckForAppUpdates;
+
+        public void SetCheckForAppUpdates(bool enabled)
+        {
+            _settings.CheckForAppUpdates = enabled;
             SaveSettings();
         }
     }

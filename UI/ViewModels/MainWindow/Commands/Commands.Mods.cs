@@ -24,6 +24,8 @@ namespace FactorioModManager.ViewModels.MainWindow
         public ReactiveCommand<ModViewModel, Unit> DeleteOldVersionCommand { get; private set; } = null!;
         public ReactiveCommand<Unit, Unit> CheckSingleModUpdateCommand { get; private set; } = null!;
         public ReactiveCommand<ModViewModel, Unit> ViewDependentsCommand { get; private set; } = null!;
+        public ReactiveCommand<Unit, Unit> LaunchFactorioCommand { get; private set; } = null!;
+        public ReactiveCommand<Unit, Unit> CheckForAppUpdatesCommand { get; private set; } = null!;
 
         private void InitializeModCommands()
         {
@@ -41,6 +43,8 @@ namespace FactorioModManager.ViewModels.MainWindow
             DeleteOldVersionCommand = ReactiveCommand.Create<ModViewModel>(mod => DeleteOldVersion(mod));
             CheckSingleModUpdateCommand = ReactiveCommand.CreateFromTask(CheckSingleModUpdateAsync);
             ViewDependentsCommand = ReactiveCommand.CreateFromTask<ModViewModel>(ViewDependentsAsync);
+            LaunchFactorioCommand = ReactiveCommand.Create(LaunchFactorio);
+            CheckForAppUpdatesCommand = ReactiveCommand.CreateFromTask(CheckForAppUpdatesCustomAsync);
         }
 
         /// <summary>
@@ -243,6 +247,61 @@ namespace FactorioModManager.ViewModels.MainWindow
                     return Result<bool>.Fail(ex.Message, ErrorCode.UnexpectedError);
                 }
             });
+        }
+
+        /// <summary>
+        /// Launches Factorio using the configured executable path (with auto-detection fallback)
+        /// </summary>
+        private void LaunchFactorio()
+        {
+            try
+            {
+                var factorioPath = _settingsService.GetFactorioExecutablePath();
+
+                // If path is not configured, try to auto-detect it
+                if (string.IsNullOrEmpty(factorioPath))
+                {
+                    factorioPath = FolderPathHelper.DetectFactorioExecutable();
+
+                    if (string.IsNullOrEmpty(factorioPath))
+                    {
+                        SetStatus("Factorio path not configured and could not be auto-detected. Please set it in Settings.", LogLevel.Warning);
+                        _logService.Log("Factorio executable path not configured and auto-detection failed", LogLevel.Warning);
+                        return;
+                    }
+
+                    // Save the detected path for future use
+                    _settingsService.SetFactorioExecutablePath(factorioPath);
+                    _logService.Log($"Auto-detected and saved Factorio path: {factorioPath}", LogLevel.Info);
+                }
+
+                if (!System.IO.File.Exists(factorioPath))
+                {
+                    SetStatus($"Factorio executable not found at: {factorioPath}. Please update in Settings.", LogLevel.Error);
+                    _logService.LogError("Factorio executable not found", new System.IO.FileNotFoundException("Factorio not found", factorioPath));
+                    return;
+                }
+
+                var processInfo = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = factorioPath,
+                    UseShellExecute = true,
+                    WorkingDirectory = System.IO.Path.GetDirectoryName(factorioPath) ?? string.Empty
+                };
+
+                System.Diagnostics.Process.Start(processInfo);
+                SetStatus($"Launched Factorio");
+                _logService.Log($"Launched Factorio: {factorioPath}", LogLevel.Info);
+            }
+            catch (Exception ex)
+            {
+                HandleError(ex, "Error launching Factorio");
+            }
+        }
+
+        private async Task CheckForAppUpdatesCustomAsync()
+        {
+            await CheckForAppUpdatesAsync();
         }
     }
 }

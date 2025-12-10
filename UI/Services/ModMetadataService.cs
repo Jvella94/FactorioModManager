@@ -38,7 +38,7 @@ namespace FactorioModManager.Services
             _logService = logService;
             // Auto-save every 5 seconds if dirty
             _saveTimer = new Timer(AutoSave, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
-            var modsDir = ModPathHelper.GetModsDirectory();
+            var modsDir = FolderPathHelper.GetModsDirectory();
             _metadataPath = Path.Combine(modsDir, "mod-metadata.json");
             LoadMetadata();
         }

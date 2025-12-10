@@ -9,6 +9,7 @@ using System.Linq;
 using System.Reactive.Disposables;
 using System.Reactive.Disposables.Fluent;
 using System.Reactive.Linq;
+using System.Threading.Tasks;
 
 namespace FactorioModManager.ViewModels.MainWindow
 {
@@ -32,6 +33,8 @@ namespace FactorioModManager.ViewModels.MainWindow
         private string _statusText = "Ready";
         private string? _selectedAuthorFilter;
         private string _authorSearchText = string.Empty;
+        private bool _showOnlyUnusedInternals = false;
+        private bool _showOnlyPendingUpdates = false;
 
         public bool HasSelectedMod => SelectedMod != null;
 
@@ -44,6 +47,7 @@ namespace FactorioModManager.ViewModels.MainWindow
         private readonly ILogService _logService;
         private readonly IDownloadService _downloadService;
         private readonly IErrorMessageService _errorMessageService;
+        private readonly IAppUpdateChecker _appUpdateChecker;
 
         public MainWindowViewModel(
             IModService modService,
@@ -54,7 +58,8 @@ namespace FactorioModManager.ViewModels.MainWindow
             IUIService uiService,
             ILogService logService,
             IDownloadService downloadService,
-            IErrorMessageService errorMessageService)
+            IErrorMessageService errorMessageService,
+            IAppUpdateChecker appUpdateChecker)
         {
             _modService = modService;
             _groupService = groupService;
@@ -65,6 +70,7 @@ namespace FactorioModManager.ViewModels.MainWindow
             _logService = logService;
             _downloadService = downloadService;
             _errorMessageService = errorMessageService;
+            _appUpdateChecker = appUpdateChecker;
 
             SetupReactiveFiltering();
             InitializeCommands();
@@ -77,9 +83,11 @@ namespace FactorioModManager.ViewModels.MainWindow
         {
             // Throttle search text changes
             this.WhenAnyValue(
-                    x => x.SearchText,
-                    x => x.SelectedAuthorFilter,
-                    x => x.SelectedGroup)
+                x => x.SearchText,
+                x => x.SelectedAuthorFilter,
+                x => x.SelectedGroup,
+                x => x.ShowOnlyUnusedInternals,
+                x => x.ShowOnlyPendingUpdates)
                 .Throttle(TimeSpan.FromMilliseconds(150))
                 .ObserveOn(RxApp.MainThreadScheduler)
                 .Subscribe(_ => ApplyModFilter())
@@ -158,6 +166,14 @@ namespace FactorioModManager.ViewModels.MainWindow
                             return false;
                     }
 
+                    // Filter for unused internal mods
+                    if (_showOnlyUnusedInternals && !mod.IsUnusedInternal)
+                        return false;
+
+                    // Filter for mods with pending updates
+                    if (_showOnlyPendingUpdates && !mod.HasUpdate)
+                        return false;
+
                     return true;
                 })
                 .OrderByDescending(m => m.LastUpdated ?? DateTime.MinValue)
@@ -221,6 +237,45 @@ namespace FactorioModManager.ViewModels.MainWindow
         {
             var parenIndex = authorFilter.IndexOf('(');
             return parenIndex > 0 ? authorFilter[..parenIndex].Trim() : authorFilter.Trim();
+        }
+
+        private async void InitializeStartupTasks()
+        {
+            // Check for app updates on startup if enabled
+            if (_settingsService.GetCheckForAppUpdates())
+            {
+                _ = Task.Run(async () =>
+                {
+                    await Task.Delay(2000); // Delay to avoid startup blocking
+                    await CheckForAppUpdatesAsync();
+                });
+            }
+        }
+
+        private async Task CheckForAppUpdatesAsync()
+        {
+            try
+            {
+                var currentVersion = "1.0.0"; // Replace with Assembly.GetExecutingAssembly().GetName().Version.ToString()
+                var updateInfo = await _appUpdateChecker.CheckForUpdatesAsync(currentVersion);
+
+                if (updateInfo?.IsNewer == true)
+                {
+                    await _uiService.InvokeAsync(() =>
+                    {
+                        SetStatus($"New version {updateInfo.Version} available! Check Settings → Help.", LogLevel.Info);
+                        _uiService.ShowMessageAsync("Update Available",
+                            $"A new version {updateInfo.Version} of Factorio Mod Manager is available!\n\n" +
+                            $"Release notes: {updateInfo.HtmlUrl}");
+                    });
+                }
+
+                _settingsService.SetLastAppUpdateCheck(DateTime.UtcNow);
+            }
+            catch (Exception ex)
+            {
+                _logService.LogError("App update check failed", ex);
+            }
         }
 
         // Properties
@@ -303,6 +358,18 @@ namespace FactorioModManager.ViewModels.MainWindow
         public string UnusedInternalWarning => $"⚠ {UnusedInternalCount} unused internal dependencies";
         public int UnusedInternalCount => _allMods.Count(m => m.IsUnusedInternal);
         public bool HasUnusedInternals => UnusedInternalCount > 0;
+
+        public bool ShowOnlyUnusedInternals
+        {
+            get => _showOnlyUnusedInternals;
+            set => this.RaiseAndSetIfChanged(ref _showOnlyUnusedInternals, value);
+        }
+
+        public bool ShowOnlyPendingUpdates
+        {
+            get => _showOnlyPendingUpdates;
+            set => this.RaiseAndSetIfChanged(ref _showOnlyPendingUpdates, value);
+        }
 
         /// <summary>
         /// Helper to set status text and log message with proper error handling

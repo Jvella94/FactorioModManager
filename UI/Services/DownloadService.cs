@@ -39,7 +39,7 @@ namespace FactorioModManager.Services
                 }
 
                 var authenticatedUrl = Constants.Urls.GetModDownloadUrl(downloadUrl, username, token);
-                var modsDirectory = ModPathHelper.GetModsDirectory();
+                var modsDirectory = FolderPathHelper.GetModsDirectory();
                 var fileName = $"{modName}_{version}.zip";
                 var filePath = Path.Combine(modsDirectory, fileName);
 
@@ -138,7 +138,7 @@ namespace FactorioModManager.Services
             try
             {
                 var fileName = Path.GetFileName(sourceFilePath);
-                var modsDirectory = ModPathHelper.GetModsDirectory();
+                var modsDirectory = FolderPathHelper.GetModsDirectory();
                 var destinationPath = Path.Combine(modsDirectory, fileName);
 
                 var verifyResult = await VerifyModFileAsync(sourceFilePath, fileName);
@@ -165,7 +165,7 @@ namespace FactorioModManager.Services
                 if (keepOldFiles)
                     return;
 
-                var modsDirectory = ModPathHelper.GetModsDirectory();
+                var modsDirectory = FolderPathHelper.GetModsDirectory();
                 var oldFiles = Directory.GetFiles(modsDirectory, $"{modName}_*.zip")
                     .Where(f => !f.Equals(currentVersionFile, StringComparison.OrdinalIgnoreCase))
                     .ToList();

@@ -15,7 +15,7 @@ namespace FactorioModManager.Services
 
         public ModGroupService(ILogService logService)
         {
-            var modsDir = ModPathHelper.GetModsDirectory();
+            var modsDir = FolderPathHelper.GetModsDirectory();
             _groupsFilePath = Path.Combine(modsDir, "mod-groups.json");
             _logService = logService;
         }

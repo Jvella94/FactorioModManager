@@ -24,8 +24,20 @@ namespace FactorioModManager.Services
 
         void SetKeepOldModFiles(bool keep);
 
-        DateTime? GetLastUpdateCheck();
+        DateTime? GetLastModUpdateCheck();
 
-        void SetLastUpdateCheck(DateTime dateTime);
+        void SetLastModUpdateCheck(DateTime dateTime);
+
+        string? GetFactorioExecutablePath();
+
+        void SetFactorioExecutablePath(string path);
+
+        DateTime? GetLastAppUpdateCheck();
+
+        void SetLastAppUpdateCheck(DateTime timestamp);
+
+        bool GetCheckForAppUpdates();
+
+        void SetCheckForAppUpdates(bool enabled);
     }
 }

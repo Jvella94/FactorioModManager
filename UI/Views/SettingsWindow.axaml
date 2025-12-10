@@ -3,11 +3,12 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="using:FactorioModManager.ViewModels.Dialogs"
-        mc:Ignorable="d" d:DesignWidth="600" d:DesignHeight="450"
+        mc:Ignorable="d" d:DesignWidth="600" d:DesignHeight="550"
         x:Class="FactorioModManager.Views.SettingsWindow"
         x:DataType="vm:SettingsWindowViewModel"
         Title="Settings"
-        Width="600" Height="450"
+        Width="650" Height="600"
+        MinWidth="600" MinHeight="500"
         Background="#1E1E1E"
         WindowStartupLocation="CenterOwner">
 
@@ -16,84 +17,183 @@
     <KeyBinding Gesture="Escape" Command="{Binding CancelCommand}" />
   </Window.KeyBindings>
 
-  <Grid Margin="20" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,*,Auto">
+  <Grid Margin="20" RowDefinitions="*,Auto">
 
-    <!-- Mods Directory -->
-    <TextBlock Grid.Row="0"
-               Text="Factorio Mods Directory:"
-               Foreground="White"
-               Margin="0,0,0,5" />
-    <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,0,0,15">
-      <TextBox Grid.Column="0"
-               Text="{Binding ModsPath}"
-               IsReadOnly="True"
-               Margin="0,0,10,0" />
+    <!-- Scrollable Content -->
+    <ScrollViewer Grid.Row="0">
+      <StackPanel Spacing="20">
+
+        <!-- Factorio Executable Path Section -->
+        <StackPanel Spacing="8">
+          <TextBlock Text="Factorio Executable Path"
+                     FontWeight="Bold"
+                     FontSize="14"
+                     Foreground="White" />
+          <TextBlock Text="Path to the Factorio executable file (factorio.exe on Windows, factorio on Linux/Mac)"
+                     Foreground="#888"
+                     FontSize="11"
+                     TextWrapping="Wrap"
+                     Margin="0,0,0,5" />
+
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBox Grid.Column="0"
+                     x:Name="FactorioPathTextBox"
+                     Text="{Binding FactorioExePath}"
+                     Watermark="Path will be auto-detected if left empty..."
+                     Margin="0,0,10,0"
+                     VerticalAlignment="Center" />
+            <Button Grid.Column="1"
+                    Content="Browse..."
+                    Click="BrowseFactorioPath_Click"
+                    Padding="15,8"
+                    VerticalAlignment="Center" />
+          </Grid>
+
+          <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,5,0,0">
+            <Button Content="🔍 Auto-Detect"
+                    Click="AutoDetectFactorioPath_Click"
+                    Padding="10,5"
+                    Background="#2D5016" />
+            <Button Content="Test Launch"
+                    Click="TestFactorioPath_Click"
+                    Padding="10,5"
+                    Background="#1E5A1E" />
+          </StackPanel>
+
+          <TextBlock x:Name="FactorioPathStatus"
+                     FontSize="11"
+                     Margin="0,5,0,0"
+                     TextWrapping="Wrap"
+                     Foreground="#888" />
+        </StackPanel>
+
+        <Separator Background="#333" />
+
+        <!-- Mods Directory Section -->
+        <StackPanel Spacing="8">
+          <TextBlock Text="Factorio Mods Directory"
+                     FontWeight="Bold"
+                     FontSize="14"
+                     Foreground="White" />
+          <TextBlock Text="Location where your Factorio mods are stored"
+                     Foreground="#888"
+                     FontSize="11"
+                     Margin="0,0,0,5" />
+
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBox Grid.Column="0"
+                     Text="{Binding ModsPath}"
+                     IsReadOnly="True"
+                     Margin="0,0,10,0" />
+            <Button Grid.Column="1"
+                    Content="Browse..."
+                    Click="BrowseModsPath"
+                    Padding="15,8" />
+          </Grid>
+        </StackPanel>
+
+        <Separator Background="#333" />
+
+        <!-- API Credentials Section -->
+        <StackPanel Spacing="8">
+          <TextBlock Text="Mod Portal Credentials"
+                     FontWeight="Bold"
+                     FontSize="14"
+                     Foreground="White" />
+          <TextBlock TextWrapping="Wrap"
+                     Foreground="#888"
+                     FontSize="11"
+                     Margin="0,0,0,10"
+                     Text="Username and Token are automatically loaded from Factorio's player-data.json file. You only need to enter them manually if auto-detection fails." />
+
+          <!-- Username -->
+          <TextBlock Text="Factorio Username (for downloads):"
+                     Foreground="White"
+                     Margin="0,0,0,5" />
+          <TextBox Text="{Binding Username}"
+                   Watermark="Auto-detected from Factorio"
+                   Margin="0,0,0,10" />
+
+          <!-- Token -->
+          <TextBlock Text="Factorio Token (for downloads):"
+                     Foreground="White"
+                     Margin="0,0,0,5" />
+          <TextBox Text="{Binding Token}"
+                   Watermark="Auto-detected from Factorio"
+                   PasswordChar="•"
+                   Margin="0,0,0,10" />
+
+          <!-- API Key -->
+          <TextBlock Text="Mod Portal API Key (optional - for browsing):"
+                     Foreground="White"
+                     Margin="0,0,0,5" />
+          <TextBox Text="{Binding ApiKey}"
+                   Watermark="Enter your API key" />
+        </StackPanel>
+
+        <Separator Background="#333" />
+
+        <!-- Update Settings Section -->
+        <StackPanel Spacing="8">
+          <TextBlock Text="Update Settings"
+                     FontWeight="Bold"
+                     FontSize="14"
+                     Foreground="White" />
+
+          <CheckBox x:Name="AutoCheckUpdatesCheckBox"
+                    Content="Automatically check for mod updates on startup"
+                    Foreground="White" />
+
+          <CheckBox Content="Check for Mod Manager updates on startup"
+                    IsChecked="{Binding CheckForAppUpdates}"
+                    Foreground="White" />
+
+          <TextBlock x:Name="LastUpdateCheckText"
+                     Foreground="#888"
+                     FontSize="11"
+                     Margin="20,5,0,0"
+                     Text="Last mod update check: Never" />
+
+          <TextBlock Foreground="#888"
+                     FontSize="11"
+                     Margin="20,5,0,0"
+                    Text="{Binding LastAppUpdateCheck, StringFormat='Last app update check: {0:g}', FallbackValue='Last app update check: Never'}" />
+        </StackPanel>
+
+        <Separator Background="#333" />
+
+        <!-- Other Settings Section -->
+        <StackPanel Spacing="8">
+          <TextBlock Text="Other Settings"
+                     FontWeight="Bold"
+                     FontSize="14"
+                     Foreground="White" />
+
+          <CheckBox Content="Keep old mod files when updating"
+                    IsChecked="{Binding KeepOldModFiles}"
+                    Foreground="White" />
+        </StackPanel>
+      </StackPanel>
+    </ScrollViewer>
+
+    <!-- Dialog Buttons -->
+    <Grid Grid.Row="1"
+          ColumnDefinitions="*,Auto,Auto"
+          Margin="0,20,0,0">
       <Button Grid.Column="1"
-              Content="Browse..."
-              Click="BrowseModsPath" />
-    </Grid>
-
-    <!-- API Key -->
-    <TextBlock Grid.Row="2"
-               Text="Mod Portal API Key (optional - for browsing):"
-               Foreground="White"
-               Margin="0,0,0,5" />
-    <TextBox Grid.Row="3"
-             Text="{Binding ApiKey}"
-             Watermark="Enter your API key"
-             Margin="0,0,0,15" />
-
-    <!-- Username -->
-    <TextBlock Grid.Row="4"
-               Text="Factorio Username (for downloads):"
-               Foreground="White"
-               Margin="0,0,0,5" />
-    <TextBox Grid.Row="5"
-             Text="{Binding Username}"
-             Watermark="Auto-detected from Factorio"
-             Margin="0,0,0,15" />
-
-    <!-- Token -->
-    <TextBlock Grid.Row="6"
-               Text="Factorio Token (for downloads):"
-               Foreground="White"
-               Margin="0,0,0,5" />
-    <TextBox Grid.Row="7"
-             Text="{Binding Token}"
-             Watermark="Auto-detected from Factorio"
-             PasswordChar="•"
-             Margin="0,0,0,15" />
-
-    <!-- Keep old mod files -->
-    <CheckBox Grid.Row="8"
-              Content="Keep old mod files when updating"
-              IsChecked="{Binding KeepOldModFiles}"
-              Foreground="White"
-              VerticalAlignment="Top"
-              Margin="0,0,0,15" />
-
-    <!-- Info text -->
-    <TextBlock Grid.Row="9"
-               TextWrapping="Wrap"
-               Foreground="#888"
-               FontSize="11"
-               VerticalAlignment="Top"
-               Text="Username and Token are automatically loaded from Factorio's player-data.json file. You only need to enter them manually if auto-detection fails." />
-
-    <!-- Buttons -->
-    <StackPanel Grid.Row="10"
-                Orientation="Horizontal"
-                HorizontalAlignment="Right"
-                Spacing="10"
-                Margin="0,10,0,0">
-      <Button Content="Save"
+              Content="Save"
               Command="{Binding SaveCommand}"
-              Width="80"
+              Width="100"
+              Padding="15,8"
+              Margin="0,0,10,0"
+              Background="#2D5016"
               IsDefault="True" />
-      <Button Content="Cancel"
+      <Button Grid.Column="2"
+              Content="Cancel"
               Command="{Binding CancelCommand}"
-              Width="80"
+              Width="100"
+              Padding="15,8"
               IsCancel="True" />
-    </StackPanel>
+    </Grid>
   </Grid>
 </Window>

@@ -129,7 +129,8 @@ namespace FactorioModManager.Services.Infrastructure
             return await Dispatcher.UIThread.InvokeAsync(async () =>
             {
                 var settingsService = ServiceContainer.Instance.Resolve<ISettingsService>();
-                var dialog = new Views.SettingsWindow(settingsService);
+                var loggingService = ServiceContainer.Instance.Resolve<ILogService>();
+                var dialog = new Views.SettingsWindow(settingsService, loggingService);
                 var owner = GetMainWindow();
                 if (owner != null)
                 {

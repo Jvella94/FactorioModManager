@@ -37,6 +37,8 @@ namespace FactorioModManager
             RegisterSingleton<ISettingsService>(new SettingsService(Resolve<ILogService>()));
             RegisterSingleton<IModGroupService>(new ModGroupService(Resolve<ILogService>()));
             RegisterSingleton<IModMetadataService>(new ModMetadataService(Resolve<ILogService>()));
+            RegisterSingleton<ISettingsService>(new SettingsService(Resolve<ILogService>()));
+            RegisterSingleton<IAppUpdateChecker>(new AppUpdateChecker(Resolve<ILogService>(), Resolve<HttpClient>()));
             RegisterSingleton<IDownloadService>(new DownloadService(Resolve<ISettingsService>(), Resolve<ILogService>(), Resolve<HttpClient>()));
 
             // API Services - wrap with caching
@@ -60,7 +62,8 @@ namespace FactorioModManager
                 Resolve<IUIService>(),
                 Resolve<ILogService>(),
                 Resolve<IDownloadService>(),
-                Resolve<IErrorMessageService>()
+                Resolve<IErrorMessageService>(),
+                Resolve<IAppUpdateChecker>()
             ));
         }
 

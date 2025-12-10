@@ -40,6 +40,8 @@
       </MenuItem>
 
       <MenuItem Header="Check for Mod _Updates" Command="{Binding CheckUpdatesCustomCommand}" />
+      <MenuItem Header="Check for Mod Manager Updates"
+                Command="{Binding CheckForAppUpdatesCommand}" />
 
       <MenuItem Header="_Help">
         <MenuItem Header="_About" Click="ShowAbout_Click" />
@@ -49,12 +51,25 @@
     <!-- Search/Filter Toolbar -->
     <Border Grid.Row="1" BorderBrush="#333" BorderThickness="0,0,0,1"
             Background="#2B2B2B" Padding="10">
-      <Grid ColumnDefinitions="Auto,*,Auto">
-        <TextBlock Grid.Column="0" Text="Search:"
+      <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+        <!-- Launch Factorio Button (leftmost) -->
+        <Button Grid.Column="0"
+                Command="{Binding LaunchFactorioCommand}"
+                Padding="12,6"
+                Margin="0,0,15,0"
+                ToolTip.Tip="Launch Factorio"
+                Background="#1E5A1E"
+                VerticalAlignment="Center">
+          <StackPanel Orientation="Horizontal" Spacing="5">
+            <TextBlock Text="▶" FontSize="14" FontWeight="Bold" />
+            <TextBlock Text="Launch Factorio" FontWeight="SemiBold" />
+          </StackPanel>
+        </Button>
+        <TextBlock Grid.Column="1" Text="Search:"
                    VerticalAlignment="Center"
                    Margin="0,0,10,0" />
 
-        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10">
           <TextBox Watermark="Search mods..."
                    Text="{Binding SearchText}"
                    Width="250"
@@ -71,9 +86,30 @@
                            GotFocus="AuthorBox_OnGotFocus"
                            Name="AuthorFilterBox"
                            VerticalAlignment="Center" />
+          <!-- Unused Internal Filter Button -->
+          <ToggleButton IsChecked="{Binding ShowOnlyUnusedInternals}"
+                        VerticalAlignment="Center"
+                        Padding="10,7"
+                        ToolTip.Tip="Show only unused internal dependencies">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <TextBlock Text="⚠" FontSize="14" />
+              <TextBlock Text="Unused Internal" />
+            </StackPanel>
+          </ToggleButton>
+
+          <!-- Pending Updates Filter Button -->
+          <ToggleButton IsChecked="{Binding ShowOnlyPendingUpdates}"
+                        VerticalAlignment="Center"
+                        Padding="10,7"
+                        ToolTip.Tip="Show only mods with pending updates">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <TextBlock Text="⬇" FontSize="14" />
+              <TextBlock Text="Pending Updates" />
+            </StackPanel>
+          </ToggleButton>
         </StackPanel>
 
-        <StackPanel Grid.Column="2"
+        <StackPanel Grid.Column="3"
                     VerticalAlignment="Center"
                     Margin="20,0,10,0">
           <TextBlock Text="{Binding ModCountSummary}"
