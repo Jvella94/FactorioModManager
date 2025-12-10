@@ -35,7 +35,7 @@ namespace FactorioModManager.Services.Settings
 
         public void SetVersion(string? version) => _settingsService.SetFactorioVersion(version);
 
-        public bool HasSpaceAgeDlc() => _settingsService.GetHasSpaceAgeDlc();
+        public bool HasSpaceAgeDlc() => _settingsService.GetHasSpaceAgeDLC();
 
         public void SetHasSpaceAgeDlc(bool value) => _settingsService.SetHasSpaceAgeDlc(value);
 

@@ -313,7 +313,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                 var binFolder = Path.GetDirectoryName(exeDir);
                 var rootDir = Path.GetDirectoryName(binFolder);
 
-                var dataDir = _settingsService.GetFactorioDataPath() ?? Path.Combine(rootDir, "data");
+                var dataDir = _settingsService.GetFactorioDataPath() ?? Path.Combine(rootDir ?? string.Empty, "data");
                 if (!Directory.Exists(dataDir))
                 {
                     _logService.LogWarning($"Factorio data directory not found at: {dataDir}");
@@ -409,7 +409,7 @@ namespace FactorioModManager.ViewModels.MainWindow
         /// <summary>
         /// Gets whether Space Age DLC is detected
         /// </summary>
-        public bool HasSpaceAgeDlc => _settingsService.GetHasSpaceAgeDlc();
+        public bool HasSpaceAgeDlc => _settingsService.GetHasSpaceAgeDLC();
 
         /// <summary>
         /// Gets the formatted Factorio version display text

@@ -24,7 +24,7 @@ namespace FactorioModManager.Models.Mapping
                 apiModel.Title,
                 apiModel.Category,
                 apiModel.DownloadsCount,
-                [.. apiModel.Releases.Select(r => r.ToDTO())]
+                apiModel.Releases.ToShortReleaseDTOs()
             );
         }
 
@@ -35,20 +35,33 @@ namespace FactorioModManager.Models.Mapping
                 apiModel.Title,
                 apiModel.Category,
                 apiModel.DownloadsCount,
-                [.. apiModel.Releases.Select(r => r.ToDTO())],
+                apiModel.Releases.ToFullReleaseDTOs(),
                 apiModel.Changelog,
                 apiModel.SourceUrl,
                 apiModel.Homepage
             );
         }
 
-        public static ReleaseDTO ToDTO(this ModRelease apiRelease)
+        public static ShortReleaseDTO ToRDTO(this ModReleaseShort apiRelease)
         {
-            return new ReleaseDTO(
+            return new ShortReleaseDTO(
                 apiRelease.Version,
                 apiRelease.ReleasedAt,
                 apiRelease.DownloadUrl,
                 apiRelease.InfoJson?.FactorioVersion ?? "2.0"
+            );
+        }
+
+        public static FullReleaseDTO ToFRDTO(this ModReleaseFull apiRelease)
+        {
+            return new FullReleaseDTO(
+                apiRelease.Version,
+                apiRelease.ReleasedAt,
+                apiRelease.DownloadUrl,
+                apiRelease.InfoJson?.FactorioVersion ?? "2.0",
+                apiRelease.InfoJson?.Dependencies is not null
+                    ? [.. apiRelease.InfoJson.Dependencies]
+                    : null
             );
         }
 
@@ -104,7 +117,7 @@ namespace FactorioModManager.Models.Mapping
         // ============================================
 
         public static ModUpdateInfo ToUpdateInfo(
-            this ModRelease release,
+            this ModReleaseShort release,
             string modName,
             string modTitle,
             string currentVersion)
@@ -122,9 +135,14 @@ namespace FactorioModManager.Models.Mapping
         // Batch Conversions
         // ============================================
 
-        public static List<ReleaseDTO> ToReleaseDTOs(this IEnumerable<ModRelease> releases)
+        public static List<ShortReleaseDTO> ToShortReleaseDTOs(this IEnumerable<ModReleaseShort> releases)
         {
-            return [.. releases.Select(r => r.ToDTO())];
+            return [.. releases.Select(r => r.ToRDTO())];
+        }
+
+        public static List<FullReleaseDTO> ToFullReleaseDTOs(this IEnumerable<ModReleaseFull> releases)
+        {
+            return [.. releases.Select(r => r.ToFRDTO())];
         }
 
         public static List<Mod> ToDomainModels(

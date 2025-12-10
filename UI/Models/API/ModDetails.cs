@@ -28,7 +28,7 @@ namespace FactorioModManager.Models.API
         public int DownloadsCount { get; set; }
 
         [JsonPropertyName("releases")]
-        public List<ModRelease> Releases { get; set; } = [];
+        public List<ModReleaseShort> Releases { get; set; } = [];
 
         [JsonPropertyName("thumbnail")]
         public string? Thumbnail { get; set; }
@@ -71,6 +71,9 @@ namespace FactorioModManager.Models.API
 
         [JsonPropertyName("deprecated")]
         public bool? Deprecated { get; set; }
+
+        [JsonPropertyName("releases")]
+        public new List<ModReleaseFull> Releases { get; set; } = [];
     }
 
     /// <summary>

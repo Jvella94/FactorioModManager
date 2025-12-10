@@ -15,7 +15,7 @@ namespace FactorioModManager.Views
             InitializeComponent();
         }
 
-        public VersionHistoryWindow(string modTitle, string modName, List<ReleaseDTO> releases) : this()
+        public VersionHistoryWindow(string modTitle, string modName, List<ShortReleaseDTO> releases) : this()
         {
             var vm = new VersionHistoryViewModel(
                ServiceContainer.Instance.Resolve<IModVersionManager>(),

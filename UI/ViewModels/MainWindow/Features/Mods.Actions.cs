@@ -161,7 +161,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                 var message =
                     $"{mod.Title} is required by the following mods:\n\n" +
                     string.Join("\n", dependents.Select(m => m.Title)) +
-                    "\n\nDo you want to uninstall these mods as well?";
+                    "\n\nDo you want to uninstall these mods as well? If not, they will be disabled.";
 
                 var removeAll = await _uiService.ShowConfirmationAsync(
                     "Mod In Use",

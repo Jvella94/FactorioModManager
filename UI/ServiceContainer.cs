@@ -1,4 +1,4 @@
-﻿using FactorioModManager.Domain;
+﻿using FactorioModManager.Models.Domain;
 using FactorioModManager.Services;
 using FactorioModManager.Services.API;
 using FactorioModManager.Services.Infrastructure;
@@ -68,6 +68,11 @@ namespace FactorioModManager
                 Resolve<ILogService>(),
                 Resolve<HttpClient>()));
 
+            // API Services
+            var apiService = new FactorioApiService(Resolve<HttpClient>(), Resolve<ILogService>());
+            var cachedApiService = new CachedFactorioApiService(apiService, Resolve<ILogService>());
+            RegisterSingleton<IFactorioApiService>(cachedApiService);
+
             // Mod Services
             RegisterSingleton<IModVersionManager>(new ModVersionManager(
                 Resolve<ILogService>(),
@@ -75,21 +80,16 @@ namespace FactorioModManager
                 Resolve<IDownloadService>()));
 
             RegisterSingleton<IModDependencyResolver>(new ModDependencyResolver(
-                Resolve<IModDependencyValidator>(),
                 Resolve<IUIService>(),
-                Resolve<ILogService>()));
+                Resolve<ILogService>(),
+                Resolve<IFactorioApiService>(),
+                Resolve<ISettingsService>()));
 
             RegisterSingleton<IModService>(new ModService(
                 Resolve<IModRepository>(),
                 Resolve<ILogService>()));
 
             RegisterSingleton<IThumbnailCache>(new ThumbnailCache(Resolve<ILogService>()));
-
-
-            // API Services
-            var apiService = new FactorioApiService(Resolve<HttpClient>(), Resolve<ILogService>());
-            var cachedApiService = new CachedFactorioApiService(apiService, Resolve<ILogService>());
-            RegisterSingleton<IFactorioApiService>(cachedApiService);
 
             RegisterSingleton<IModUpdateService>(new ModUpdateService(
                 Resolve<IFactorioApiService>(),

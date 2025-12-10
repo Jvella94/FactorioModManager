@@ -18,7 +18,7 @@ namespace FactorioModManager.Models.API
         public string Name { get; set; } = string.Empty;
 
         [JsonPropertyName("latest_release")]
-        public ModRelease? LatestRelease { get; set; }
+        public ModReleaseShort? LatestRelease { get; set; }
     }
 
     public record PaginationInfo(

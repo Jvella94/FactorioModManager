@@ -1,7 +1,7 @@
-﻿using Avalonia.Controls;
-using FactorioModManager.Domain;
-using FactorioModManager.Models;
+﻿using FactorioModManager.Models;
+using FactorioModManager.Services.API;
 using FactorioModManager.Services.Infrastructure;
+using FactorioModManager.Services.Settings;
 using FactorioModManager.ViewModels;
 using System;
 using System.Collections.Generic;
@@ -13,7 +13,7 @@ namespace FactorioModManager.Services.Mods
     public interface IModDependencyResolver
     {
         Task<DependencyResolution> ResolveForInstallAsync(
-            ModInfo modInfo,
+            string modName,
             IEnumerable<ModViewModel> installedMods);
 
         Task<DependencyResolution> ResolveForUpdateAsync(
@@ -21,7 +21,7 @@ namespace FactorioModManager.Services.Mods
             string version,
             IEnumerable<ModViewModel> installedMods);
 
-        bool ValidateMandatoryDependencies(ModInfo modInfo, IEnumerable<ModViewModel> installedMods);
+        bool ValidateMandatoryDependencies(List<string> dependencies, IEnumerable<ModViewModel> installedMods);
     }
 
     public sealed class DependencyResolution
@@ -34,140 +34,33 @@ namespace FactorioModManager.Services.Mods
     }
 
     public class ModDependencyResolver(
-        IModDependencyValidator validator,
         IUIService uiService,
-        ILogService logService) : IModDependencyResolver
+        ILogService logService,
+        IFactorioApiService factorioApiService,
+        ISettingsService settingsService) : IModDependencyResolver
     {
-        private readonly IModDependencyValidator _validator = validator;
         private readonly IUIService _uiService = uiService;
         private readonly ILogService _logService = logService;
+        private readonly IFactorioApiService _factorioApiService = factorioApiService;
+        private readonly ISettingsService _settingsService = settingsService;
 
         public async Task<DependencyResolution> ResolveForInstallAsync(
-            ModInfo modInfo,
-            IEnumerable<ModViewModel> installedMods)
+         string modName,
+         IEnumerable<ModViewModel> installedMods)
         {
-            var result = new DependencyResolution
+            var visitedMods = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var dependencyTree = new Dictionary<string, List<string>>();
+            var resolution = await ResolveDependenciesRecursivelyAsync(modName, installedMods, visitedMods, dependencyTree);
+
+            // Build the tree message
+            var treeMessage = BuildDependencyTreeMessage(dependencyTree, resolution);
+
+            // Present the summary to the user
+            if (treeMessage.Length > 0)
             {
-                Proceed = true,
-                InstallEnabled = true
-            };
-
-            var modTitle = modInfo.Title ?? modInfo.Name;
-            var deps = modInfo.Dependencies as IReadOnlyList<string>;
-            var mandatoryRaw = Constants.DependencyHelper.GetMandatoryDependencies(deps);
-
-            // Check built-in dependencies
-            var missingBuiltIn = _validator.GetMissingBuiltInDependencies(modInfo);
-            if (missingBuiltIn.Count > 0)
-            {
-                var msg = $"The mod {modTitle} requires official content that is not detected:\n\n" +
-                         string.Join("\n", missingBuiltIn) +
-                         "\n\nThese cannot be installed via the mod portal.";
-
-                await _uiService.ShowMessageAsync("Missing Official Content", msg);
-                result.Proceed = false;
-                return result;
+                resolution.Proceed = await _uiService.ShowConfirmationAsync("Confirm dependencies to be installed", treeMessage, null);
             }
-
-            // Filter out game dependencies
-            var mandatoryDeps = mandatoryRaw
-                .Where(d => !Constants.DependencyHelper.GameDependencies.Contains(d, StringComparer.OrdinalIgnoreCase))
-                .ToList();
-
-            var incompatibleDeps = Constants.DependencyHelper.GetIncompatibleDependencies(deps);
-
-            // Check missing and disabled dependencies
-            var (missingDeps, installedDisabledDeps) = ClassifyDependencies(mandatoryDeps, installedMods);
-
-            // Check incompatible mods
-            var incompatibleLoaded = installedMods
-                .Where(m => m.IsEnabled && incompatibleDeps.Contains(m.Name))
-                .ToList();
-
-            // Handle missing dependencies
-            if (missingDeps.Count > 0)
-            {
-                var installMissing = await _uiService.ShowConfirmationAsync(
-                    "Missing Dependencies",
-                    $"The following mandatory dependencies for {modTitle} are not installed:\n\n" +
-                    string.Join("\n", missingDeps) +
-                    "\n\nDo you want to install these dependencies as well?",
-                    null);
-
-                if (!installMissing)
-                {
-                    var installDisabled = await _uiService.ShowConfirmationAsync(
-                        "Install Disabled?",
-                        $"{modTitle} will not be loadable without these dependencies.\n\n" +
-                        "Install the mod disabled instead?",
-                        null);
-
-                    if (!installDisabled)
-                    {
-                        result.Proceed = false;
-                        return result;
-                    }
-
-                    result.InstallEnabled = false;
-                }
-                else
-                {
-                    result.MissingDependenciesToInstall.AddRange(missingDeps);
-                }
-            }
-
-            // Handle disabled dependencies
-            if (installedDisabledDeps.Count > 0 && result.InstallEnabled)
-            {
-                var enableDeps = await _uiService.ShowConfirmationAsync(
-                    "Enable Dependencies",
-                    $"The following mandatory dependencies for {modTitle} are installed but disabled:\n\n" +
-                    string.Join("\n", installedDisabledDeps.Select(m => m.Title)) +
-                    "\n\nEnable them now?",
-                    null);
-
-                if (enableDeps)
-                {
-                    result.ModsToEnable.AddRange(installedDisabledDeps);
-                }
-                else
-                {
-                    var installDisabled = await _uiService.ShowConfirmationAsync(
-                        "Install Disabled?",
-                        $"{modTitle} will be installed disabled.\n\nContinue?",
-                        null);
-
-                    if (!installDisabled)
-                    {
-                        result.Proceed = false;
-                        return result;
-                    }
-
-                    result.InstallEnabled = false;
-                }
-            }
-
-            // Handle incompatible mods
-            if (incompatibleLoaded.Count > 0 && result.InstallEnabled)
-            {
-                var disableIncompatibles = await _uiService.ShowConfirmationAsync(
-                    "Incompatible Mods",
-                    $"The following mods are incompatible with {modTitle}:\n\n" +
-                    string.Join("\n", incompatibleLoaded.Select(m => m.Title)) +
-                    "\n\nDisable them?",
-                    null);
-
-                if (disableIncompatibles)
-                {
-                    result.ModsToDisable.AddRange(incompatibleLoaded);
-                }
-                else
-                {
-                    result.InstallEnabled = false;
-                }
-            }
-
-            return result;
+            return resolution;
         }
 
         public async Task<DependencyResolution> ResolveForUpdateAsync(
@@ -187,15 +80,15 @@ namespace FactorioModManager.Services.Mods
             return await Task.FromResult(result);
         }
 
-        public bool ValidateMandatoryDependencies(ModInfo modInfo, IEnumerable<ModViewModel> installedMods)
+        public bool ValidateMandatoryDependencies(List<string> dependencies, IEnumerable<ModViewModel> installedMods)
         {
-            var mandatoryDeps = Constants.DependencyHelper.GetMandatoryDependencies(modInfo.Dependencies);
+            var mandatoryDeps = Constants.DependencyHelper.GetMandatoryDependencies(dependencies);
             var (missing, _) = ClassifyDependencies(mandatoryDeps, installedMods);
 
             return missing.Count == 0;
         }
 
-        private static (List<string> Missing, List<ModViewModel> Disabled) ClassifyDependencies(
+        private (List<string> Missing, List<ModViewModel> Disabled) ClassifyDependencies(
             IReadOnlyList<string> dependencies,
             IEnumerable<ModViewModel> installedMods)
         {
@@ -208,6 +101,19 @@ namespace FactorioModManager.Services.Mods
                 var depMod = installedModsList.FirstOrDefault(
                     m => m.Name.Equals(depName, StringComparison.OrdinalIgnoreCase));
 
+                if (Constants.DependencyHelper.IsGameDependency(depName))
+                {
+                    if (Constants.DependencyHelper.IsDLCDependency(depName) && _settingsService.GetHasSpaceAgeDLC() == false)
+                    {
+                        _logService.Log($"Missing required DLC for dependency: {depName}", LogLevel.Warning);
+                    }
+                    else
+                    {
+                        _logService.Log($"Skipping game dependency: {depName}", LogLevel.Info);
+                        continue;
+                    }
+                }
+
                 if (depMod == null)
                 {
                     missing.Add(depName);
@@ -219,6 +125,176 @@ namespace FactorioModManager.Services.Mods
             }
 
             return (missing, disabled);
+        }
+
+        private async Task<DependencyResolution> ResolveDependenciesRecursivelyAsync(
+            string modName,
+            IEnumerable<ModViewModel> installedMods,
+            HashSet<string> visitedMods,
+            Dictionary<string, List<string>> dependencyTree)
+        {
+            // Prevent infinite loops in circular dependencies
+            if (visitedMods.Contains(modName))
+            {
+                _logService.Log($"Skipping already visited mod: {modName}", LogLevel.Info);
+                return new DependencyResolution { Proceed = true, InstallEnabled = true };
+            }
+
+            visitedMods.Add(modName);
+
+            var result = new DependencyResolution
+            {
+                Proceed = true,
+                InstallEnabled = true
+            };
+
+            try
+            {
+                // Fetch mod details from the API
+                _logService.LogDebug($"Fetching details for mod: {modName}");
+                var modDetails = await _factorioApiService.GetModDetailsFullAsync(modName);
+                if (modDetails?.Releases == null || modDetails.Releases.Count == 0)
+                {
+                    _logService.Log($"No release details found for {modName}", LogLevel.Warning);
+                    return new DependencyResolution { Proceed = false, InstallEnabled = false };
+                }
+
+                // Get the latest release
+                var latestRelease = modDetails.Releases
+                    .OrderByDescending(r => r.ReleasedAt)
+                    .FirstOrDefault();
+
+                if (latestRelease == null || latestRelease.Dependencies == null)
+                {
+                    _logService.Log($"No dependencies found for {modName}", LogLevel.Info);
+                    return result;
+                }
+
+                // Classify dependencies
+                var mandatoryDeps = Constants.DependencyHelper.GetMandatoryDependencies(latestRelease.Dependencies);
+                var incompatibleDeps = Constants.DependencyHelper.GetIncompatibleDependencies(latestRelease.Dependencies);
+
+                _logService.Log($"Mandatory dependencies for {modName}: {string.Join(", ", mandatoryDeps)}", LogLevel.Info);
+                _logService.Log($"Incompatible dependencies for {modName}: {string.Join(", ", incompatibleDeps)}", LogLevel.Info);
+
+                var (missingDeps, disabledDeps) = ClassifyDependencies(mandatoryDeps, installedMods);
+                var incompatibleLoaded = installedMods
+                    .Where(m => m.IsEnabled && incompatibleDeps.Contains(m.Name))
+                    .ToList();
+
+                // Add missing dependencies to the tree
+                if (!dependencyTree.TryGetValue(modName, out List<string>? value))
+                {
+                    value = [];
+                    dependencyTree[modName] = value;
+                }
+
+                // Use a HashSet to ensure unique entries in MissingDependenciesToInstall
+                var uniqueDependencies = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                foreach (var missingDep in missingDeps)
+                {
+                    _logService.Log($"Found missing dependency: {missingDep}", LogLevel.Info);
+                    value.Add(missingDep);
+
+                    // Add the missing dependency to the HashSet
+                    if (uniqueDependencies.Add(missingDep))
+                    {
+                        result.MissingDependenciesToInstall.Add(missingDep);
+                    }
+
+                    // Recursively resolve dependencies for the missing dependency
+                    var depResolution = await ResolveDependenciesRecursivelyAsync(missingDep, installedMods, visitedMods, dependencyTree);
+                    if (!depResolution.Proceed)
+                    {
+                        result.Proceed = false;
+                        return result;
+                    }
+
+                    // Add unique dependencies from the recursive result
+                    foreach (var dep in depResolution.MissingDependenciesToInstall)
+                    {
+                        if (uniqueDependencies.Add(dep))
+                        {
+                            result.MissingDependenciesToInstall.Add(dep);
+                        }
+                    }
+
+                    result.ModsToEnable.AddRange(depResolution.ModsToEnable);
+                    result.ModsToDisable.AddRange(depResolution.ModsToDisable);
+                }
+
+                // Aggregate disabled dependencies
+                if (disabledDeps.Count > 0)
+                {
+                    _logService.Log($"Disabled dependencies for {modName}: {string.Join(", ", disabledDeps.Select(m => m.Title))}", LogLevel.Warning);
+                    result.ModsToEnable.AddRange(disabledDeps);
+                }
+
+                // Aggregate incompatible mods
+                if (incompatibleLoaded.Count > 0)
+                {
+                    _logService.Log($"Incompatible mods for {modName}: {string.Join(", ", incompatibleLoaded.Select(m => m.Title))}", LogLevel.Warning);
+                    result.ModsToDisable.AddRange(incompatibleLoaded);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logService.LogError($"Error resolving dependencies for {modName}: {ex.Message}", ex);
+                result.Proceed = false;
+            }
+
+            return result;
+        }
+
+        private static string BuildDependencyTreeMessage(
+             Dictionary<string, List<string>> dependencyTree,
+             DependencyResolution resolution)
+        {
+            var message = new System.Text.StringBuilder();
+
+            if (dependencyTree.Count == 0)
+            {
+                message.AppendLine("No dependencies were found.");
+                return message.ToString();
+            }
+
+            void AppendTree(string modName, int level)
+            {
+                var indent = new string(' ', level * 4);
+                message.AppendLine($"{indent}- {modName}");
+
+                if (dependencyTree.TryGetValue(modName, out var dependencies))
+                {
+                    foreach (var dependency in dependencies)
+                    {
+                        AppendTree(dependency, level + 1);
+                    }
+                }
+            }
+
+            message.AppendLine("Dependency Tree:");
+            AppendTree(dependencyTree.Keys.First(), 0);
+
+            if (resolution.ModsToEnable.Count > 0)
+            {
+                message.AppendLine("\nDisabled Dependencies:");
+                foreach (var mod in resolution.ModsToEnable)
+                {
+                    message.AppendLine($"- {mod.Title}");
+                }
+            }
+
+            if (resolution.ModsToDisable.Count > 0)
+            {
+                message.AppendLine("\nIncompatible Mods:");
+                foreach (var mod in resolution.ModsToDisable)
+                {
+                    message.AppendLine($"- {mod.Title}");
+                }
+            }
+
+            return message.ToString();
         }
     }
 }

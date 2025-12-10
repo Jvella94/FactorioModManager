@@ -13,7 +13,7 @@ namespace FactorioModManager.ViewModels.Dialogs
         private bool _isInstalled;
         private bool _canDelete = true;
 
-        public ReleaseDTO Release { get; }
+        public ShortReleaseDTO Release { get; }
 
         public string Version => Release.Version;
         public DateTime ReleasedAt => Release.ReleasedAt;
@@ -52,7 +52,7 @@ namespace FactorioModManager.ViewModels.Dialogs
         // Button is enabled if: downloading OR (deleting AND canDelete)
         public bool CanDeleteOrDownload => !IsInstalled || CanDelete;
 
-        public VersionHistoryReleaseViewModel(ReleaseDTO release, IModVersionManager modVersionManager, string modName)
+        public VersionHistoryReleaseViewModel(ShortReleaseDTO release, IModVersionManager modVersionManager, string modName)
         {
             Release = release;
             _modVersionManager = modVersionManager;

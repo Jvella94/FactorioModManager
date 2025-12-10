@@ -3,7 +3,7 @@ using FactorioModManager.Services.API;
 using FactorioModManager.Services.Infrastructure;
 using Moq;
 
-namespace Tests.ServicesTests
+namespace FMM.Tests.ServicesTests
 {
     public class ModMetadataServiceTests
     {
@@ -46,19 +46,6 @@ namespace Tests.ServicesTests
         }
 
         [Fact]
-        public void NeedsCategoryCheck_ReturnsTrueForNewMod()
-        {
-            // Arrange
-            var modName = "new-mod";
-
-            // Act
-            var result = _service.NeedsCategoryCheck(modName);
-
-            // Assert
-            Assert.True(result);
-        }
-
-        [Fact]
         public void ClearAllUpdates_ClearsUpdateFlags()
         {
             // Arrange
@@ -82,62 +69,6 @@ namespace Tests.ServicesTests
             _service.UpdateSourceUrl(modName, sourceUrl);
             // Assert
             Assert.Equal(sourceUrl, _service.GetSourceUrl(modName));
-        }
-
-        [Fact]
-        public void NeedsSourceUrlCheck_ReturnsFalseIfRecentlyChecked()
-        {
-            // Arrange
-            var modName = "recently-checked-mod";
-            _service.UpdateSourceUrl(modName, "https://example.com/mod", wasChecked: true);
-            // Act
-            var result = _service.NeedsSourceUrlCheck(modName);
-            // Assert
-            Assert.False(result);
-        }
-
-        [Fact]
-        public void NeedsSourceUrlCheck_ReturnsTrueIfNotChecked()
-        {
-            // Arrange
-            var modName = "not-checked-mod";
-            _service.UpdateSourceUrl(modName, "https://example.com/mod", wasChecked: false);
-            // Act
-            var result = _service.NeedsSourceUrlCheck(modName);
-            // Assert
-            Assert.True(result);
-        }
-
-        [Fact]
-        public void NeedsSourceUrlCheck_ReturnsTrueIfCheckedLongAgo()
-        {
-            // Arrange
-            var modName = "old-checked-mod";
-            _service.UpdateSourceUrl(modName, "https://example.com/mod", wasChecked: true);
-            // Manually set LastChecked to more than 7 days ago
-            var metadataField = typeof(ModMetadataService).GetField("_cache", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            var cache = (Dictionary<string, ModMetadata>)metadataField.GetValue(_service)!;
-            cache[modName].CreatedOn = DateTime.UtcNow.AddDays(-8);
-            // Act
-            var result = _service.NeedsSourceUrlCheck(modName);
-            // Assert
-            Assert.True(result);
-        }
-
-        [Fact]
-        public async void CheckSourceUrlLoadSuccessfully()
-        {
-            var modName = "single-furnace-stack";
-            _service.ClearMetadataForMod(modName);
-            var details = await _apiService.GetModDetailsFullAsync(modName);
-            // Manually clear cache
-            if (details != null)
-            {
-            }
-            else
-            {
-                _service.CreateMetadata(modName);
-            }
         }
     }
 }

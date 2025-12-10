@@ -73,7 +73,7 @@ namespace Tests.Mocks
             return Task.CompletedTask;
         }
 
-        public Task ShowVersionHistoryAsync(string modTitle, string modName, System.Collections.Generic.List<FactorioModManager.Models.DTO.ReleaseDTO> releases)
+        public Task ShowVersionHistoryAsync(string modTitle, string modName, System.Collections.Generic.List<FactorioModManager.Models.DTO.ShortReleaseDTO> releases)
         {
             return Task.CompletedTask;
         }

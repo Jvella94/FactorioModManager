@@ -195,16 +195,8 @@ namespace FactorioModManager
 
         public static class DependencyHelper
         {
-            /// <summary>
-            /// List of all official game dependencies that come with Factorio
-            /// </summary>
-            public static readonly HashSet<string> GameDependencies = new(StringComparer.OrdinalIgnoreCase)
-            {
-                "base",
-                "space-age",
-                "quality",
-                "elevated-rails"
-            };
+            private const string _baseGameName = "base";
+            private static readonly string[] _dLCNames = ["space-age", "quality", "elevated-rails"];
 
             /// <summary>
             /// Checks if a dependency name is an official game dependency
@@ -213,7 +205,17 @@ namespace FactorioModManager
             /// <returns>True if it's a game dependency, false otherwise</returns>
             public static bool IsGameDependency(string dependencyName)
             {
-                return GameDependencies.Contains(dependencyName);
+                return dependencyName == _baseGameName || _dLCNames.Contains(dependencyName);
+            }
+
+            /// <summary>
+            /// Checks if a dependency name is an official game dependency
+            /// </summary>
+            /// <param name="dependencyName">The dependency name to check</param>
+            /// <returns>True if it's a game dependency, false otherwise</returns>
+            public static bool IsDLCDependency(string dependencyName)
+            {
+                return _dLCNames.Contains(dependencyName);
             }
 
             /// <summary>

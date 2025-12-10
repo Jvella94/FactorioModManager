@@ -83,6 +83,6 @@ namespace FactorioModManager.Services.Infrastructure
         /// Shows the version history window
         /// </summary>
         Task ShowVersionHistoryAsync(string modTitle, string modName,
-            List<Models.DTO.ReleaseDTO> releases);
+            List<Models.DTO.ShortReleaseDTO> releases);
     }
 }

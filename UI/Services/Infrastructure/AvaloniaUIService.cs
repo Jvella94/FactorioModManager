@@ -179,7 +179,7 @@ namespace FactorioModManager.Services.Infrastructure
         }
 
         public Task ShowVersionHistoryAsync(string modTitle, string modName,
-            System.Collections.Generic.List<Models.DTO.ReleaseDTO> releases)
+            System.Collections.Generic.List<Models.DTO.ShortReleaseDTO> releases)
         {
             return Dispatcher.UIThread.InvokeAsync(() =>
             {

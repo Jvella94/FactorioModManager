@@ -48,7 +48,7 @@ namespace FactorioModManager.Services.Settings
 
         void SetFactorioVersion(string? version);
 
-        bool GetHasSpaceAgeDlc();
+        bool GetHasSpaceAgeDLC();
 
         void SetHasSpaceAgeDlc(bool value);
 
@@ -293,7 +293,7 @@ namespace FactorioModManager.Services.Settings
             SaveSettings();
         }
 
-        public bool GetHasSpaceAgeDlc() => _settings.HasSpaceAgeDlc;
+        public bool GetHasSpaceAgeDLC() => _settings.HasSpaceAgeDlc;
 
         public void SetHasSpaceAgeDlc(bool value)
         {

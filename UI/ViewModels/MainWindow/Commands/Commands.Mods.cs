@@ -1,4 +1,5 @@
 ﻿using FactorioModManager.Models;
+using FactorioModManager.Models.Domain;
 using FactorioModManager.Services;
 using ReactiveUI;
 using System;
@@ -141,11 +142,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                     ? await InstallModFromUrlAsync(data)
                     : await InstallModFromFileAsync(data);
 
-                if (installResult.Success)
-                {
-                    await RefreshModsAsync();
-                }
-                else if (installResult.Error != null)
+                if (installResult.Error != null)
                 {
                     SetStatus(installResult.Error, LogLevel.Error);
                 }
@@ -187,68 +184,9 @@ namespace FactorioModManager.ViewModels.MainWindow
                         SetStatus($"Fetching {modName} from mod portal...");
                     });
 
-                    var modDetails = await _apiService.GetModDetailsAsync(modName);
-                    if (modDetails?.Releases == null || modDetails.Releases.Count == 0)
-                    {
-                        _logService.LogWarning($"Failed to fetch release details for {modName}");
-                        await _uiService.InvokeAsync(() =>
-                        {
-                            SetStatus($"Failed to fetch mod details for {modName}", LogLevel.Error);
-                        });
-                        return Result.Fail("No release information found", ErrorCode.ApiRequestFailed);
-                    }
-
-                    var latestRelease = modDetails.Releases
-                        .OrderByDescending(r => r.ReleasedAt)
-                        .FirstOrDefault();
-
-                    if (latestRelease == null || string.IsNullOrEmpty(latestRelease.DownloadUrl))
-                    {
-                        _logService.LogWarning($"No download URL found for {modName}");
-                        await _uiService.InvokeAsync(() =>
-                        {
-                            SetStatus($"No download URL available for {modName}", LogLevel.Error);
-                        });
-                        return Result.Fail("No download URL", ErrorCode.ApiRequestFailed);
-                    }
-
-                    var modTitle = modDetails.Title ?? modName;
-                    await _uiService.InvokeAsync(() =>
-                    {
-                        SetStatus($"Downloading {modTitle}...");
-                    });
-
-                    var downloadResult = await _downloadService.DownloadModAsync(
-                        modName,
-                        modTitle,
-                        latestRelease.Version,
-                        latestRelease.DownloadUrl);
-
-                    if (!downloadResult.Success)
-                        return downloadResult;
-
-                    // At this point the mod zip exists locally; get its ModInfo
-                    var modsDirectory = FolderPathHelper.GetModsDirectory();
-                    var downloadedPath = System.IO.Path.Combine(
-                        modsDirectory,
-                        $"{modName}_{latestRelease.Version}.zip");
-
-                    var modInfo = _modService.ReadModInfo(downloadedPath);
-                    if (modInfo == null)
-                    {
-                        await _uiService.InvokeAsync(() =>
-                        {
-                            SetStatus($"Installed {modTitle}, but could not read info.json for dependency checks.", LogLevel.Warning);
-                        });
-                        return downloadResult;
-                    }
-
-                    // Resolve dependencies using local ModInfo (workaround for API not providing them)
-                    var resolution = await _modDependencyResolver.ResolveForInstallAsync(modInfo, _allMods);
+                    var resolution = await _modDependencyResolver.ResolveForInstallAsync(modName, _allMods);
                     if (!resolution.Proceed)
                         return Result.Fail("Installation cancelled by user due to dependencies.", ErrorCode.OperationCancelled);
-
-                    await RefreshModsAsync();
 
                     await _uiService.InvokeAsync(() =>
                     {
@@ -272,11 +210,30 @@ namespace FactorioModManager.ViewModels.MainWindow
                                 _modService.ToggleMod(vm.Name, false);
                             }
                         }
+                    });
 
-                        var installedMain = _allMods.FirstOrDefault(m => m.Name == modInfo.Name);
+                    foreach (var mod in resolution.MissingDependenciesToInstall)
+                    {
+                        var result = await InstallMod(mod);
+                        if (!result.Success)
+                        {
+                            await _uiService.InvokeAsync(() =>
+                            {
+                                SetStatus($"Failed to install dependency {modName}: {result.Error}", LogLevel.Warning);
+                            });
+                            return result;
+                        }
+                    }
+
+                    await InstallMod(modName);
+                    await RefreshModsAsync();
+                    var installedMain = _allMods.FirstOrDefault(m => m.Name == modName);
+                    await _uiService.InvokeAsync(() =>
+                    {
                         if (installedMain != null)
                         {
                             installedMain.IsEnabled = resolution.InstallEnabled;
+
                             _modService.ToggleMod(installedMain.Name, resolution.InstallEnabled);
 
                             SelectedMod = installedMain;
@@ -287,11 +244,11 @@ namespace FactorioModManager.ViewModels.MainWindow
                         }
                         else
                         {
-                            SetStatus($"Successfully downloaded {modTitle}, but it was not found after refresh.", LogLevel.Warning);
+                            SetStatus($"Successfully downloaded {modName}, but it was not found after refresh.", LogLevel.Warning);
                         }
                     });
 
-                    return downloadResult;
+                    return Result.Ok();
                 }
                 catch (Exception ex)
                 {
@@ -302,6 +259,67 @@ namespace FactorioModManager.ViewModels.MainWindow
                     return Result.Fail(ex.Message, ErrorCode.UnexpectedError);
                 }
             });
+        }
+
+        private async Task<Result> InstallMod(string modName)
+        {
+            var modDetails = await _apiService.GetModDetailsAsync(modName);
+            if (modDetails?.Releases == null || modDetails.Releases.Count == 0)
+            {
+                _logService.LogWarning($"Failed to fetch release details for {modName}");
+                await _uiService.InvokeAsync(() =>
+                {
+                    SetStatus($"Failed to fetch mod details for {modName}", LogLevel.Error);
+                });
+                return Result.Fail("No release information found", ErrorCode.ApiRequestFailed);
+            }
+
+            var latestRelease = modDetails.Releases
+                .OrderByDescending(r => r.ReleasedAt)
+                .FirstOrDefault();
+
+            if (latestRelease == null || string.IsNullOrEmpty(latestRelease.DownloadUrl))
+            {
+                _logService.LogWarning($"No download URL found for {modName}");
+                await _uiService.InvokeAsync(() =>
+                {
+                    SetStatus($"No download URL available for {modName}", LogLevel.Error);
+                });
+                return Result.Fail("No download URL", ErrorCode.ApiRequestFailed);
+            }
+
+            var modTitle = modDetails.Title ?? modName;
+            await _uiService.InvokeAsync(() =>
+            {
+                SetStatus($"Downloading {modTitle}...");
+            });
+
+            var downloadResult = await _downloadService.DownloadModAsync(
+                modName,
+                modTitle,
+                latestRelease.Version,
+                latestRelease.DownloadUrl);
+
+            if (!downloadResult.Success)
+                return downloadResult;
+
+            // At this point the mod zip exists locally; get its ModInfo
+            var modsDirectory = FolderPathHelper.GetModsDirectory();
+            var downloadedPath = System.IO.Path.Combine(
+                modsDirectory,
+                $"{modName}_{latestRelease.Version}.zip");
+
+            var modInfo = _modService.ReadModInfo(downloadedPath);
+            if (modInfo == null)
+            {
+                await _uiService.InvokeAsync(() =>
+                {
+                    SetStatus($"Installed {modTitle}, but could not read info.json for dependency checks.", LogLevel.Warning);
+                });
+                return downloadResult;
+            }
+
+            return Result.Ok();
         }
 
         /// <summary>

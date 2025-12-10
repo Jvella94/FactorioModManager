@@ -5,6 +5,7 @@ using FactorioModManager.Services.Mods;
 using FactorioModManager.Services.Settings;
 using ReactiveUI;
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Reactive;
@@ -37,7 +38,7 @@ namespace FactorioModManager.ViewModels.Dialogs
             IUIService uiService,
             string modTitle,
             string modName,
-            System.Collections.Generic.List<ReleaseDTO> releases,
+            List<ShortReleaseDTO> releases,
             Window? parentWindow = null)
         {
             _versionManager = versionManager;
