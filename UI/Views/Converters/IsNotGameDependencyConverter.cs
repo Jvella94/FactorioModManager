@@ -19,11 +19,19 @@ namespace FactorioModManager.Views.Converters
             if (value is string dependency)
             {
                 var parts = dependency.Split(Constants.Separators.Dependency, StringSplitOptions.RemoveEmptyEntries);
-                if (parts.Length == 0) return true;
+                if (parts.Length == 0)
+                    return true;
 
                 var depName = parts[0];
-                return !Constants.GameDependencies.IsGameDependency(depName);
+                bool isUserMod = !Constants.GameDependencies.IsGameDependency(depName);
+
+                // If parameter == "invert", return the opposite (true for game deps)
+                if (parameter is string p && string.Equals(p, "invert", StringComparison.OrdinalIgnoreCase))
+                    return !isUserMod;
+
+                return isUserMod;
             }
+
             return true;
         }
 

@@ -16,6 +16,9 @@
 
   <Window.Resources>
     <converter:IsNotGameDependencyConverter x:Key="IsNotGameDependencyConverter" />
+    <converter:BaseGameVersionConverter x:Key="BaseGameVersionConverter" />
+    <converter:IsBaseDependencyConverter x:Key="IsBaseDependencyConverter" />
+    <converter:GameDependencyIconPathConverter x:Key="GameDependencyIconPathConverter" />
   </Window.Resources>
 
   <Design.DataContext>
@@ -254,6 +257,7 @@
                        Width="200" Height="200"
                        Stretch="Uniform" />
 
+                <!-- Mod Details -->
                 <TextBlock Text="{Binding Title, TargetNullValue={x:Null}}"
                            FontSize="18" FontWeight="Bold"
                            TextWrapping="Wrap" />
@@ -324,7 +328,44 @@
                 <TextBlock Text="{Binding Description, TargetNullValue={x:Null}}"
                            TextWrapping="Wrap" />
 
-                <TextBlock Text="Dependencies:" FontWeight="Bold" Margin="0,10,0,0" />
+                <TextBlock Text="Dependencies" FontWeight="Bold" Margin="0,10,0,0" />
+
+                <!-- Game dependency icons in a horizontal row -->
+                <ItemsControl ItemsSource="{Binding Dependencies}">
+                  <!-- Make all items share one horizontal strip -->
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <StackPanel Orientation="Horizontal" Spacing="4" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <!-- Show only for game dependencies (using invert parameter) -->
+                      <StackPanel Orientation="Horizontal"
+                                  Spacing="1"
+                                  Margin="2,0"
+                                  IsVisible="{Binding Converter={StaticResource IsNotGameDependencyConverter}, ConverterParameter=invert}">
+
+                        <!-- Base game version, only for 'base' -->
+                        <TextBlock Text="{Binding Converter={StaticResource BaseGameVersionConverter}}"
+                                   Foreground="Gray"
+                                   FontSize="15"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,5,0"
+                                   IsVisible="{Binding Converter={StaticResource IsBaseDependencyConverter}}" />
+
+                        <!-- Icon for base / space-age / quality / elevated-rails -->
+                        <Image Width="24"
+                               Height="24"
+                               VerticalAlignment="Center"
+                               Source="{Binding Converter={StaticResource GameDependencyIconPathConverter}}" />
+                      </StackPanel>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- User mod dependencies: clickable buttons (unchanged) -->
                 <ItemsControl ItemsSource="{Binding Dependencies}">
                   <ItemsControl.ItemTemplate>
                     <DataTemplate>
@@ -332,12 +373,8 @@
                               Command="{Binding ElementName=RootWindow, Path=DataContext.NavigateToDependencyCommand}"
                               CommandParameter="{Binding}"
                               Margin="5,2,0,2"
-                              HorizontalAlignment="Left">
-                        <Button.IsEnabled>
-                          <MultiBinding Converter="{x:Static BoolConverters.And}">
-                            <Binding Path="." Converter="{StaticResource IsNotGameDependencyConverter}" />
-                          </MultiBinding>
-                        </Button.IsEnabled>
+                              HorizontalAlignment="Left"
+                              IsVisible="{Binding Converter={StaticResource IsNotGameDependencyConverter}}">
                       </Button>
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
