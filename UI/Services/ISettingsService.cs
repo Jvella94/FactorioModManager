@@ -39,5 +39,14 @@ namespace FactorioModManager.Services
         bool GetCheckForAppUpdates();
 
         void SetCheckForAppUpdates(bool enabled);
+
+        // Factorio version & DLC info
+        string? GetFactorioVersion();
+
+        void SetFactorioVersion(string? version);
+
+        bool GetHasSpaceAgeDlc();
+
+        void SetHasSpaceAgeDlc(bool value);
     }
 }

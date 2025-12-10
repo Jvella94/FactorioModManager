@@ -223,9 +223,12 @@
             <DataGridTemplateColumn Header="Enabled" Width="100" SortMemberPath="IsEnabled">
               <DataGridTemplateColumn.CellTemplate>
                 <DataTemplate>
-                  <CheckBox IsChecked="{Binding IsEnabled}"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center" />
+                  <CheckBox
+                     HorizontalAlignment="Center"
+                     VerticalAlignment="Center"
+                     Command="{Binding $parent[Window].((vmmw:MainWindowViewModel)DataContext).ToggleModCommand}"
+                     CommandParameter="{Binding}"
+                     IsChecked="{Binding IsEnabled}" />
                 </DataTemplate>
               </DataGridTemplateColumn.CellTemplate>
             </DataGridTemplateColumn>
@@ -443,11 +446,7 @@
                           Command="{Binding ElementName=RootWindow, Path=DataContext.OpenVersionHistoryCommand}"
                           HorizontalAlignment="Stretch" />
                   <Separator />
-                  <Button Content="Enable/Disable"
-                          Command="{Binding ElementName=RootWindow, Path=DataContext.ToggleModCommand}"
-                          CommandParameter="{Binding}"
-                          HorizontalAlignment="Stretch" />
-                  <Button Content="Remove"
+                  <Button Content="Uninstall Mod"
                           Command="{Binding ElementName=RootWindow, Path=DataContext.RemoveModCommand}"
                           CommandParameter="{Binding}"
                           HorizontalAlignment="Stretch" />

@@ -32,15 +32,15 @@ namespace FactorioModManager.ViewModels.MainWindow
             RefreshModsCommand = ReactiveCommand.CreateFromTask(RefreshModsAsync);
             InstallModCommand = ReactiveCommand.CreateFromTask(InstallModAsync);
             OpenModFolderCommand = ReactiveCommand.Create(OpenModFolder);
-            ToggleModCommand = ReactiveCommand.Create<ModViewModel>(mod => ToggleMod(mod));
-            RemoveModCommand = ReactiveCommand.Create<ModViewModel>(mod => RemoveMod(mod));
+            ToggleModCommand = ReactiveCommand.Create<ModViewModel>(ToggleMod);
+            RemoveModCommand = ReactiveCommand.Create<ModViewModel>(RemoveMod);
             OpenModPortalCommand = ReactiveCommand.Create(OpenModPortal);
             OpenSourceUrlCommand = ReactiveCommand.Create(OpenSourceUrl);
             OpenChangelogCommand = ReactiveCommand.CreateFromTask(OpenChangelogAsync);
             OpenVersionHistoryCommand = ReactiveCommand.CreateFromTask(OpenVersionHistoryAsync);
             CheckUpdatesCustomCommand = ReactiveCommand.CreateFromTask(CheckUpdatesCustomAsync);
-            DownloadUpdateCommand = ReactiveCommand.CreateFromTask<ModViewModel>(mod => DownloadUpdateAsync(mod));
-            DeleteOldVersionCommand = ReactiveCommand.Create<ModViewModel>(mod => DeleteOldVersion(mod));
+            DownloadUpdateCommand = ReactiveCommand.CreateFromTask<ModViewModel>(DownloadUpdateAsync);
+            DeleteOldVersionCommand = ReactiveCommand.Create<ModViewModel>(DeleteOldVersion);
             CheckSingleModUpdateCommand = ReactiveCommand.CreateFromTask(CheckSingleModUpdateAsync);
             ViewDependentsCommand = ReactiveCommand.CreateFromTask<ModViewModel>(ViewDependentsAsync);
             LaunchFactorioCommand = ReactiveCommand.Create(LaunchFactorio);
@@ -166,7 +166,7 @@ namespace FactorioModManager.ViewModels.MainWindow
         /// <summary>
         /// Installs a mod from a mod portal URL
         /// </summary>
-        private async Task<Models.Result<bool>> InstallModFromUrlAsync(string url)
+        private async Task<Result> InstallModFromUrlAsync(string url)
         {
             return await Task.Run(async () =>
             {
@@ -179,7 +179,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                         {
                             SetStatus("Invalid mod portal URL", LogLevel.Error);
                         });
-                        return Models.Result<bool>.Fail("Invalid URL format", Models.ErrorCode.InvalidInput);
+                        return Result.Fail("Invalid URL format", ErrorCode.InvalidInput);
                     }
 
                     await _uiService.InvokeAsync(() =>
@@ -188,7 +188,6 @@ namespace FactorioModManager.ViewModels.MainWindow
                     });
 
                     var modDetails = await _apiService.GetModDetailsAsync(modName);
-
                     if (modDetails?.Releases == null || modDetails.Releases.Count == 0)
                     {
                         _logService.LogWarning($"Failed to fetch release details for {modName}");
@@ -196,8 +195,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                         {
                             SetStatus($"Failed to fetch mod details for {modName}", LogLevel.Error);
                         });
-                        return Models.Result<bool>.Fail("No release information found",
-                            Models.ErrorCode.ApiRequestFailed);
+                        return Result.Fail("No release information found", ErrorCode.ApiRequestFailed);
                     }
 
                     var latestRelease = modDetails.Releases
@@ -211,11 +209,10 @@ namespace FactorioModManager.ViewModels.MainWindow
                         {
                             SetStatus($"No download URL available for {modName}", LogLevel.Error);
                         });
-                        return Models.Result<bool>.Fail("No download URL", Models.ErrorCode.ApiRequestFailed);
+                        return Result.Fail("No download URL", ErrorCode.ApiRequestFailed);
                     }
 
                     var modTitle = modDetails.Title ?? modName;
-
                     await _uiService.InvokeAsync(() =>
                     {
                         SetStatus($"Downloading {modTitle}...");
@@ -225,16 +222,74 @@ namespace FactorioModManager.ViewModels.MainWindow
                         modName,
                         modTitle,
                         latestRelease.Version,
-                        latestRelease.DownloadUrl
-                    );
+                        latestRelease.DownloadUrl);
 
-                    if (downloadResult.Success)
+                    if (!downloadResult.Success)
+                        return downloadResult;
+
+                    // At this point the mod zip exists locally; get its ModInfo
+                    var modsDirectory = _modService.GetModsDirectory();
+                    var downloadedPath = System.IO.Path.Combine(
+                        modsDirectory,
+                        $"{modName}_{latestRelease.Version}.zip");
+
+                    var modInfo = _modService.ReadModInfoFromFile(downloadedPath);
+                    if (modInfo == null)
                     {
                         await _uiService.InvokeAsync(() =>
                         {
-                            SetStatus($"Successfully installed {modTitle} version {latestRelease.Version}. Refreshing...");
+                            SetStatus($"Installed {modTitle}, but could not read info.json for dependency checks.", LogLevel.Warning);
                         });
+                        return downloadResult;
                     }
+
+                    // Resolve dependencies using local ModInfo (workaround for API not providing them)
+                    var resolution = await ResolveInstallDependenciesAsync(modInfo);
+                    if (!resolution.Proceed)
+                        return Result.Fail("Installation cancelled by user due to dependencies.", ErrorCode.OperationCancelled);
+
+                    await RefreshModsAsync();
+
+                    await _uiService.InvokeAsync(() =>
+                    {
+                        // apply enable/disable decisions
+                        foreach (var toEnable in resolution.ModsToEnable)
+                        {
+                            var vm = _allMods.FirstOrDefault(m => m.Name == toEnable.Name);
+                            if (vm != null && !vm.IsEnabled)
+                            {
+                                vm.IsEnabled = true;
+                                _modService.ToggleMod(vm.Name, true);
+                            }
+                        }
+
+                        foreach (var toDisable in resolution.ModsToDisable)
+                        {
+                            var vm = _allMods.FirstOrDefault(m => m.Name == toDisable.Name);
+                            if (vm != null && vm.IsEnabled)
+                            {
+                                vm.IsEnabled = false;
+                                _modService.ToggleMod(vm.Name, false);
+                            }
+                        }
+
+                        var installedMain = _allMods.FirstOrDefault(m => m.Name == modInfo.Name);
+                        if (installedMain != null)
+                        {
+                            installedMain.IsEnabled = resolution.InstallEnabled;
+                            _modService.ToggleMod(installedMain.Name, resolution.InstallEnabled);
+
+                            SelectedMod = installedMain;
+                            SetStatus(
+                                resolution.InstallEnabled
+                                    ? $"Successfully installed and enabled {installedMain.Title}."
+                                    : $"Successfully installed {installedMain.Title} (disabled).");
+                        }
+                        else
+                        {
+                            SetStatus($"Successfully downloaded {modTitle}, but it was not found after refresh.", LogLevel.Warning);
+                        }
+                    });
 
                     return downloadResult;
                 }
@@ -244,7 +299,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                     {
                         HandleError(ex, $"Error installing mod from url {url}");
                     });
-                    return Result<bool>.Fail(ex.Message, ErrorCode.UnexpectedError);
+                    return Result.Fail(ex.Message, ErrorCode.UnexpectedError);
                 }
             });
         }

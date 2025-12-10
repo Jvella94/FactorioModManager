@@ -72,24 +72,14 @@ namespace FactorioModManager.ViewModels.MainWindow
         private bool CheckMandatoryDependencies(ModViewModel mod)
         {
             var mandatoryDeps = DependencyHelper.GetMandatoryDependencies(mod.Dependencies);
-            var missingDeps = new List<string>();
-
-            foreach (var depName in mandatoryDeps)
-            {
-                if (!_allMods.Any(m => m.Name.Equals(depName, StringComparison.OrdinalIgnoreCase)))
-                {
-                    missingDeps.Add(depName);
-                }
-            }
-
-            if (missingDeps.Count > 0)
+            var missingDeps = ClassifyDependencies(mandatoryDeps).missing.Count > 0;
+            if (missingDeps)
             {
                 var message = $"Missing dependencies for {mod.Title}: {string.Join(", ", missingDeps)}";
                 SetStatus(message, LogLevel.Warning);
                 _logService.LogWarning($"Cannot update {mod.Title}: Missing mandatory dependencies: {string.Join(", ", missingDeps)}");
                 return false;
             }
-
             return true;
         }
 
@@ -383,6 +373,205 @@ namespace FactorioModManager.ViewModels.MainWindow
                     });
                 }
             });
+        }
+
+        private ModViewModel? FindModByName(string name) =>
+           _allMods.FirstOrDefault(m => m.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+
+        private sealed class InstallDependencyResolution
+        {
+            public bool Proceed { get; set; }
+            public bool InstallEnabled { get; set; }
+            public List<ModViewModel> ModsToEnable { get; } = [];
+            public List<ModViewModel> ModsToDisable { get; } = [];
+            public List<string> MissingDependenciesToInstall { get; } = [];
+        }
+
+        /// <summary>
+        /// Checks all mandatory deps for a mod about to be installed.
+        /// Handles: missing deps, disabled deps, incompatible mods.
+        /// Returns a resolution describing how to proceed.
+        /// </summary>
+        private async Task<InstallDependencyResolution> ResolveInstallDependenciesAsync(
+            ModInfo modInfo)
+        {
+            var result = new InstallDependencyResolution
+            {
+                Proceed = true,
+                InstallEnabled = true // default to enabled
+            };
+
+            var modTitle = modInfo.Title ?? modInfo.Name;
+            var deps = modInfo.Dependencies as IReadOnlyList<string>;
+            var mandatoryRaw = DependencyHelper.GetMandatoryDependencies(deps);
+
+            var builtInRequired = mandatoryRaw
+                .Where(name => DependencyHelper.GameDependencies.Contains(name, StringComparer.OrdinalIgnoreCase))
+                .ToList();
+
+            // Check official content ownership
+
+            var missingBuiltIn = ClassifyDependencies(mandatoryRaw).missing;
+            foreach (var name in builtInRequired)
+            {
+                switch (name.ToLowerInvariant())
+                {
+                    case "base":
+                        // assume base is present if the game runs; no extra check
+                        break;
+
+                    case "space-age":
+                    case "quality":
+                    case "elevated-rails":
+                        if (!_settingsService.GetHasSpaceAgeDlc())
+                            missingBuiltIn.Add("Space Age DLC (includes Quality & Elevated Rails)");
+                        break;
+                }
+            }
+
+            if (missingBuiltIn.Count > 0)
+            {
+                var title = modInfo.Title ?? modInfo.Name;
+                var msg =
+                    $"The mod {title} requires official content that is not detected in your Factorio installation:\n\n" +
+                    string.Join("\n", missingBuiltIn) +
+                    "\n\nThese cannot be installed via the mod portal. " +
+                    "Please enable or purchase them in Factorio itself.";
+
+                await _uiService.ShowMessageAsync("Missing Official Content", msg);
+                return new InstallDependencyResolution
+                {
+                    Proceed = false,
+                    InstallEnabled = false
+                };
+            }
+            // Now only consider non-built-in dependencies as portal / local mods
+            var mandatoryDeps = mandatoryRaw
+                .Where(d => !DependencyHelper.GameDependencies.Contains(d, StringComparer.OrdinalIgnoreCase))
+                .ToList();
+
+            var incompatibleDeps = DependencyHelper.GetIncompatibleDependencies(deps);
+
+            var missingDeps = new List<string>();
+            var installedDisabledDeps = new List<ModViewModel>();
+
+            // Check mandatory deps
+            foreach (var depName in mandatoryDeps)
+            {
+                var depMod = FindModByName(depName);
+                if (depMod == null)
+                {
+                    missingDeps.Add(depName);
+                }
+                else if (!depMod.IsEnabled)
+                {
+                    installedDisabledDeps.Add(depMod);
+                }
+            }
+
+            // Check incompatible mods currently enabled
+            var incompatibleLoaded = _allMods
+                .Where(m => m.IsEnabled && incompatibleDeps.Contains(m.Name))
+                .ToList();
+
+            // 1) Missing deps: ask to install them
+            if (missingDeps.Count > 0)
+            {
+                var msg =
+                    $"The following mandatory dependencies for {modTitle} are not installed:\n\n" +
+                    string.Join("\n", missingDeps) +
+                    "\n\nDo you want to install these dependencies as well?";
+
+                var installMissing = await _uiService.ShowConfirmationAsync(
+                    "Missing Dependencies",
+                    msg,
+                    null);
+
+                if (!installMissing)
+                {
+                    // Offer installing mod disabled
+                    var installDisabled = await _uiService.ShowConfirmationAsync(
+                        "Install Disabled?",
+                        $"{modTitle} will not be loadable without these dependencies.\n\n" +
+                        "Install the mod disabled instead?",
+                        null);
+
+                    if (!installDisabled)
+                    {
+                        result.Proceed = false;
+                        SetStatus($"Cancelled installation of {modTitle} due to missing dependencies.", LogLevel.Warning);
+                        return result;
+                    }
+
+                    result.InstallEnabled = false;
+                }
+                else
+                {
+                    result.MissingDependenciesToInstall.AddRange(missingDeps);
+                }
+            }
+
+            // 2) Installed but disabled deps
+            if (installedDisabledDeps.Count > 0 && result.InstallEnabled)
+            {
+                var msg =
+                    $"The following mandatory dependencies for {modTitle} are installed but disabled:\n\n" +
+                    string.Join("\n", installedDisabledDeps.Select(m => m.Title)) +
+                    "\n\nEnable them now?";
+
+                var enableDeps = await _uiService.ShowConfirmationAsync(
+                    "Enable Dependencies",
+                    msg,
+                    null);
+
+                if (enableDeps)
+                {
+                    result.ModsToEnable.AddRange(installedDisabledDeps);
+                }
+                else
+                {
+                    // Offer to install main mod disabled instead
+                    var installDisabled = await _uiService.ShowConfirmationAsync(
+                        "Install Disabled?",
+                        $"{modTitle} will be installed disabled and its dependencies will remain disabled.\n\nContinue?",
+                        null);
+
+                    if (!installDisabled)
+                    {
+                        result.Proceed = false;
+                        SetStatus($"Cancelled installation of {modTitle} due to disabled dependencies.", LogLevel.Warning);
+                        return result;
+                    }
+
+                    result.InstallEnabled = false;
+                }
+            }
+
+            // 3) Incompatible enabled mods
+            if (incompatibleLoaded.Count > 0 && result.InstallEnabled)
+            {
+                var msg =
+                    $"The following mods are incompatible with {modTitle} and are currently enabled:\n\n" +
+                    string.Join("\n", incompatibleLoaded.Select(m => m.Title)) +
+                    "\n\nDo you want to disable them and install {modTitle} enabled?\n\n" +
+                    "Choosing No will install the mod disabled instead.";
+
+                var disableIncompatibles = await _uiService.ShowConfirmationAsync(
+                    "Incompatible Mods",
+                    msg,
+                    null);
+
+                if (disableIncompatibles)
+                {
+                    result.ModsToDisable.AddRange(incompatibleLoaded);
+                }
+                else
+                {
+                    result.InstallEnabled = false;
+                }
+            }
+
+            return result;
         }
     }
 }

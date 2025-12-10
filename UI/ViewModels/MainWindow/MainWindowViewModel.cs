@@ -5,6 +5,8 @@ using FactorioModManager.Services.Infrastructure;
 using ReactiveUI;
 using System;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Reactive.Disposables;
 using System.Reactive.Disposables.Fluent;
@@ -35,6 +37,7 @@ namespace FactorioModManager.ViewModels.MainWindow
         private string _authorSearchText = string.Empty;
         private bool _showOnlyUnusedInternals = false;
         private bool _showOnlyPendingUpdates = false;
+        private bool _togglingMod = false;
 
         public bool HasSelectedMod => SelectedMod != null;
 
@@ -241,6 +244,8 @@ namespace FactorioModManager.ViewModels.MainWindow
 
         private async void InitializeStartupTasks()
         {
+            DetectFactorioVersionAndDLC();
+
             // Check for app updates on startup if enabled
             if (_settingsService.GetCheckForAppUpdates())
             {
@@ -249,6 +254,50 @@ namespace FactorioModManager.ViewModels.MainWindow
                     await Task.Delay(2000); // Delay to avoid startup blocking
                     await CheckForAppUpdatesAsync();
                 });
+            }
+        }
+
+        private void DetectFactorioVersionAndDLC()
+        {
+            try
+            {
+                var exePath = _settingsService.GetFactorioExecutablePath();
+                if (string.IsNullOrEmpty(exePath) || !File.Exists(exePath))
+                    return;
+
+                // Version [web:49]
+                try
+                {
+                    var fvi = FileVersionInfo.GetVersionInfo(exePath);
+                    _settingsService.SetFactorioVersion(fvi.FileVersion);
+                    _logService.Log($"Detected Factorio version: {fvi.FileVersion}");
+                }
+                catch (Exception ex)
+                {
+                    _logService.LogWarning($"Failed to read Factorio file version: {ex.Message}");
+                }
+
+                // DLC detection via data folders [web:38][web:53]
+                var rootDir = Path.GetDirectoryName(exePath);
+                if (string.IsNullOrEmpty(rootDir))
+                    return;
+
+                var dataDir = Path.Combine(rootDir, "data");
+                if (!Directory.Exists(dataDir))
+                    return;
+
+                // If any of the DLC module folders exist, treat Space Age DLC as present
+                bool hasSpaceAgeDlc =
+                    Directory.Exists(Path.Combine(dataDir, "space-age")) ||
+                    Directory.Exists(Path.Combine(dataDir, "quality")) ||
+                    Directory.Exists(Path.Combine(dataDir, "elevated-rails"));
+
+                _settingsService.SetHasSpaceAgeDlc(hasSpaceAgeDlc);
+                _logService.Log($"Detected Space Age DLC bundle: {hasSpaceAgeDlc}");
+            }
+            catch (Exception ex)
+            {
+                _logService.LogWarning($"Error detecting Factorio DLC/version: {ex.Message}");
             }
         }
 

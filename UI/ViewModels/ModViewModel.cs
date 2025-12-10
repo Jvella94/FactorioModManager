@@ -8,6 +8,7 @@ using System.Collections.Specialized;
 using System.Reactive.Disposables;
 using System.Reactive.Disposables.Fluent;
 using System.Reactive.Linq;
+using static FactorioModManager.Constants;
 
 namespace FactorioModManager.ViewModels
 {
@@ -16,9 +17,9 @@ namespace FactorioModManager.ViewModels
         private readonly CompositeDisposable _disposables = [];
 
         // Static brushes - frozen for performance
-        private static readonly IBrush UpdateBrush = CreateFrozenBrush(60, 120, 60);
+        private static readonly IBrush _updateBrush = CreateFrozenBrush(60, 120, 60);
 
-        private static readonly IBrush UnusedBrush = CreateFrozenBrush(255, 140, 0);
+        private static readonly IBrush _unusedBrush = CreateFrozenBrush(255, 140, 0);
 
         private static SolidColorBrush CreateFrozenBrush(byte r, byte g, byte b)
         {
@@ -42,7 +43,7 @@ namespace FactorioModManager.ViewModels
         private string? _groupName;
         private bool _isUnusedInternal;
         private Bitmap? _thumbnail;
-        private static readonly Bitmap PlaceholderBitmap = Constants.LoadPlaceholderThumbnail();
+        private static readonly Bitmap _placeholderBitmap = LoadPlaceholderThumbnail();
         private string? _selectedVersion;
         private string? _filePath;
         private int _installedCount;
@@ -126,7 +127,7 @@ namespace FactorioModManager.ViewModels
 
         public Bitmap? Thumbnail
         {
-            get => _thumbnail ?? PlaceholderBitmap;
+            get => _thumbnail ?? _placeholderBitmap;
             set => this.RaiseAndSetIfChanged(ref _thumbnail, value);
         }
 
@@ -203,11 +204,17 @@ namespace FactorioModManager.ViewModels
         {
             get
             {
-                if (HasUpdate) return UpdateBrush;
-                if (IsUnusedInternal) return UnusedBrush;
+                if (HasUpdate) return _updateBrush;
+                if (IsUnusedInternal) return _unusedBrush;
                 return null;
             }
         }
+
+        public IReadOnlyList<string> MandatoryDependencies =>
+            DependencyHelper.GetMandatoryDependencies(Dependencies);
+
+        public IReadOnlyList<string> IncompatibleDependencies =>
+            DependencyHelper.GetIncompatibleDependencies(Dependencies);
 
         public ModViewModel()
         {
@@ -242,7 +249,7 @@ namespace FactorioModManager.ViewModels
 
                 _disposables?.Dispose();
                 // Only dispose if it's not the shared placeholder
-                if (_thumbnail != null && _thumbnail != PlaceholderBitmap)
+                if (_thumbnail != null && _thumbnail != _placeholderBitmap)
                 {
                     _thumbnail?.Dispose();
                 }

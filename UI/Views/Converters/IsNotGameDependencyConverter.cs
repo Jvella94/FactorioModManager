@@ -23,7 +23,7 @@ namespace FactorioModManager.Views.Converters
                     return true;
 
                 var depName = parts[0];
-                bool isUserMod = !Constants.GameDependencies.IsGameDependency(depName);
+                bool isUserMod = !Constants.DependencyHelper.IsGameDependency(depName);
 
                 // If parameter == "invert", return the opposite (true for game deps)
                 if (parameter is string p && string.Equals(p, "invert", StringComparison.OrdinalIgnoreCase))

@@ -132,6 +132,90 @@ namespace FactorioModManager.Services
             }
         }
 
+        public void RemoveMod(string modName, string filePath)
+        {
+            var modsDirectory = GetModsDirectory();
+            var modListPath = Path.Combine(modsDirectory, Constants.FileSystem.ModListFileName);
+
+            try
+            {
+                // Delete the mod file/directory
+                if (File.Exists(filePath))
+                {
+                    File.Delete(filePath);
+                    _logService.Log($"Deleted mod file: {filePath}");
+                }
+                else if (Directory.Exists(filePath))
+                {
+                    Directory.Delete(filePath, recursive: true);
+                    _logService.Log($"Deleted mod directory: {filePath}");
+                }
+                else
+                {
+                    _logService.LogWarning($"Mod file/directory not found: {filePath}");
+                }
+
+                // Update mod-list.json to remove the entry
+                try
+                {
+                    var modList = LoadModListJson(modListPath);
+                    if (modList is not null && modList.ContainsKey(modName))
+                    {
+                        modList.Remove(modName);
+                        SaveModListJson(modListPath, modList);
+                        _logService.Log($"Removed {modName} from mod-list.json");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logService.LogWarning($"Error updating mod-list.json after removal: {ex.Message}");
+                    // Don't throw - file is already deleted
+                }
+
+                // Clear caches
+                _versionCache.Remove(modName);
+
+                // Clear thumbnail cache entries for this mod
+                var thumbnailKeysToRemove = _thumbnailCache.Keys
+                    .Where(k => k.Contains(filePath))
+                    .ToList();
+                foreach (var key in thumbnailKeysToRemove)
+                {
+                    _thumbnailCache.Remove(key);
+                }
+
+                _logService.Log($"Successfully removed mod: {modName}");
+            }
+            catch (Exception ex)
+            {
+                _logService.LogError($"Error removing mod {modName}: {ex.Message}", ex);
+                throw;
+            }
+        }
+
+        public ModInfo? ReadModInfoFromFile(string filePath)
+        {
+            try
+            {
+                if (filePath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                {
+                    return ExtractModInfoFromZip(filePath);
+                }
+
+                var infoPath = Path.Combine(filePath, Constants.FileSystem.InfoJsonFileName);
+                if (File.Exists(infoPath))
+                    return LoadModInfoFromJson(infoPath);
+
+                _logService.LogWarning($"info.json not found for {filePath}");
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logService.LogError($"Error reading ModInfo from {filePath}: {ex.Message}", ex);
+                return null;
+            }
+        }
+
         /// <summary>
         /// ✅ Loads a thumbnail with caching
         /// </summary>

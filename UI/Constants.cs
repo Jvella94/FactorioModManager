@@ -49,26 +49,6 @@ namespace FactorioModManager
         /// </summary>
         public static class GameDependencies
         {
-            /// <summary>
-            /// List of all official game dependencies that come with Factorio
-            /// </summary>
-            public static readonly HashSet<string> All = new(StringComparer.OrdinalIgnoreCase)
-            {
-                "base",
-                "space-age",
-                "quality",
-                "elevated-rails"
-            };
-
-            /// <summary>
-            /// Checks if a dependency name is an official game dependency
-            /// </summary>
-            /// <param name="dependencyName">The dependency name to check</param>
-            /// <returns>True if it's a game dependency, false otherwise</returns>
-            public static bool IsGameDependency(string dependencyName)
-            {
-                return All.Contains(dependencyName);
-            }
         }
 
         /// <summary>
@@ -215,13 +195,26 @@ namespace FactorioModManager
 
         public static class DependencyHelper
         {
-            private static readonly HashSet<string> _gameDependencies = new(StringComparer.OrdinalIgnoreCase)
-        {
-            "base",
-            "space-age",
-            "quality",
-            "elevated-rails"
-        };
+            /// <summary>
+            /// List of all official game dependencies that come with Factorio
+            /// </summary>
+            public static readonly HashSet<string> GameDependencies = new(StringComparer.OrdinalIgnoreCase)
+            {
+                "base",
+                "space-age",
+                "quality",
+                "elevated-rails"
+            };
+
+            /// <summary>
+            /// Checks if a dependency name is an official game dependency
+            /// </summary>
+            /// <param name="dependencyName">The dependency name to check</param>
+            /// <returns>True if it's a game dependency, false otherwise</returns>
+            public static bool IsGameDependency(string dependencyName)
+            {
+                return GameDependencies.Contains(dependencyName);
+            }
 
             /// <summary>
             /// Extracts the dependency name from a dependency string
@@ -233,7 +226,7 @@ namespace FactorioModManager
                     return string.Empty;
 
                 return dependency
-                    .Split(Constants.Separators.Dependency, StringSplitOptions.RemoveEmptyEntries)
+                    .Split(Separators.Dependency, StringSplitOptions.RemoveEmptyEntries)
                     .FirstOrDefault()?.Trim() ?? string.Empty;
             }
 
@@ -256,22 +249,63 @@ namespace FactorioModManager
             }
 
             /// <summary>
-            /// Checks if a dependency is a game/base dependency
-            /// </summary>
-            public static bool IsGameDependency(string dependencyName)
-            {
-                return _gameDependencies.Contains(dependencyName);
-            }
-
-            /// <summary>
             /// Gets all mandatory (required) dependencies from a mod
             /// </summary>
-            public static List<string> GetMandatoryDependencies(IEnumerable<string> dependencies)
+            public static IReadOnlyList<string> GetMandatoryDependencies(IReadOnlyList<string>? dependencies)
             {
+                if (dependencies == null || dependencies.Count == 0)
+                    return [];
+
+                // Mandatory: no prefix OR `~` (load-order only) but not `?`, "(?)", or `!` [web:38]
                 return [.. dependencies
-                    .Where(dep => !IsOptionalDependency(dep) && !IsConflictDependency(dep))
-                    .Select(ExtractDependencyName)
-                    .Where(name => !string.IsNullOrEmpty(name) && !IsGameDependency(name))];
+                    .Select(ParseDependencyNameAndPrefix)
+                    .Where(d => d != null && d.Value.Prefix is null or "" or "~")
+                    .Select(d => d!.Value.Name)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)];
+            }
+
+            // NEW: incompatible dependencies (prefix `!`) [web:38]
+            public static IReadOnlyList<string> GetIncompatibleDependencies(IReadOnlyList<string>? dependencies)
+            {
+                if (dependencies == null || dependencies.Count == 0)
+                    return [];
+
+                return [.. dependencies
+                    .Select(ParseDependencyNameAndPrefix)
+                    .Where(d => d != null && d.Value.Prefix == "!")
+                    .Select(d => d!.Value.Name)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)];
+            }
+
+            private static (string? Prefix, string Name)? ParseDependencyNameAndPrefix(string raw)
+            {
+                if (string.IsNullOrWhiteSpace(raw))
+                    return null;
+
+                var trimmed = raw.Trim();
+                string? prefix = null;
+
+                // Factorio prefixes: "!", "?", "(?)", "~" [web:38]
+                if (trimmed.StartsWith("(!)", StringComparison.Ordinal) ||
+                    trimmed.StartsWith("(?)", StringComparison.Ordinal))
+                {
+                    prefix = trimmed[..3];
+                    trimmed = trimmed[3..].TrimStart();
+                }
+                else if (trimmed.Length > 0 && (trimmed[0] == '!' || trimmed[0] == '?' || trimmed[0] == '~'))
+                {
+                    prefix = trimmed[0].ToString();
+                    trimmed = trimmed[1..].TrimStart();
+                }
+
+                // Strip any version constraint part: "name >= 1.0.0" → "name" [web:38]
+                var spaceIndex = trimmed.IndexOf(' ');
+                var name = (spaceIndex > 0 ? trimmed[..spaceIndex] : trimmed).Trim();
+
+                if (string.IsNullOrEmpty(name))
+                    return null;
+
+                return (prefix, name);
             }
         }
 

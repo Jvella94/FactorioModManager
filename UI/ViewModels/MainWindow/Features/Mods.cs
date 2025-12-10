@@ -269,6 +269,53 @@ namespace FactorioModManager.ViewModels.MainWindow
                 $"The following mods depend on '{mod.Title}':{Environment.NewLine}{Environment.NewLine}{list}");
         }
 
+        // Find installed mods by name (case-insensitive)
+        private ModViewModel? FindMod(string name) =>
+            _allMods.FirstOrDefault(m => m.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+
+        // All mods that depend on a given mod (mandatory dependency)
+        private List<ModViewModel> GetDependents(string modName) =>
+            [.. _allMods.Where(m =>
+                m.Dependencies != null &&
+                DependencyHelper.GetMandatoryDependencies(m.Dependencies)
+                    .Any(d => d.Equals(modName, StringComparison.OrdinalIgnoreCase)))];
+
+        // Mods that conflict with the given mod (incompatible dependencies)
+        private List<ModViewModel> GetIncompatibleMods(ModViewModel mod) =>
+            [.. _allMods.Where(m =>
+                m.IsEnabled &&
+                m.Dependencies != null &&
+                DependencyHelper.GetIncompatibleDependencies(m.Dependencies)
+                    .Any(d => d.Equals(mod.Name, StringComparison.OrdinalIgnoreCase)))];
+
+        private (List<ModViewModel> installedEnabled,
+         List<ModViewModel> installedDisabled,
+         List<string> missing) ClassifyDependencies(IReadOnlyList<string> dependencyNames)
+        {
+            var installedEnabled = new List<ModViewModel>();
+            var installedDisabled = new List<ModViewModel>();
+            var missing = new List<string>();
+
+            foreach (var depName in dependencyNames)
+            {
+                var dep = FindModByName(depName);
+                if (dep == null)
+                {
+                    missing.Add(depName);
+                }
+                else if (dep.IsEnabled)
+                {
+                    installedEnabled.Add(dep);
+                }
+                else
+                {
+                    installedDisabled.Add(dep);
+                }
+            }
+
+            return (installedEnabled, installedDisabled, missing);
+        }
+
         /// <summary>
         /// Fetches missing metadata (category, source URL) from API
         /// </summary>

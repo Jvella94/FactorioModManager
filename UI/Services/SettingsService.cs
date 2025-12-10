@@ -16,6 +16,8 @@ namespace FactorioModManager.Services
         public string? FactorioExePath { get; set; }
         public DateTime? LastAppUpdateCheck { get; set; }
         public bool CheckForAppUpdates { get; set; } = true;
+        public string? FactorioVersion { get; set; }
+        public bool HasSpaceAgeDlc { get; set; }
     }
 
     public class SettingsService : ISettingsService
@@ -224,6 +226,22 @@ namespace FactorioModManager.Services
         public void SetCheckForAppUpdates(bool enabled)
         {
             _settings.CheckForAppUpdates = enabled;
+            SaveSettings();
+        }
+
+        public string? GetFactorioVersion() => _settings.FactorioVersion;
+
+        public void SetFactorioVersion(string? version)
+        {
+            _settings.FactorioVersion = version;
+            SaveSettings();
+        }
+
+        public bool GetHasSpaceAgeDlc() => _settings.HasSpaceAgeDlc;
+
+        public void SetHasSpaceAgeDlc(bool value)
+        {
+            _settings.HasSpaceAgeDlc = value;
             SaveSettings();
         }
     }

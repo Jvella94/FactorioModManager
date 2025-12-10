@@ -20,6 +20,11 @@ namespace FactorioModManager.Services
         void ToggleMod(string modName, bool isEnabled);
 
         /// <summary>
+        /// Removes a mod completely (deletes file and updates mod-list.json)
+        /// </summary>
+        void RemoveMod(string modName, string filePath);
+
+        /// <summary>
         /// Loads a thumbnail from a mod zip file or directory
         /// </summary>
         Task<Bitmap?> LoadThumbnailAsync(string thumbnailPath);
@@ -52,5 +57,10 @@ namespace FactorioModManager.Services
             string version,
             string downloadUrl,
             IProgress<(long bytesDownloaded, long? totalBytes)> progress, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Reads ModInfo (info.json) from a mod file (zip or directory)
+        /// </summary>
+        ModInfo? ReadModInfoFromFile(string filePath);
     }
 }
