@@ -20,22 +20,12 @@ namespace FactorioModManager.Services.Settings
         void SetHasSpaceAgeDlc(bool value);
 
         void DetectEnvironment();
-
-        string? GetFactorioDataPath();
-
-        void SetFactorioDataPath(string? path);
     }
 
-    public class FactorioEnvironment : IFactorioEnvironment
+    public class FactorioEnvironment(ISettingsService settingsService, ILogService logService) : IFactorioEnvironment
     {
-        private readonly ISettingsService _settingsService;
-        private readonly ILogService _logService;
-
-        public FactorioEnvironment(ISettingsService settingsService, ILogService logService)
-        {
-            _settingsService = settingsService;
-            _logService = logService;
-        }
+        private readonly ISettingsService _settingsService = settingsService;
+        private readonly ILogService _logService = logService;
 
         public string? GetExecutablePath() => _settingsService.GetFactorioExecutablePath();
 

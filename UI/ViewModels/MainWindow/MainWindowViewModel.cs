@@ -394,6 +394,9 @@ namespace FactorioModManager.ViewModels.MainWindow
                 {
                     OnModSelected(value);
                     _ = LoadThumbnailAsync(value);
+
+                    // Update SourceUrl using metadata service
+                    value.SourceUrl = _metadataService.GetSourceUrl(value.Name);
                 }
             }
         }

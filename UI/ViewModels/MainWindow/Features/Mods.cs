@@ -335,8 +335,7 @@ namespace FactorioModManager.ViewModels.MainWindow
             // Take a snapshot to avoid collection modification issues
             var modsSnapshot = _allMods.ToList();
             var modsNeedingMetadata = modsSnapshot.Where(m =>
-                _metadataService.NeedsCategoryCheck(m.Name) ||
-                _metadataService.NeedsSourceUrlCheck(m.Name)).ToList();
+                _metadataService.NeedsMetadaUpdate(m.Name)).ToList();
 
             if (modsNeedingMetadata.Count == 0)
                 return;
@@ -360,27 +359,18 @@ namespace FactorioModManager.ViewModels.MainWindow
                     var details = await _apiService.GetModDetailsFullAsync(mod.Name);
                     if (details != null)
                     {
-                        if (_metadataService.NeedsCategoryCheck(mod.Name))
+                        // Update both category and source URL in a single operation
+                        _metadataService.UpdateAllPortalMetadata(mod.Name, details.Category, details.SourceUrl);
+                        await _uiService.InvokeAsync(() =>
                         {
-                            _metadataService.UpdateCategory(mod.Name, details.Category);
-                            await _uiService.InvokeAsync(() =>
-                            {
-                                mod.Category = details.Category;
-                            });
-                        }
-
-                        if (_metadataService.NeedsSourceUrlCheck(mod.Name))
-                        {
-                            _metadataService.UpdateSourceUrl(mod.Name, details.SourceUrl);
-                            await _uiService.InvokeAsync(() =>
-                            {
-                                mod.SourceUrl = details.SourceUrl;
-                            });
-                        }
+                            mod.Category = details.Category;
+                            mod.SourceUrl = details.SourceUrl;
+                        });
                     }
                     else
                     {
-                        _metadataService.MarkAsChecked(mod.Name);
+                        _logService.LogWarning($"No full portal details for mod {mod.Name}");
+                        _metadataService.CreateBaseMetadata(mod.Name);
                     }
 
                     await Task.Delay(100); // Rate limiting
@@ -388,7 +378,6 @@ namespace FactorioModManager.ViewModels.MainWindow
                 catch (Exception ex)
                 {
                     HandleError(ex, _errorMessageService.GetTechnicalMessage(ex));
-                    _metadataService.MarkAsChecked(mod.Name);
                 }
             }
 

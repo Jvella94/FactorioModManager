@@ -40,7 +40,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                         if (File.Exists(latestVersionPath))
                         {
                             _logService.Log($"Found already-downloaded update for {mod.Title}: {mod.LatestVersion}");
-                            _metadataService.ClearUpdate(mod.Name);
+                            _metadataService.ClearModUpdateInfo(mod.Name);
                             _uiService.Post(() =>
                             {
                                 mod.HasUpdate = false;

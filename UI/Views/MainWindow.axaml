@@ -509,19 +509,6 @@
                     VerticalAlignment="Center"
                     ToolTip.Tip="Space Age DLC Detected"
                     IsVisible="{Binding HasSpaceAgeDlc}" />
-
-          <!-- Fallback Text Badge -->
-          <Border Background="#4A1E5A"
-                  CornerRadius="3"
-                  Padding="6,2"
-                  VerticalAlignment="Center"
-                  ToolTip.Tip="Space Age DLC Detected"
-                  IsVisible="{Binding HasSpaceAgeDlc}">
-            <TextBlock Text="🚀 Space Age"
-                       Foreground="#E0B0FF"
-                       FontSize="11"
-                       FontWeight="SemiBold" />
-          </Border>
         </StackPanel>
       </Grid>
     </Border>

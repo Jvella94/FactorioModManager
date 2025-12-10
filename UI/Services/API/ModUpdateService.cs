@@ -197,7 +197,7 @@ namespace FactorioModManager.Services.API
                             if (File.Exists(latestVersionPath))
                             {
                                 _logService.Log($"Found already-downloaded update for {mod.Title}: {mod.LatestVersion}");
-                                _metadataService.ClearUpdate(mod.Name);
+                                _metadataService.ClearModUpdateInfo(mod.Name);
                                 clearedCount++;
                             }
                         }
