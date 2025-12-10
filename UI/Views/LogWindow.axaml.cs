@@ -1,8 +1,10 @@
 ﻿// Views/LogWindow.axaml.cs
 using Avalonia.Controls;
+using Avalonia.Interactivity;
 using FactorioModManager.Services.Infrastructure;
 using FactorioModManager.ViewModels.Dialogs;
 using System;
+using System.Reactive.Linq;
 
 namespace FactorioModManager.Views
 {
@@ -22,12 +24,14 @@ namespace FactorioModManager.Views
         {
         }
 
-        // ✅ Only platform-specific logic remains
-        protected override void OnOpened(EventArgs e)
+        private async void Window_Loaded(object? sender, RoutedEventArgs e)
         {
-            base.OnOpened(e);
-            // Scroll to bottom after window loads
-            LogScrollViewer.ScrollToEnd();
+            // ✅ Auto-refresh when window opens
+            if (DataContext is LogWindowViewModel vm)
+            {
+                await vm.RefreshCommand.Execute();
+                LogScrollViewer.ScrollToEnd();
+            }
         }
 
         protected override void OnClosed(EventArgs e)

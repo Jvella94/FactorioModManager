@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using FactorioModManager.Services;
@@ -40,6 +41,9 @@ namespace FactorioModManager
                     logservice.Log("Application starting...");
 
                     desktop.MainWindow = ServicesProvider.GetRequiredService<MainWindow>();
+
+                    // Shutdown when main window closes
+                    desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
                 }
                 catch (Exception ex)
                 {

@@ -15,6 +15,13 @@ namespace FactorioModManager.ViewModels.Dialogs
         private readonly CompositeDisposable _disposables = [];
 
         private ObservableCollection<FormattedLogEntry> _logs;
+        private bool _isLoading = true;
+
+        public bool IsLoading
+        {
+            get => _isLoading;
+            private set => this.RaiseAndSetIfChanged(ref _isLoading, value);
+        }
 
         public ObservableCollection<FormattedLogEntry> Logs
         {
@@ -34,8 +41,19 @@ namespace FactorioModManager.ViewModels.Dialogs
             _logService = logService;
             _logs = [];
 
-            // ✅ Commands instead of event handlers
-            RefreshCommand = ReactiveCommand.Create(LoadLogs);
+            RefreshCommand = ReactiveCommand.CreateFromTask(async () =>
+            {
+                IsLoading = true;
+                try
+                {
+                    // Load your logs here
+                    LoadLogs();
+                }
+                finally
+                {
+                    IsLoading = false;
+                }
+            });
             ClearLogsCommand = ReactiveCommand.CreateFromTask(async () =>
             {
                 _logService.ClearLogs();
@@ -55,9 +73,6 @@ namespace FactorioModManager.ViewModels.Dialogs
                     UseShellExecute = true
                 });
             });
-
-            // Load initial logs
-            LoadLogs();
         }
 
         private void LoadLogs()

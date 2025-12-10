@@ -54,10 +54,7 @@
               </StackPanel>
             </DataTemplate>
           </DataGridTemplateColumn.CellTemplate>
-        </DataGridTemplateColumn>
-
-
-    
+        </DataGridTemplateColumn>    
       </DataGrid.Columns>
     </DataGrid>
   </Grid>

@@ -19,7 +19,7 @@
   </Window.Resources>
 
   <Design.DataContext>
-    <vmmw:MainWindowVM />
+    <vmmw:MainWindowViewModel />
   </Design.DataContext>
 
   <Grid RowDefinitions="Auto,Auto,*,Auto">

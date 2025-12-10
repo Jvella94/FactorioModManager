@@ -113,6 +113,31 @@ namespace FactorioModManager.ViewModels.MainWindow
                     }
                 })
                 .DisposeWith(_disposables);
+
+            _allMods.CollectionChanged += (s, e) =>
+            {
+                // When collection changes, subscribe to new items
+                if (e.NewItems != null)
+                {
+                    foreach (ModViewModel mod in e.NewItems)
+                    {
+                        mod.WhenAnyValue(
+                            x => x.IsEnabled,
+                            x => x.HasUpdate,
+                            x => x.IsUnusedInternal)
+                            .Throttle(TimeSpan.FromMilliseconds(100))
+                            .ObserveOn(RxApp.MainThreadScheduler)
+                            .Subscribe(_ =>
+                            {
+                                this.RaisePropertyChanged(nameof(ModCountSummary));
+                                this.RaisePropertyChanged(nameof(UnusedInternalCount));
+                                this.RaisePropertyChanged(nameof(HasUnusedInternals));
+                                this.RaisePropertyChanged(nameof(UnusedInternalWarning));
+                            })
+                            .DisposeWith(_disposables);
+                    }
+                }
+            };
         }
 
         /// <summary>

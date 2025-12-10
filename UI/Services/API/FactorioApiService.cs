@@ -124,7 +124,7 @@ namespace FactorioModManager.Services.API
                 }
                 if (_lastUpdateTime != DateTime.MinValue)
                 {
-                    _logService.LogDebug($"Latest update known is of {_lastModName} at {_lastUpdateTime.ToLocalTime()::yyyy-MM-dd HH:mm:ss}.");
+                    _logService.LogDebug($"Latest update known is of {_lastModName} at {_lastUpdateTime.ToLocalTime():yyyy-MM-dd HH:mm:ss}.");
                 }
                 _logService.LogDebug($"Found {recentModNames.Count} updates on the portal.");
                 return [.. recentModNames];

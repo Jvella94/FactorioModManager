@@ -5,6 +5,7 @@
         xmlns:m="using:FactorioModManager.Models"
         x:Class="FactorioModManager.Views.LogWindow"
         x:DataType="vm:LogWindowViewModel"
+        Loaded="Window_Loaded"
         Title="Log Viewer"
         Width="900" Height="600">
 
@@ -27,50 +28,62 @@
       </StackPanel>
     </Grid>
 
-    <!-- Log Content -->
-    <ScrollViewer Grid.Row="1"
-                 x:Name="LogScrollViewer"
-                 Background="#1E1E1E">
+    <!-- Log Content Area -->
+    <Grid Grid.Row="1">
+      <!-- ✅ Loading State - Controlled by IsLoading -->
+      <StackPanel IsVisible="{Binding IsLoading}"
+                  VerticalAlignment="Center"
+                  HorizontalAlignment="Center"
+                  Spacing="15">
 
-      <!-- ✅ ItemsControl for log entries -->
-      <ItemsControl ItemsSource="{Binding Logs}">
-        <ItemsControl.ItemTemplate>
-          <DataTemplate x:DataType="m:FormattedLogEntry">
-            <StackPanel Orientation="Horizontal" Margin="5,2">
+        <ProgressBar IsIndeterminate="True"
+                     Width="50"
+                     Height="50"
+                     Foreground="#4CAF50" />
 
-              <!-- Timestamp -->
-              <TextBlock Text="{Binding Timestamp}"
-                         Foreground="Gray"
-                         FontFamily="Consolas" />
+        <TextBlock Text="Loading Logs..."
+                   FontSize="16"
+                   Foreground="#888"
+                   HorizontalAlignment="Center" />
+      </StackPanel>
 
-              <!-- Level -->
-              <TextBlock Text="{Binding LevelText}"
-                         Foreground="{Binding LevelBrush}"
-                         FontWeight="Bold"
-                         FontFamily="Consolas"
-                         Margin="5,0" />
+      <!-- ✅ Logs Display -->
+      <ScrollViewer IsVisible="{Binding !IsLoading}"
+                    x:Name="LogScrollViewer"
+                    Background="#1E1E1E">
 
-              <!-- Message segments -->
-              <ItemsControl ItemsSource="{Binding MessageSegments}">
-                <ItemsControl.ItemsPanel>
-                  <ItemsPanelTemplate>
-                    <StackPanel Orientation="Horizontal" />
-                  </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="m:MessageSegment">
-                    <TextBlock Text="{Binding Text}"
-                               Foreground="{Binding Foreground}"
-                               FontWeight="{Binding Weight}"
-                               FontFamily="Consolas" />
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-            </StackPanel>
-          </DataTemplate>
-        </ItemsControl.ItemTemplate>
-      </ItemsControl>
-    </ScrollViewer>
+        <ItemsControl ItemsSource="{Binding Logs}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="m:FormattedLogEntry">
+              <StackPanel Orientation="Horizontal" Margin="5,2">
+                <TextBlock Text="{Binding Timestamp}"
+                           Foreground="Gray"
+                           FontFamily="Consolas" />
+                <TextBlock Text="{Binding LevelText}"
+                           Foreground="{Binding LevelBrush}"
+                           FontWeight="Bold"
+                           FontFamily="Consolas"
+                           Margin="5,0" />
+                <ItemsControl ItemsSource="{Binding MessageSegments}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <StackPanel Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="m:MessageSegment">
+                      <TextBlock Text="{Binding Text}"
+                                 Foreground="{Binding Foreground}"
+                                 FontWeight="{Binding Weight}"
+                                 FontFamily="Consolas" />
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+    </Grid>
   </Grid>
 </Window>
