@@ -55,6 +55,7 @@ namespace FactorioModManager.ViewModels
         private double _downloadProgress;
         private bool _hasDownloadProgress;
         private string _downloadStatusText = string.Empty;
+        private long? _sizeOnDiskBytes;
 
         // Properties
         public string Name
@@ -175,6 +176,40 @@ namespace FactorioModManager.ViewModels
         {
             get => _filePath;
             set => this.RaiseAndSetIfChanged(ref _filePath, value);
+        }
+
+        // New: size on disk in bytes
+        public long? SizeOnDiskBytes
+        {
+            get => _sizeOnDiskBytes;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _sizeOnDiskBytes, value);
+                this.RaisePropertyChanged(nameof(SizeOnDiskText));
+            }
+        }
+
+        // Human-readable size text
+        public string SizeOnDiskText
+        {
+            get
+            {
+                if (!SizeOnDiskBytes.HasValue || SizeOnDiskBytes.Value == 0)
+                    return "Unknown";
+
+                var bytes = SizeOnDiskBytes.Value;
+                const long KB = 1024;
+                const long MB = KB * 1024;
+                const long GB = MB * 1024;
+
+                if (bytes >= GB)
+                    return $"{(bytes / (double)GB):F2} GB";
+                if (bytes >= MB)
+                    return $"{(bytes / (double)MB):F2} MB";
+                if (bytes >= KB)
+                    return $"{(bytes / (double)KB):F2} KB";
+                return $"{bytes} B";
+            }
         }
 
         // Collections

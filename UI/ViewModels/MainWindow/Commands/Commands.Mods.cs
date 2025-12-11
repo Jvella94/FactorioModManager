@@ -328,7 +328,7 @@ namespace FactorioModManager.ViewModels.MainWindow
         /// Refreshes a single selected mod's info from the zip, refreshes installed versions, fetches portal metadata,
         /// reloads thumbnail and then checks for updates for that mod.
         /// Adds a confirmation dialog, uses the mod's download UI as a lightweight progress indicator,
-        /// and logs telemetry-style events to the app log.
+        /// and logs telemetry-style events to the app log. Also recomputes and persists size on disk.
         /// </summary>
         private async Task RefreshSelectedModAsync()
         {
@@ -338,43 +338,48 @@ namespace FactorioModManager.ViewModels.MainWindow
                 return;
             }
 
+            // Capture current selection to avoid races
+            var selectedMod = SelectedMod;
+            var modName = selectedMod.Name;
+            var modTitle = selectedMod.Title;
+
             // Confirm action with the user
             var confirm = await _uiService.ShowConfirmationAsync(
                 "Refresh Mod Info",
-                $"Refresh all cached info for '{SelectedMod.Title}' from the local mod file and portal? This will re-read info.json and refresh metadata.",
+                $"Refresh all cached info for '{modTitle}' from the local mod file and portal? This will re-read info.json and refresh metadata.",
                 null);
             if (!confirm)
             {
-                _logService.LogDebug($"RefreshSelectedMod cancelled by user: {SelectedMod.Name}");
+                _logService.LogDebug($"RefreshSelectedMod cancelled by user: {modName}");
                 return;
             }
 
             // Telemetry / log - start
-            _logService.Log($"Telemetry: RefreshSelectedMod Started for {SelectedMod.Name}", LogLevel.Info);
-            _logService.LogDebug($"Starting refresh of mod: {SelectedMod.Name} ({SelectedMod.FilePath})");
+            _logService.Log($"Telemetry: RefreshSelectedMod Started for {modName}", LogLevel.Info);
+            _logService.LogDebug($"Starting refresh of mod: {modName} ({selectedMod.FilePath})");
 
             await Task.Run(async () =>
             {
                 // Use the mod's download UI as a transient progress indicator
                 await _uiService.InvokeAsync(() =>
                 {
-                    SelectedMod.IsDownloading = true;
-                    SelectedMod.HasDownloadProgress = false;
-                    SelectedMod.DownloadStatusText = "Refreshing mod info...";
-                    SetStatus($"Refreshing info for {SelectedMod.Title}...");
+                    selectedMod.IsDownloading = true;
+                    selectedMod.HasDownloadProgress = false;
+                    selectedMod.DownloadStatusText = "Refreshing mod info...";
+                    SetStatus($"Refreshing info for {modTitle}...");
                 });
 
                 try
                 {
-                    var filePath = SelectedMod.FilePath;
+                    var filePath = selectedMod.FilePath;
                     if (string.IsNullOrEmpty(filePath))
                     {
                         await _uiService.InvokeAsync(() =>
                         {
-                            SetStatus($"Mod file path not available for {SelectedMod.Title}", LogLevel.Warning);
+                            SetStatus($"Mod file path not available for {modTitle}", LogLevel.Warning);
                         });
 
-                        _logService.LogWarning($"RefreshSelectedMod failed: file path missing for {SelectedMod.Name}");
+                        _logService.LogWarning($"RefreshSelectedMod failed: file path missing for {modName}");
                         return;
                     }
 
@@ -384,92 +389,110 @@ namespace FactorioModManager.ViewModels.MainWindow
                     {
                         await _uiService.InvokeAsync(() =>
                         {
-                            SetStatus($"Failed to read info.json for {SelectedMod.Title}", LogLevel.Error);
+                            SetStatus($"Failed to read info.json for {modTitle}", LogLevel.Error);
                         });
 
-                        _logService.LogWarning($"RefreshSelectedMod: could not read info.json for {SelectedMod.Name}");
+                        _logService.LogWarning($"RefreshSelectedMod: could not read info.json for {modName}");
                         return;
                     }
 
                     // Update UI-bound fields from local info.json
                     await _uiService.InvokeAsync(() =>
                     {
-                        SelectedMod.Title = string.IsNullOrEmpty(modInfo.Title) ? modInfo.Name : modInfo.Title;
-                        SelectedMod.Version = modInfo.Version;
-                        SelectedMod.Author = modInfo.Author;
-                        SelectedMod.Description = modInfo.Description ?? string.Empty;
-                        SelectedMod.Dependencies = modInfo.Dependencies;
-                        SelectedMod.FilePath = filePath;
-                        SelectedMod.DownloadStatusText = "Local info refreshed...";
+                        selectedMod.Title = string.IsNullOrEmpty(modInfo.Title) ? modInfo.Name : modInfo.Title;
+                        selectedMod.Version = modInfo.Version;
+                        selectedMod.Author = modInfo.Author;
+                        selectedMod.Description = modInfo.Description ?? string.Empty;
+                        selectedMod.Dependencies = modInfo.Dependencies;
+                        selectedMod.FilePath = filePath;
+                        selectedMod.DownloadStatusText = "Local info refreshed...";
                     });
 
                     // Refresh version cache and update available versions list
-                    _modVersionManager.RefreshVersionCache(SelectedMod.Name);
-                    var installedVersions = _modVersionManager.GetInstalledVersions(SelectedMod.Name);
+                    _modVersionManager.RefreshVersionCache(selectedMod.Name);
+                    var installedVersions = _modVersionManager.GetInstalledVersions(selectedMod.Name);
                     await _uiService.InvokeAsync(() =>
                     {
-                        SelectedMod.AvailableVersions.Clear();
+                        selectedMod.AvailableVersions.Clear();
                         foreach (var v in installedVersions)
                         {
-                            SelectedMod.AvailableVersions.Add(v);
+                            selectedMod.AvailableVersions.Add(v);
                         }
-                        SelectedMod.SelectedVersion = SelectedMod.Version;
-                        SelectedMod.DownloadStatusText = "Versions refreshed...";
+                        selectedMod.SelectedVersion = selectedMod.Version;
+                        selectedMod.DownloadStatusText = "Versions refreshed...";
                     });
+
+                    // Recompute size on disk (zip length or sum of directory files)
+                    try
+                    {
+                        var size = ComputeSizeOnDisk(filePath);
+                        _metadataService.UpdateSizeOnDisk(selectedMod.Name, size);
+                        await _uiService.InvokeAsync(() =>
+                        {
+                            selectedMod.SizeOnDiskBytes = size;
+                            selectedMod.DownloadStatusText = "Size refreshed...";
+                        });
+
+                        _logService.Log($"Telemetry: Size refreshed for {selectedMod.Name}: {size} bytes", LogLevel.Info);
+                    }
+                    catch (Exception exSize)
+                    {
+                        _logService.LogWarning($"Failed to compute size for {selectedMod.Name}: {exSize.Message}");
+                    }
 
                     // Fetch full portal metadata (category, source url) and cache it
                     try
                     {
-                        var details = await _apiService.GetModDetailsFullAsync(SelectedMod.Name);
+                        var details = await _apiService.GetModDetailsFullAsync(selectedMod.Name);
                         if (details != null)
                         {
-                            _metadataService.UpdateAllPortalMetadata(SelectedMod.Name, details.Category, details.SourceUrl);
+                            _metadataService.UpdateAllPortalMetadata(selectedMod.Name, details.Category, details.SourceUrl);
                             await _uiService.InvokeAsync(() =>
                             {
-                                SelectedMod.Category = details.Category;
-                                SelectedMod.SourceUrl = details.SourceUrl;
-                                SelectedMod.DownloadStatusText = "Portal metadata refreshed...";
+                                selectedMod.Category = details.Category;
+                                selectedMod.SourceUrl = details.SourceUrl;
+                                selectedMod.DownloadStatusText = "Portal metadata refreshed...";
                             });
 
-                            _logService.LogDebug($"RefreshSelectedMod: portal metadata updated for {SelectedMod.Name}");
+                            _logService.LogDebug($"RefreshSelectedMod: portal metadata updated for {selectedMod.Name}");
                         }
                         else
                         {
-                            _logService.LogWarning($"RefreshSelectedMod: no portal details for {SelectedMod.Name}");
+                            _logService.LogWarning($"RefreshSelectedMod: no portal details for {selectedMod.Name}");
                         }
                     }
                     catch (Exception exMeta)
                     {
-                        _logService.LogWarning($"Failed to fetch portal metadata for {SelectedMod.Name}: {exMeta.Message}");
+                        _logService.LogWarning($"Failed to fetch portal metadata for {selectedMod.Name}: {exMeta.Message}");
                     }
 
                     // Reload thumbnail if available
-                    await LoadThumbnailAsync(SelectedMod);
+                    await LoadThumbnailAsync(selectedMod);
 
                     // Finally, run the existing single-mod update check (will update metadata latest version/HasUpdate)
                     await CheckSingleModUpdateAsync();
 
                     // Telemetry / log - success
-                    _logService.Log($"Telemetry: RefreshSelectedMod Completed for {SelectedMod.Name}", LogLevel.Info);
-                    _logService.LogDebug($"Completed refresh of mod: {SelectedMod.Name}");
+                    _logService.Log($"Telemetry: RefreshSelectedMod Completed for {selectedMod.Name}", LogLevel.Info);
+                    _logService.LogDebug($"Completed refresh of mod: {selectedMod.Name}");
                     await _uiService.InvokeAsync(() =>
                     {
-                        SetStatus($"Refreshed {SelectedMod.Title}");
+                        SetStatus($"Refreshed {selectedMod.Title}");
                     });
                 }
                 catch (Exception ex)
                 {
-                    _logService.LogError($"Telemetry: RefreshSelectedMod Failed for {SelectedMod.Name}: {ex.Message}", ex);
-                    HandleError(ex, $"Error refreshing mod info for {SelectedMod.Title}");
+                    _logService.LogError($"Telemetry: RefreshSelectedMod Failed for {selectedMod.Name}: {ex.Message}", ex);
+                    HandleError(ex, $"Error refreshing mod info for {selectedMod.Title}");
                 }
                 finally
                 {
                     // Clear progress indicator
                     await _uiService.InvokeAsync(() =>
                     {
-                        SelectedMod.IsDownloading = false;
-                        SelectedMod.HasDownloadProgress = false;
-                        SelectedMod.DownloadStatusText = string.Empty;
+                        selectedMod.IsDownloading = false;
+                        selectedMod.HasDownloadProgress = false;
+                        selectedMod.DownloadStatusText = string.Empty;
                     });
                 }
             });

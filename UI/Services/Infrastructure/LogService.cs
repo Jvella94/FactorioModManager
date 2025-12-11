@@ -16,7 +16,7 @@ namespace FactorioModManager.Services.Infrastructure
         private StreamWriter _logWriter;
         private readonly Timer _flushTimer;
         private readonly IErrorMessageService _errorMessageService;
-        private const int _maxMemoryLogs = 1000;
+        private const int _maxMemoryLogs = 100;
         private bool _disposed;
 
         public LogService(IErrorMessageService errorMessageService)

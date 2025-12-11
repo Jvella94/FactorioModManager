@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using static FactorioModManager.Constants;
+using System.IO;
 
 namespace FactorioModManager.ViewModels.MainWindow
 {
@@ -81,7 +82,6 @@ namespace FactorioModManager.ViewModels.MainWindow
             foreach (var (info, isEnabled, lastUpdated, thumbnailPath, filePath) in latestMods)
             {
                 var modVm = CreateModViewModel(info, isEnabled, lastUpdated, thumbnailPath, filePath, loadedGroups);
-
                 // Track dependencies
                 foreach (var dep in info.Dependencies)
                 {
@@ -119,6 +119,29 @@ namespace FactorioModManager.ViewModels.MainWindow
             ApplyModFilter();
         }
 
+        private async Task GetVmSizeOnDisk(ModViewModel vm)
+        {
+            var path = vm.FilePath;
+            if (string.IsNullOrEmpty(path))
+                return;
+
+            // Capture variables for closure
+            var modName = vm.Name;
+            await Task.Run(() =>
+            {
+                try
+                {
+                    long size = ComputeSizeOnDisk(path);
+                    _metadataService.UpdateSizeOnDisk(modName, size);
+                    vm.SizeOnDiskBytes = size;
+                }
+                catch (Exception ex)
+                {
+                    _logService.LogWarning($"Failed to compute size for {modName}: {ex.Message}");
+                }
+            });
+        }
+
         /// <summary>
         /// Updates the authors list based on current mods
         /// </summary>
@@ -140,6 +163,8 @@ namespace FactorioModManager.ViewModels.MainWindow
 
             ApplyAuthorFilter();
         }
+
+  
 
         private ModViewModel CreateModViewModel(
             Models.ModInfo info,
@@ -164,7 +189,9 @@ namespace FactorioModManager.ViewModels.MainWindow
                 SourceUrl = _metadataService.GetSourceUrl(info.Name),
                 HasUpdate = _metadataService.GetHasUpdate(info.Name),
                 LatestVersion = _metadataService.GetLatestVersion(info.Name),
-                FilePath = filePath
+                FilePath = filePath,
+                // Load persisted size if available (fast)
+                SizeOnDiskBytes = _metadataService.GetSizeOnDisk(info.Name)
             };
 
             var group = loadedGroups.FirstOrDefault(g => g.ModNames.Contains(modVm.Title));
@@ -351,37 +378,81 @@ namespace FactorioModManager.ViewModels.MainWindow
                     SetStatus($"Fetching metadata ({currentIndex}/{modsNeedingMetadata.Count}): {mod.Title}");
                 });
 
-                try
-                {
-                    var details = await _apiService.GetModDetailsFullAsync(mod.Name);
-                    if (details != null)
-                    {
-                        // Update both category and source URL in a single operation
-                        _metadataService.UpdateAllPortalMetadata(mod.Name, details.Category, details.SourceUrl);
-                        await _uiService.InvokeAsync(() =>
-                        {
-                            mod.Category = details.Category;
-                            mod.SourceUrl = details.SourceUrl;
-                        });
-                    }
-                    else
-                    {
-                        _logService.LogWarning($"No full portal details for mod {mod.Name}");
-                        _metadataService.CreateBaseMetadata(mod.Name);
-                    }
-
-                    await Task.Delay(100); // Rate limiting
-                }
-                catch (Exception ex)
-                {
-                    HandleError(ex, _errorMessageService.GetTechnicalMessage(ex));
-                }
+                await GetModPortalMetaData(mod);
+                await GetVmSizeOnDisk(mod);
+                await Task.Delay(100); // Rate limiting
             }
 
             await _uiService.InvokeAsync(() =>
             {
                 SetStatus("Metadata update complete");
             });
+        }
+
+        private async Task GetModPortalMetaData(ModViewModel mod)
+        {
+            try
+            {
+                var details = await _apiService.GetModDetailsFullAsync(mod.Name);
+                if (details != null)
+                {
+                    // Update both category and source URL in a single operation
+                    _metadataService.UpdateAllPortalMetadata(mod.Name, details.Category, details.SourceUrl);
+                    await _uiService.InvokeAsync(() =>
+                    {
+                        mod.Category = details.Category;
+                        mod.SourceUrl = details.SourceUrl;
+                    });
+                }
+                else
+                {
+                    _logService.LogWarning($"No full portal details for mod {mod.Name}");
+                    _metadataService.CreateBaseMetadata(mod.Name);
+                }
+            }
+            catch (Exception ex)
+            {
+                HandleError(ex, _errorMessageService.GetTechnicalMessage(ex));
+            }
+        }
+
+        private static long ComputeSizeOnDisk(string path)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(path))
+                    return 0;
+
+                if (File.Exists(path))
+                {
+                    var fi = new FileInfo(path);
+                    return fi.Length;
+                }
+
+                if (Directory.Exists(path))
+                {
+                    long total = 0;
+                    foreach (var file in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories))
+                    {
+                        try
+                        {
+                            var fi = new FileInfo(file);
+                            total += fi.Length;
+                        }
+                        catch
+                        {
+                            // Skip files we cannot access
+                        }
+                    }
+                    return total;
+                }
+            }
+            catch
+            {
+                // Swallow and return 0 on failure
+            }
+
+            return 0;
         }
     }
 }

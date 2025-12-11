@@ -314,7 +314,8 @@
                   <TextBlock Text="Installed Versions:" FontWeight="Bold" />
                   <ComboBox ItemsSource="{Binding AvailableVersions}"
                             SelectedItem="{Binding SelectedVersion}"
-                            HorizontalAlignment="Stretch" />
+                            HorizontalAlignment="Stretch" 
+                             Margin="0,0,15,0"/>
 
                   <!-- Delete old version button (only shown for non-current versions) -->
                   <Button Content="Delete This Version"
@@ -322,7 +323,8 @@
                           CommandParameter="{Binding}"
                           HorizontalAlignment="Stretch"
                           Background="#8B0000"
-                          IsVisible="{Binding IsOldVersionSelected}" />
+                          IsVisible="{Binding IsOldVersionSelected}"
+                          Margin="0,0,15,0"/>
                 </StackPanel>
 
                 <TextBlock Text="{Binding UpdateText}"
@@ -372,6 +374,11 @@
                 <StackPanel Orientation="Horizontal" Spacing="5">
                   <TextBlock Text="Group:" FontWeight="Bold" VerticalAlignment="Center" />
                   <TextBlock Text="{Binding GroupName, TargetNullValue='-'}" VerticalAlignment="Center" />
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Spacing="5">
+                  <TextBlock Text="Size on disk:" FontWeight="Bold" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding SizeOnDiskText}" VerticalAlignment="Center" />
                 </StackPanel>
 
                 <TextBlock Text="Description:" FontWeight="Bold" Margin="0,10,0,0" />
@@ -562,15 +569,14 @@
                      Width="20"
                      Height="20"
                      VerticalAlignment="Center"
-                     ToolTip.Tip="Space Age DLC Detected"
-                     IsVisible="{Binding FactorioVersionText}" />
+                     ToolTip.Tip="{Binding FactorioVersionText}"/>
 
           <!-- Space Age Icon -->
           <Image Source="/Assets/space-age.png"
                     Width="20"
                     Height="20"
                     VerticalAlignment="Center"
-                    ToolTip.Tip="Space Age DLC Detected"
+                    ToolTip.Tip="Space Age DLC Detected!"
                     IsVisible="{Binding HasSpaceAgeDlc}" />
         </StackPanel>
       </Grid>

@@ -41,6 +41,11 @@ namespace FactorioModManager.Services
         void UpdateLatestVersion(string modName, string version, bool hasUpdate);
 
         void UpdateSourceUrl(string modName, string? sourceUrl, bool wasChecked = true);
+
+        // New: size on disk metadata
+        long? GetSizeOnDisk(string modName);
+
+        void UpdateSizeOnDisk(string modName, long sizeInBytes);
     }
 
     public class ModMetadata
@@ -52,6 +57,9 @@ namespace FactorioModManager.Services
         public DateTime? LastUpdateCheck { get; set; }
         public string? LatestVersion { get; set; }
         public string? SourceUrl { get; set; }
+
+        // NEW: size on disk in bytes
+        public long? SizeOnDiskBytes { get; set; }
     }
 
     public class ModMetadataCollection
@@ -203,6 +211,24 @@ namespace FactorioModManager.Services
         public void UpdateAllPortalMetadata(string modName, string? category, string? sourceUrl)
         {
             UpdatePortalMetadata(modName, category, sourceUrl);
+        }
+
+        // NEW: size on disk accessors
+        public long? GetSizeOnDisk(string modName)
+        {
+            return _cache.TryGetValue(modName, out var metadata) ? metadata.SizeOnDiskBytes : null;
+        }
+
+        public void UpdateSizeOnDisk(string modName, long sizeInBytes)
+        {
+            var metadata = GetOrCreate(modName);
+            if (metadata.SizeOnDiskBytes != sizeInBytes)
+            {
+                metadata.SizeOnDiskBytes = sizeInBytes;
+                metadata.CreatedOn = DateTime.UtcNow;
+                MarkDirty();
+                _logService.LogDebug($"Updated size on disk for {modName}: {sizeInBytes} bytes");
+            }
         }
 
         private void AutoSave(object? state)
