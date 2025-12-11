@@ -12,6 +12,9 @@ using System.Reactive;
 using System.Reactive.Disposables;
 using System.Threading;
 using System.Threading.Tasks;
+using FactorioModManager.ViewModels.MainWindow;
+using System.IO;
+using FactorioModManager.Services;
 
 namespace FactorioModManager.ViewModels.Dialogs
 {
@@ -106,6 +109,9 @@ namespace FactorioModManager.ViewModels.Dialogs
                 }
 
                 RefreshInstalledStates();
+
+                // Update mod data in main window so version dropdown reflects changes immediately
+                await UpdateMainWindowModVersionsAsync();
             }
             catch (OperationCanceledException)
             {
@@ -123,29 +129,72 @@ namespace FactorioModManager.ViewModels.Dialogs
         }
 
         private async Task DeleteVersionAsync(
-            VersionHistoryReleaseViewModel release,
-            CancellationToken cancellationToken)
+          VersionHistoryReleaseViewModel release,
+          CancellationToken cancellationToken)
         {
             release.IsInstalling = true;
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                // Run deletion on background thread
-                await Task.Run(() =>
-                    _versionManager.DeleteVersion(ModName, release.Version),
-                    cancellationToken);
+                const int maxAttempts = 3;
+                var attempt = 0;
+                var deleted = false;
 
-                release.IsInstalled = false;
-                _logService.Log($"🗑️ Deleted {ModName} v{release.Version}");
-            }
-            catch (OperationCanceledException)
-            {
-                _logService.Log("Deleting Version Cancelled.");
-            }
-            catch (Exception ex)
-            {
-                _logService.LogError($"Delete failed: {ex.Message}", ex);
+                while (attempt < maxAttempts && !deleted)
+                {
+                    attempt++;
+                    try
+                    {
+                        // run deletion on background thread (delegate to manager)
+                        await Task.Run(() =>
+                            _versionManager.DeleteVersion(ModName, release.Version),
+                            cancellationToken);
+
+                        deleted = true;
+                        release.IsInstalled = false;
+                        _logService.Log($"🗑️ Deleted {ModName} v{release.Version}");
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        _logService.Log("Deleting Version Cancelled.");
+                        throw;
+                    }
+                    catch (UnauthorizedAccessException uaEx)
+                    {
+                        // File is locked / permission issue — report to user and stop retrying
+                        _logService.LogWarning($"Unauthorized deleting {ModName}_{release.Version}.zip: {uaEx.Message}");
+                        await _uiService.ShowMessageAsync(
+                            "Delete Failed",
+                            $"Unable to delete {ModTitle} version {release.Version}: access denied or file in use. Please close other programs and try again.");
+                        break;
+                    }
+                    catch (IOException ioEx) when (attempt < maxAttempts)
+                    {
+                        // Transient IO (file locked momentarily). Retry with small backoff.
+                        _logService.LogWarning($"I/O error deleting (attempt {attempt}) {ModName}_{release.Version}.zip: {ioEx.Message}");
+                        await Task.Delay(200 * attempt, cancellationToken);
+                        continue;
+                    }
+                    catch (IOException ioEx)
+                    {
+                        _logService.LogError($"I/O error deleting version: {ioEx.Message}", ioEx);
+                        await _uiService.ShowMessageAsync("Delete Failed", $"Failed to delete file: {ioEx.Message}");
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logService.LogError($"Delete failed: {ex.Message}", ex);
+                        await _uiService.ShowMessageAsync("Delete Failed", $"Unexpected error deleting version: {ex.Message}");
+                        break;
+                    }
+                }
+
+                if (!deleted)
+                {
+                    // Ensure UI reflects actual state from disk if delete didn't happen
+                    RefreshInstalledStates();
+                }
             }
             finally
             {
@@ -223,6 +272,88 @@ namespace FactorioModManager.ViewModels.Dialogs
             }
 
             _versionManager.RefreshVersionCache(ModName);
+        }
+
+        /// <summary>
+        /// Updates the corresponding ModViewModel in the main window (if available)
+        /// so the AvailableVersions, VersionFilePaths, InstalledCount and SelectedVersion reflect changes
+        /// made here. Best-effort: updates SelectedMod first then falls back to filtered list.
+        /// </summary>
+        private async Task UpdateMainWindowModVersionsAsync()
+        {
+            try
+            {
+                // Execute on UI thread to safely update view models bound to the UI
+                await _uiService.InvokeAsync(() =>
+                {
+                    var mainWindow = _uiService.GetMainWindow();
+                    if (mainWindow?.DataContext is not MainWindowViewModel mainVm)
+                        return;
+
+                    // Prefer selected mod, then search filtered mods
+                    ModViewModel? modVm = null;
+                    if (mainVm.SelectedMod != null && string.Equals(mainVm.SelectedMod.Name, ModName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        modVm = mainVm.SelectedMod;
+                    }
+                    else
+                    {
+                        modVm = mainVm.FilteredMods.FirstOrDefault(m => string.Equals(m.Name, ModName, StringComparison.OrdinalIgnoreCase));
+                    }
+
+                    if (modVm == null)
+                        return;
+
+                    var installed = _versionManager.GetInstalledVersions(ModName);
+
+                    modVm.AvailableVersions.Clear();
+                    foreach (var v in installed)
+                    {
+                        modVm.AvailableVersions.Add(v);
+                    }
+
+                    // Also rebuild VersionFilePaths so indexes match AvailableVersions
+                    try
+                    {
+                        var modsDirectory = FolderPathHelper.GetModsDirectory();
+                        var files = Directory.GetFiles(modsDirectory, $"{ModName}_*.zip")
+                                             .OrderByDescending(f => f)
+                                             .ToList();
+
+                        modVm.VersionFilePaths.Clear();
+                        foreach (var f in files)
+                        {
+                            modVm.VersionFilePaths.Add(f);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logService.LogWarning($"Failed to rebuild version file paths for {ModName}: {ex.Message}");
+                    }
+
+                    modVm.InstalledCount = modVm.AvailableVersions.Count;
+
+                    // Ensure SelectedVersion points to an installed version (prefer the active Version)
+                    if (!string.IsNullOrEmpty(modVm.Version) && modVm.AvailableVersions.Contains(modVm.Version))
+                    {
+                        modVm.SelectedVersion = modVm.Version;
+                    }
+                    else if (modVm.AvailableVersions.Count > 0)
+                    {
+                        modVm.SelectedVersion = modVm.AvailableVersions.First();
+                    }
+                    else
+                    {
+                        modVm.SelectedVersion = null;
+                    }
+
+                    modVm.RaisePropertyChanged(nameof(modVm.HasMultipleVersions));
+                });
+            }
+            catch (Exception ex)
+            {
+                _logService.LogError($"Failed to update main window mod versions: {ex.Message}", ex);
+            }
         }
 
         protected override void Dispose(bool disposing)

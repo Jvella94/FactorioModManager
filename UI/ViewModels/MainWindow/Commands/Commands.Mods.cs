@@ -1,5 +1,4 @@
 ﻿using FactorioModManager.Models;
-using FactorioModManager.Models.Domain;
 using FactorioModManager.Services;
 using ReactiveUI;
 using System;
@@ -22,7 +21,7 @@ namespace FactorioModManager.ViewModels.MainWindow
         public ReactiveCommand<Unit, Unit> OpenVersionHistoryCommand { get; private set; } = null!;
         public ReactiveCommand<Unit, Unit> CheckUpdatesCustomCommand { get; private set; } = null!;
         public ReactiveCommand<ModViewModel, Unit> DownloadUpdateCommand { get; private set; } = null!;
-        public ReactiveCommand<ModViewModel, Unit> DeleteOldVersionCommand { get; private set; } = null!;
+        public ReactiveCommand<string, Unit> DeleteOldVersionCommand { get; private set; } = null!;
         public ReactiveCommand<Unit, Unit> CheckSingleModUpdateCommand { get; private set; } = null!;
         public ReactiveCommand<Unit, Unit> RefreshSelectedModCommand { get; private set; } = null!;
         public ReactiveCommand<ModViewModel, Unit> ViewDependentsCommand { get; private set; } = null!;
@@ -42,7 +41,7 @@ namespace FactorioModManager.ViewModels.MainWindow
             OpenVersionHistoryCommand = ReactiveCommand.CreateFromTask(OpenVersionHistoryAsync);
             CheckUpdatesCustomCommand = ReactiveCommand.CreateFromTask(CheckUpdatesCustomAsync);
             DownloadUpdateCommand = ReactiveCommand.CreateFromTask<ModViewModel>(DownloadUpdateAsync);
-            DeleteOldVersionCommand = ReactiveCommand.Create<ModViewModel>(DeleteOldVersion);
+            DeleteOldVersionCommand = ReactiveCommand.Create<string>(DeleteOldVersion);
             CheckSingleModUpdateCommand = ReactiveCommand.CreateFromTask(CheckSingleModUpdateAsync);
             RefreshSelectedModCommand = ReactiveCommand.CreateFromTask(RefreshSelectedModAsync);
             ViewDependentsCommand = ReactiveCommand.CreateFromTask<ModViewModel>(ViewDependentsAsync);

@@ -313,18 +313,18 @@
                 <StackPanel Spacing="5" IsVisible="{Binding HasMultipleVersions}">
                   <TextBlock Text="Installed Versions:" FontWeight="Bold" />
                   <ComboBox ItemsSource="{Binding AvailableVersions}"
-                            SelectedItem="{Binding SelectedVersion}"
-                            HorizontalAlignment="Stretch" 
-                             Margin="0,0,15,0"/>
+                            SelectedItem="{Binding SelectedVersion, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                            HorizontalAlignment="Stretch"
+                            Margin="0,0,15,0" />
 
                   <!-- Delete old version button (only shown for non-current versions) -->
                   <Button Content="Delete This Version"
-                          Command="{Binding ElementName=RootWindow, Path=DataContext.DeleteOldVersionCommand}"
-                          CommandParameter="{Binding}"
-                          HorizontalAlignment="Stretch"
-                          Background="#8B0000"
-                          IsVisible="{Binding IsOldVersionSelected}"
-                          Margin="0,0,15,0"/>
+                    Command="{Binding ElementName=RootWindow, Path=DataContext.DeleteOldVersionCommand}"
+                    CommandParameter="{Binding SelectedVersion}"
+                    HorizontalAlignment="Stretch"
+                    Background="#8B0000"
+                    IsVisible="{Binding IsOldVersionSelected}"
+                    Margin="0,0,15,0" />
                 </StackPanel>
 
                 <TextBlock Text="{Binding UpdateText}"
@@ -569,7 +569,7 @@
                      Width="20"
                      Height="20"
                      VerticalAlignment="Center"
-                     ToolTip.Tip="{Binding FactorioVersionText}"/>
+                     ToolTip.Tip="{Binding FactorioVersionText}" />
 
           <!-- Space Age Icon -->
           <Image Source="/Assets/space-age.png"
