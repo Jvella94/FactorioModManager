@@ -1,5 +1,4 @@
 ﻿using FactorioModManager.Models;
-using FactorioModManager.Models.API;
 using FactorioModManager.Services.Infrastructure;
 using System;
 using System.Collections.Generic;
@@ -10,16 +9,23 @@ using System.Text.Json;
 
 namespace FactorioModManager.Services.Mods
 {
-    public class ModRepository : IModRepository
+    public interface IModRepository
     {
-        private readonly ILogService _logService;
-        private readonly Settings.IModPathSettings _pathSettings;
+        List<(ModInfo Info, bool IsEnabled, DateTime? LastUpdated, string? ThumbnailPath, string FilePath)> LoadAllMods();
 
-        public ModRepository(ILogService logService, Settings.IModPathSettings pathSettings)
-        {
-            _logService = logService;
-            _pathSettings = pathSettings;
-        }
+        ModInfo? ReadModInfo(string filePath);
+
+        void SaveModEntry(string modName, bool enabled, string? version = null);
+
+        Dictionary<string, ModListEntry> LoadModEntries();
+
+        void SaveModEntries(IDictionary<string, ModListEntry> states);
+    }
+
+    public class ModRepository(ILogService logService, Settings.IModPathSettings pathSettings) : IModRepository
+    {
+        private readonly ILogService _logService = logService;
+        private readonly Settings.IModPathSettings _pathSettings = pathSettings;
 
         public List<(ModInfo Info, bool IsEnabled, DateTime? LastUpdated, string? ThumbnailPath, string FilePath)> LoadAllMods()
         {
@@ -34,7 +40,7 @@ namespace FactorioModManager.Services.Mods
                 return [];
             }
 
-            var enabledStates = LoadEnabledStates();
+            var modEntries = LoadModEntries();
             var mods = new List<(ModInfo Info, bool IsEnabled, DateTime? LastUpdated, string? ThumbnailPath, string FilePath)>();
 
             // Load from ZIP files
@@ -46,7 +52,7 @@ namespace FactorioModManager.Services.Mods
                     var modInfo = ExtractModInfoFromZip(zipFile);
                     if (modInfo != null)
                     {
-                        var isEnabled = !enabledStates.TryGetValue(modInfo.Name, out var enabled) || enabled;
+                        var isEnabled = !modEntries.TryGetValue(modInfo.Name, out var entry) || entry.Enabled;
                         var lastUpdated = File.GetLastWriteTime(zipFile);
                         var thumbnailPath = FindThumbnailInZip(zipFile);
 
@@ -73,7 +79,7 @@ namespace FactorioModManager.Services.Mods
                         var modInfo = LoadModInfoFromJson(infoPath);
                         if (modInfo != null)
                         {
-                            var isEnabled = !enabledStates.TryGetValue(modInfo.Name, out var enabled) || enabled;
+                            var isEnabled = !modEntries.TryGetValue(modInfo.Name, out var entry) || entry.Enabled;
                             var lastUpdated = Directory.GetLastWriteTime(dir);
                             var thumbnailPath = FindThumbnailInDirectory(dir);
 
@@ -114,35 +120,55 @@ namespace FactorioModManager.Services.Mods
             }
         }
 
-        public void SaveModState(string modName, bool enabled)
+        public void SaveModEntry(string modName, bool enabled, string? version = null)
         {
-            var states = LoadEnabledStates();
-            states[modName] = enabled;
-            SaveEnabledStates(states);
+            var states = LoadModEntries();
+
+            if (states.TryGetValue(modName, out var existing))
+            {
+                var newEntry = new ModListEntry
+                {
+                    Name = modName,
+                    Enabled = enabled,
+                    Version = version ?? existing.Version
+                };
+                states[modName] = newEntry;
+            }
+            else
+            {
+                states[modName] = new ModListEntry
+                {
+                    Name = modName,
+                    Enabled = enabled,
+                    Version = version
+                };
+            }
+
+            SaveModEntries(states);
         }
 
-        public Dictionary<string, bool> LoadEnabledStates()
+        public Dictionary<string, ModListEntry> LoadModEntries()
         {
             var modsDirectory = _pathSettings.GetModsPath();
             var modListPath = Path.Combine(modsDirectory, Constants.FileSystem.ModListFileName);
-            var enabledStates = new Dictionary<string, bool>();
+            var modEntries = new Dictionary<string, ModListEntry>(StringComparer.OrdinalIgnoreCase);
 
             if (!File.Exists(modListPath))
             {
                 _logService.LogWarning("mod-list.json not found");
-                return enabledStates;
+                return modEntries;
             }
 
             try
             {
                 var json = File.ReadAllText(modListPath);
-                var modList = JsonSerializer.Deserialize<ModList>(json);
+                var modList = JsonSerializer.Deserialize<ModListDto>(json);
 
                 if (modList?.Mods != null)
                 {
                     foreach (var entry in modList.Mods)
                     {
-                        enabledStates[entry.Name] = entry.Enabled;
+                        modEntries[entry.Name] = entry;
                     }
                 }
             }
@@ -151,27 +177,30 @@ namespace FactorioModManager.Services.Mods
                 _logService.LogError($"Error reading mod-list.json: {ex.Message}", ex);
             }
 
-            return enabledStates;
+            return modEntries;
         }
 
-        public void SaveEnabledStates(Dictionary<string, bool> states)
+        public void SaveModEntries(IDictionary<string, ModListEntry> states)
         {
             var modsDirectory = _pathSettings.GetModsPath();
             var modListPath = Path.Combine(modsDirectory, Constants.FileSystem.ModListFileName);
 
             try
             {
-                var modList = new ModList
+                var dto = new ModListDto
                 {
-                    Mods = [.. states.Select(kvp => new ModListEntry
+                    Mods = [.. states.Values.Select(e => new ModListEntry
                     {
-                        Name = kvp.Key,
-                        Enabled = kvp.Value
+                        Name = e.Name,
+                        Enabled = e.Enabled,
+                        Version = e.Version
                     })]
                 };
 
-                var json = JsonSerializer.Serialize(modList, Constants.JsonHelper.CamelCase);
+                var json = JsonSerializer.Serialize(dto, Constants.JsonHelper.ModList);
                 File.WriteAllText(modListPath, json);
+
+                _logService.Log($"Wrote {Constants.FileSystem.ModListFileName} at {DateTime.UtcNow:O}");
             }
             catch (Exception ex)
             {

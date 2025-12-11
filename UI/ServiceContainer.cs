@@ -58,11 +58,15 @@ namespace FactorioModManager
                 Resolve<IModPathSettings>()));
 
             // Business Logic Services
+            RegisterSingleton<IModFilterService>(new ModFilterService());
             RegisterSingleton<IModGroupService>(new ModGroupService(Resolve<ILogService>()));
             RegisterSingleton<IModMetadataService>(new ModMetadataService(Resolve<ILogService>()));
+            RegisterSingleton<IThumbnailCache>(new ThumbnailCache(Resolve<ILogService>()));
+
             RegisterSingleton<IAppUpdateChecker>(new AppUpdateChecker(
                 Resolve<ILogService>(),
-                Resolve<HttpClient>()));
+                Resolve<HttpClient>(),
+                Resolve<IUIService>()));
             RegisterSingleton<IDownloadService>(new DownloadService(
                 Resolve<ISettingsService>(),
                 Resolve<ILogService>(),
@@ -72,6 +76,13 @@ namespace FactorioModManager
             var apiService = new FactorioApiService(Resolve<HttpClient>(), Resolve<ILogService>());
             var cachedApiService = new CachedFactorioApiService(apiService, Resolve<ILogService>());
             RegisterSingleton<IFactorioApiService>(cachedApiService);
+
+            RegisterSingleton<IModMetadataFetcher>(new ModMetadataFetcher(
+             Resolve<IFactorioApiService>(),
+             Resolve<IModMetadataService>(),
+             Resolve<IThumbnailCache>(),
+             Resolve<IUIService>(),
+             Resolve<ILogService>()));
 
             // Mod Services
             RegisterSingleton<IModVersionManager>(new ModVersionManager(
@@ -89,12 +100,17 @@ namespace FactorioModManager
                 Resolve<IModRepository>(),
                 Resolve<ILogService>()));
 
-            RegisterSingleton<IThumbnailCache>(new ThumbnailCache(Resolve<ILogService>()));
-
             RegisterSingleton<IModUpdateService>(new ModUpdateService(
                 Resolve<IFactorioApiService>(),
                 Resolve<IModMetadataService>(),
                 Resolve<IModPathSettings>(),
+                Resolve<ILogService>()));
+
+            // Mod refresh service
+            RegisterSingleton<IModRefreshService>(new ModRefreshService(
+                Resolve<IModService>(),
+                Resolve<IModGroupService>(),
+                Resolve<IModMetadataService>(),
                 Resolve<ILogService>()));
 
             // Launcher
@@ -103,6 +119,7 @@ namespace FactorioModManager
                 Resolve<ILogService>()));
 
             // ViewModels
+            // Create with parameterless constructor (partial viewmodels handle wiring)
             RegisterFactory(() => new MainWindowViewModel(
                 Resolve<IModService>(),
                 Resolve<IModGroupService>(),
@@ -114,12 +131,11 @@ namespace FactorioModManager
                 Resolve<IDownloadService>(),
                 Resolve<IErrorMessageService>(),
                 Resolve<IAppUpdateChecker>(),
-                Resolve<IModUpdateService>(),
                 Resolve<IModDependencyResolver>(),
                 Resolve<IModVersionManager>(),
                 Resolve<IFactorioLauncher>(),
-                Resolve<IErrorMapper>(),
-                Resolve<IThumbnailCache>()
+                Resolve<IThumbnailCache>(),
+                Resolve<IModFilterService>()
             ));
         }
 

@@ -7,8 +7,6 @@ using FactorioModManager.Services.Settings;
 using ReactiveUI;
 using System;
 using System.Collections.ObjectModel;
-using System.Diagnostics;
-using System.IO;
 using System.Linq;
 using System.Reactive.Disposables;
 using System.Reactive.Disposables.Fluent;
@@ -54,12 +52,11 @@ namespace FactorioModManager.ViewModels.MainWindow
         private readonly IDownloadService _downloadService;
         private readonly IErrorMessageService _errorMessageService;
         private readonly IAppUpdateChecker _appUpdateChecker;
-        private readonly IModUpdateService _modUpdateService;
         private readonly IModDependencyResolver _modDependencyResolver;
         private readonly IModVersionManager _modVersionManager;
         private readonly IFactorioLauncher _factorioLauncher;
-        private readonly IErrorMapper _errorMapper;
         private readonly IThumbnailCache _thumbnailCache;
+        private readonly IModFilterService _modFilterService;
 
         public MainWindowViewModel(
             IModService modService,
@@ -72,12 +69,11 @@ namespace FactorioModManager.ViewModels.MainWindow
             IDownloadService downloadService,
             IErrorMessageService errorMessageService,
             IAppUpdateChecker appUpdateChecker,
-            IModUpdateService modUpdateService,
             IModDependencyResolver modDependencyResolver,
             IModVersionManager modVersionManager,
             IFactorioLauncher factorioLauncher,
-            IErrorMapper errorMapper,
-            IThumbnailCache thumbnailCache)
+            IThumbnailCache thumbnailCache,
+            IModFilterService modFilterService)
         {
             _modService = modService;
             _groupService = groupService;
@@ -89,12 +85,11 @@ namespace FactorioModManager.ViewModels.MainWindow
             _downloadService = downloadService;
             _errorMessageService = errorMessageService;
             _appUpdateChecker = appUpdateChecker;
-            _modUpdateService = modUpdateService;
             _modDependencyResolver = modDependencyResolver;
             _modVersionManager = modVersionManager;
             _factorioLauncher = factorioLauncher;
-            _errorMapper = errorMapper;
             _thumbnailCache = thumbnailCache;
+            _modFilterService = modFilterService;
             ModManagement = new ModManagementViewModel();
 
             SetupReactiveFiltering();
@@ -179,32 +174,12 @@ namespace FactorioModManager.ViewModels.MainWindow
         /// </summary>
         private void ApplyModFilter()
         {
-            var filtered = _allMods
-                .Where(mod =>
-                {
-                    if (!string.IsNullOrEmpty(_searchText) &&
-                        !mod.Title.Contains(_searchText, StringComparison.OrdinalIgnoreCase))
-                        return false;
-
-                    if (!string.IsNullOrEmpty(_selectedAuthorFilter))
-                    {
-                        var authorName = ExtractAuthorName(_selectedAuthorFilter);
-                        if (mod.Author != authorName)
-                            return false;
-                    }
-
-                    // Filter for unused internal mods
-                    if (_showOnlyUnusedInternals && !mod.IsUnusedInternal)
-                        return false;
-
-                    // Filter for mods with pending updates
-                    if (_showOnlyPendingUpdates && !mod.HasUpdate)
-                        return false;
-
-                    return true;
-                })
-                .OrderByDescending(m => m.LastUpdated ?? DateTime.MinValue)
-                .ToList();
+            var filtered = _modFilterService.ApplyFilter(_allMods,
+                _searchText,
+                _selectedAuthorFilter,
+                _selectedGroup,
+                _showOnlyUnusedInternals,
+                _showOnlyPendingUpdates);
 
             // ✅ Preserve selection
             var currentSelection = SelectedMod;
@@ -284,51 +259,18 @@ namespace FactorioModManager.ViewModels.MainWindow
         {
             try
             {
-                var exePath = _settingsService.GetFactorioExecutablePath();
-                if (string.IsNullOrEmpty(exePath) || !File.Exists(exePath))
+                var (version, hasSpaceAge) = _factorioLauncher.DetectVersionAndDLC();
+
+                if (!string.IsNullOrEmpty(version))
                 {
-                    SetStatus("Factorio executable not found. Please configure the path in settings.", LogLevel.Warning);
-                    return;
+                    _settingsService.SetFactorioVersion(version);
+                    _logService.Log($"Detected Factorio version: {version}");
                 }
 
-                // Version detection
-                try
-                {
-                    var fvi = FileVersionInfo.GetVersionInfo(exePath);
-                    _settingsService.SetFactorioVersion(fvi.ProductVersion);
-                    _logService.Log($"Detected Factorio version: {fvi.ProductVersion}");
-
-                    this.RaisePropertyChanged(nameof(FactorioVersion));
-                    this.RaisePropertyChanged(nameof(FactorioVersionText));
-                    this.RaisePropertyChanged(nameof(HasFactorioVersion));
-                }
-                catch (Exception ex)
-                {
-                    _logService.LogWarning($"Failed to read Factorio file version: {ex.Message}");
-                    SetStatus("Failed to detect Factorio version.", LogLevel.Warning);
-                }
-
-                // DLC detection
-                var exeDir = Path.GetDirectoryName(exePath);
-                var binFolder = Path.GetDirectoryName(exeDir);
-                var rootDir = Path.GetDirectoryName(binFolder);
-
-                var dataDir = _settingsService.GetFactorioDataPath() ?? Path.Combine(rootDir ?? string.Empty, "data");
-                if (!Directory.Exists(dataDir))
-                {
-                    _logService.LogWarning($"Factorio data directory not found at: {dataDir}");
-                    SetStatus("Factorio data directory not found. DLC detection skipped.", LogLevel.Warning);
-                    return;
-                }
-
-                bool hasSpaceAgeDlc =
-                    Directory.Exists(Path.Combine(dataDir, "space-age")) ||
-                    Directory.Exists(Path.Combine(dataDir, "quality")) ||
-                    Directory.Exists(Path.Combine(dataDir, "elevated-rails"));
-
-                _settingsService.SetHasSpaceAgeDlc(hasSpaceAgeDlc);
-                _logService.Log($"Detected Space Age DLC bundle: {hasSpaceAgeDlc}");
-
+                _settingsService.SetHasSpaceAgeDlc(hasSpaceAge);
+                this.RaisePropertyChanged(nameof(FactorioVersion));
+                this.RaisePropertyChanged(nameof(FactorioVersionText));
+                this.RaisePropertyChanged(nameof(HasFactorioVersion));
                 this.RaisePropertyChanged(nameof(HasSpaceAgeDlc));
             }
             catch (Exception ex)

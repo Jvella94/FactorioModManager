@@ -105,10 +105,10 @@ namespace FactorioModManager.Services.API
             return result;
         }
 
-        public async Task<List<string>> GetRecentlyUpdatedModsAsync(int hoursAgo)
+        // Updated signature to include isManual and forward
+        public async Task<List<string>> GetRecentlyUpdatedModsAsync(int hoursAgo, bool isManual = false)
         {
-            // Pass through - last update is cached in service.
-            return await _inner.GetRecentlyUpdatedModsAsync(hoursAgo);
+            return await _inner.GetRecentlyUpdatedModsAsync(hoursAgo, isManual);
         }
 
         /// <summary>

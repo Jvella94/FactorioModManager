@@ -60,6 +60,11 @@ namespace FactorioModManager.Services.Settings
 
         void SetShowHiddenDependencies(bool value);
 
+        // Concurrency for Update All
+        int GetUpdateConcurrency();
+
+        void SetUpdateConcurrency(int concurrency);
+
         public event Action? FactorioPathChanged;
     }
 
@@ -78,6 +83,9 @@ namespace FactorioModManager.Services.Settings
         public bool HasSpaceAgeDlc { get; set; }
         public string? FactorioDataPath { get; set; }
         public bool ShowHiddenDependencies { get; set; } = false;
+
+        // New: concurrency limit for Update All
+        public int UpdateConcurrency { get; set; } = 3;
     }
 
     public class SettingsService : ISettingsService
@@ -128,6 +136,10 @@ namespace FactorioModManager.Services.Settings
                     settings.Username ??= Username;
                     settings.Token ??= Token;
                 }
+
+                // Ensure concurrency has sensible default
+                if (settings.UpdateConcurrency <= 0)
+                    settings.UpdateConcurrency = 3;
 
                 return settings;
             }
@@ -324,6 +336,18 @@ namespace FactorioModManager.Services.Settings
         public void SetShowHiddenDependencies(bool value)
         {
             _settings.ShowHiddenDependencies = value;
+            SaveSettings();
+        }
+
+        // Concurrency getter/setter
+        public int GetUpdateConcurrency()
+        {
+            return _settings.UpdateConcurrency <= 0 ? 1 : _settings.UpdateConcurrency;
+        }
+
+        public void SetUpdateConcurrency(int concurrency)
+        {
+            _settings.UpdateConcurrency = concurrency;
             SaveSettings();
         }
     }

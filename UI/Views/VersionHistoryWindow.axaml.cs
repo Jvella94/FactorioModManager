@@ -22,6 +22,7 @@ namespace FactorioModManager.Views
                ServiceContainer.Instance.Resolve<ISettingsService>(),
                ServiceContainer.Instance.Resolve<ILogService>(),
                ServiceContainer.Instance.Resolve<IUIService>(),
+               ServiceContainer.Instance.Resolve<IModService>(), // pass IModService so view-model can persist active version
                modTitle, modName, releases, this);
             DataContext = vm;
 

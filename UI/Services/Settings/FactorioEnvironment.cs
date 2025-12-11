@@ -19,6 +19,9 @@ namespace FactorioModManager.Services.Settings
 
         void SetHasSpaceAgeDlc(bool value);
 
+        // Returns explicit data path if configured in settings (may be null)
+        string? GetDataPath();
+
         void DetectEnvironment();
     }
 
@@ -38,6 +41,8 @@ namespace FactorioModManager.Services.Settings
         public bool HasSpaceAgeDlc() => _settingsService.GetHasSpaceAgeDLC();
 
         public void SetHasSpaceAgeDlc(bool value) => _settingsService.SetHasSpaceAgeDlc(value);
+
+        public string? GetDataPath() => _settingsService.GetFactorioDataPath();
 
         public void DetectEnvironment()
         {

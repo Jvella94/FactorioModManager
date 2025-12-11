@@ -9,9 +9,15 @@ namespace FactorioModManager.Services.Mods
     public interface IModService
     {
         List<(ModInfo Info, bool IsEnabled, DateTime? LastUpdated, string? ThumbnailPath, string FilePath)> LoadAllMods();
+
         Result ToggleMod(string modName, bool enabled);
+
         Result RemoveMod(string modName, string filePath);
+
         ModInfo? ReadModInfo(string filePath);
+
+        // Persist enabled state and optional version
+        void SaveModState(string modName, bool enabled, string? version = null);
     }
 
     public class ModService(IModRepository repository, ILogService logService) : IModService
@@ -28,7 +34,8 @@ namespace FactorioModManager.Services.Mods
         {
             try
             {
-                _repository.SaveModState(modName, enabled);
+                // Save only enabled state (preserve version)
+                _repository.SaveModEntry(modName, enabled, version: null);
                 _logService.Log($"Toggled {modName}: {(enabled ? "enabled" : "disabled")}");
                 return Result.Ok();
             }
@@ -63,10 +70,10 @@ namespace FactorioModManager.Services.Mods
                 // Update mod-list.json
                 try
                 {
-                    var states = _repository.LoadEnabledStates();
+                    var states = _repository.LoadModEntries();
                     if (states.Remove(modName))
                     {
-                        _repository.SaveEnabledStates(states);
+                        _repository.SaveModEntries(states);
                         _logService.Log($"Removed {modName} from mod-list.json");
                     }
                 }
@@ -88,6 +95,11 @@ namespace FactorioModManager.Services.Mods
         public ModInfo? ReadModInfo(string filePath)
         {
             return _repository.ReadModInfo(filePath);
+        }
+
+        public void SaveModState(string modName, bool enabled, string? version = null)
+        {
+            _repository.SaveModEntry(modName, enabled, version);
         }
     }
 }

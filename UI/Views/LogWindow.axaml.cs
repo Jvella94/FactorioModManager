@@ -12,15 +12,15 @@ namespace FactorioModManager.Views
     {
         private readonly LogWindowViewModel _viewModel;
 
-        public LogWindow(ILogService logService)
+        public LogWindow(ILogService logService, IUIService uiService)
         {
             InitializeComponent();
-            _viewModel = new LogWindowViewModel(logService);
+            _viewModel = new LogWindowViewModel(logService, uiService);
             DataContext = _viewModel;
         }
 
         public LogWindow()
-            : this(ServiceContainer.Instance.Resolve<ILogService>())
+            : this(ServiceContainer.Instance.Resolve<ILogService>(), ServiceContainer.Instance.Resolve<IUIService>())
         {
         }
 

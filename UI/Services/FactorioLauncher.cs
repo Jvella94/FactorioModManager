@@ -10,8 +10,13 @@ namespace FactorioModManager.Services
     public interface IFactorioLauncher
     {
         Result Launch();
+
         string? DetectFactorioPath();
+
         bool IsFactorioInstalled();
+
+        // Detect installed factorio version and whether Space Age DLC bundle is present
+        (string? Version, bool HasSpaceAgeDlc) DetectVersionAndDLC();
     }
 
     public class FactorioLauncher(IFactorioEnvironment environment, ILogService logService) : IFactorioLauncher
@@ -77,6 +82,65 @@ namespace FactorioModManager.Services
         {
             var path = _environment.GetExecutablePath();
             return !string.IsNullOrEmpty(path) && File.Exists(path);
+        }
+
+        public (string? Version, bool HasSpaceAgeDlc) DetectVersionAndDLC()
+        {
+            try
+            {
+                var exePath = _environment.GetExecutablePath();
+                if (string.IsNullOrEmpty(exePath) || !File.Exists(exePath))
+                {
+                    // Try to auto-detect without changing settings
+                    exePath = DetectFactorioPath();
+                }
+
+                if (string.IsNullOrEmpty(exePath) || !File.Exists(exePath))
+                {
+                    _logService.LogWarning("Factorio executable not found for version/DLC detection");
+                    return (null, false);
+                }
+
+                string? version = null;
+                try
+                {
+                    var fvi = FileVersionInfo.GetVersionInfo(exePath);
+                    version = fvi.ProductVersion;
+                    _logService.Log($"Detected Factorio version: {version}");
+                }
+                catch (Exception ex)
+                {
+                    _logService.LogWarning($"Failed to read Factorio file version: {ex.Message}");
+                }
+                var dataDir = _environment.GetDataPath();
+                if (string.IsNullOrEmpty(dataDir))
+                {
+                    var exeDir = Path.GetDirectoryName(exePath);
+                    var binFolder = Path.GetDirectoryName(exeDir);
+                    var rootDir = Path.GetDirectoryName(binFolder);
+
+                    dataDir = Path.Combine(rootDir ?? string.Empty, "data");
+                }
+                if (!Directory.Exists(dataDir))
+                {
+                    _logService.LogWarning($"Factorio data directory not found at: {dataDir}");
+                    return (version, false);
+                }
+
+                bool hasSpaceAgeDlc =
+                    Directory.Exists(Path.Combine(dataDir, "space-age")) ||
+                    Directory.Exists(Path.Combine(dataDir, "quality")) ||
+                    Directory.Exists(Path.Combine(dataDir, "elevated-rails"));
+
+                _logService.Log($"Detected Space Age DLC bundle: {hasSpaceAgeDlc}");
+
+                return (version, hasSpaceAgeDlc);
+            }
+            catch (Exception ex)
+            {
+                _logService.LogWarning($"Error detecting Factorio DLC/version: {ex.Message}");
+                return (null, false);
+            }
         }
     }
 }

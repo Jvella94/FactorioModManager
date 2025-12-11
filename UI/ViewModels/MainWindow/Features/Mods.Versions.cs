@@ -155,5 +155,102 @@ namespace FactorioModManager.ViewModels.MainWindow
                 HandleError(ex, $"Error deleting old version: {ex.Message}");
             }
         }
+
+        /// <summary>
+        /// Sets the selected installed version as the active version in the UI.
+        /// This updates the SelectedMod view model to point at the chosen file/info so details reflect immediately.
+        /// Note: this is a UI-level activation — a full refresh may restore canonical "latest" on next refresh.
+        /// </summary>
+        internal void SetActiveVersion(string? selectedVersion)
+        {
+            var mod = SelectedMod;
+            if (mod == null)
+            {
+                SetStatus("No mod selected", LogLevel.Warning);
+                return;
+            }
+
+            if (string.IsNullOrEmpty(selectedVersion))
+            {
+                SetStatus("No version selected", LogLevel.Warning);
+                return;
+            }
+
+            if (selectedVersion == mod.Version)
+            {
+                SetStatus($"{mod.Title} is already active at {mod.Version}", LogLevel.Info);
+                return;
+            }
+
+            try
+            {
+                // Refresh cached list and confirm the requested version exists
+                _modVersionManager.RefreshVersionCache(mod.Name);
+                var installed = _modVersionManager.GetInstalledVersions(mod.Name);
+                if (!installed.Contains(selectedVersion))
+                {
+                    SetStatus($"Version {selectedVersion} not found for {mod.Title}", LogLevel.Warning);
+                    LoadModVersions(mod);
+                    return;
+                }
+
+                // Resolve file path (prefer VersionFilePaths when available)
+                string filePath;
+                var idx = mod.AvailableVersions.IndexOf(selectedVersion);
+                if (idx >= 0 && idx < mod.VersionFilePaths.Count)
+                {
+                    filePath = mod.VersionFilePaths[idx];
+                }
+                else
+                {
+                    var modsDirectory = FolderPathHelper.GetModsDirectory();
+                    filePath = Path.Combine(modsDirectory, $"{mod.Name}_{selectedVersion}.zip");
+                }
+
+                if (!File.Exists(filePath))
+                {
+                    SetStatus($"File not found: {filePath}", LogLevel.Warning);
+                    LoadModVersions(mod);
+                    return;
+                }
+
+                // Read info.json from the selected file to update view-model fields
+                var info = _modService.ReadModInfo(filePath);
+                if (info == null)
+                {
+                    SetStatus($"Failed to read info.json for {selectedVersion}", LogLevel.Warning);
+                    return;
+                }
+
+                // Update SelectedMod to reflect chosen file/version immediately
+                mod.FilePath = filePath;
+                mod.Version = info.Version;
+                mod.Title = string.IsNullOrEmpty(info.DisplayTitle) ? info.Name : info.DisplayTitle;
+                mod.Author = info.Author;
+                mod.Description = info.Description ?? string.Empty;
+                mod.SelectedVersion = selectedVersion;
+
+                // Persist the active version in mod-list.json
+                try
+                {
+                    _modService.SaveModState(mod.Name, enabled: true, version: selectedVersion);
+                }
+                catch (Exception exSave)
+                {
+                    _logService.LogWarning($"Failed to persist active version for {mod.Name}: {exSave.Message}");
+                }
+
+                // Refresh lists and counts
+                _modVersionManager.RefreshVersionCache(mod.Name);
+                LoadModVersions(mod);
+
+                SetStatus($"Set active version for {mod.Title} → {selectedVersion}");
+                _logService.Log($"Set active version for {mod.Name} to {selectedVersion}");
+            }
+            catch (Exception ex)
+            {
+                HandleError(ex, $"Error setting active version: {ex.Message}");
+            }
+        }
     }
 }

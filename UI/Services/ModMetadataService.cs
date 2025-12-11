@@ -1,4 +1,5 @@
-﻿using FactorioModManager.Services.Infrastructure;
+﻿using FactorioModManager.Models;
+using FactorioModManager.Services.Infrastructure;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -46,25 +47,6 @@ namespace FactorioModManager.Services
         long? GetSizeOnDisk(string modName);
 
         void UpdateSizeOnDisk(string modName, long sizeInBytes);
-    }
-
-    public class ModMetadata
-    {
-        public string ModName { get; set; } = string.Empty;
-        public string? Category { get; set; }
-        public DateTime? CreatedOn { get; set; }
-        public bool HasUpdate { get; set; }
-        public DateTime? LastUpdateCheck { get; set; }
-        public string? LatestVersion { get; set; }
-        public string? SourceUrl { get; set; }
-
-        // NEW: size on disk in bytes
-        public long? SizeOnDiskBytes { get; set; }
-    }
-
-    public class ModMetadataCollection
-    {
-        public List<ModMetadata> Metadata { get; set; } = [];
     }
 
     public class ModMetadataService : IModMetadataService
@@ -290,7 +272,7 @@ namespace FactorioModManager.Services
                 {
                     Metadata = [.. _cache.Values]
                 };
-                var json = JsonSerializer.Serialize(collection, Constants.JsonHelper.IndentedOnly);
+                var json = JsonSerializer.Serialize(collection, Constants.JsonHelper.ModMetaData);
                 File.WriteAllText(_metadataPath, json);
             }
             catch (Exception ex)

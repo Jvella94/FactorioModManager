@@ -24,6 +24,7 @@ namespace FactorioModManager.ViewModels.Dialogs
         private readonly ISettingsService _settingsService;
         private readonly ILogService _logService;
         private readonly IUIService _uiService;
+        private readonly IModService _modService;
         private readonly Window? _parentWindow;
         private readonly CompositeDisposable _disposables = [];
         private CancellationTokenSource? _currentOperationCts;
@@ -39,6 +40,7 @@ namespace FactorioModManager.ViewModels.Dialogs
             ISettingsService settingsService,
             ILogService logService,
             IUIService uiService,
+            IModService modService,
             string modTitle,
             string modName,
             List<ShortReleaseDTO> releases,
@@ -48,6 +50,7 @@ namespace FactorioModManager.ViewModels.Dialogs
             _settingsService = settingsService;
             _logService = logService;
             _uiService = uiService;
+            _modService = modService;
             _parentWindow = parentWindow;
             ModTitle = modTitle;
             ModName = modName;
@@ -66,11 +69,10 @@ namespace FactorioModManager.ViewModels.Dialogs
 
             UpdateCanDeleteFlags();
 
-            // ✅ ActionCommand with cancellation support
+            // ActionCommand with cancellation support
             ActionCommand = ReactiveCommand.CreateFromTask<VersionHistoryReleaseViewModel>(
                 HandleActionAsync);
 
-            // ✅ Cancel command
             CancelCommand = ReactiveCommand.Create(() =>
             {
                 _currentOperationCts?.Cancel();
@@ -101,6 +103,7 @@ namespace FactorioModManager.ViewModels.Dialogs
                     if (result)
                     {
                         await DeleteVersionAsync(releaseVM, _currentOperationCts.Token);
+                        await CheckforSingleRelease();
                     }
                 }
                 else
@@ -117,6 +120,84 @@ namespace FactorioModManager.ViewModels.Dialogs
             {
                 _logService.Log("Delete/Download cancelled");
             }
+        }
+
+        private async Task CheckforSingleRelease()
+        {
+            // If deletion left a single installed version, persist it as active
+            var installed = _versionManager.GetInstalledVersions(ModName);
+            if (installed.Count == 1)
+            {
+                try
+                {
+                    var remaining = installed.First();
+                    // Persist no listed version (enable stays true)
+                    _modService.SaveModState(ModName, enabled: true, version: null);
+
+                    // Ensure main window reflects active version
+                    await _uiService.InvokeAsync(async () =>
+                    {
+                        var mainWindow = _uiService.GetMainWindow();
+                        if (mainWindow?.DataContext is MainWindowViewModel mainVm)
+                        {
+                            var modVm = mainVm.SelectedMod ?? mainVm.FilteredMods.FirstOrDefault(m => string.Equals(m.Name, ModName, StringComparison.OrdinalIgnoreCase));
+                            if (modVm != null)
+                            {
+                                modVm.SelectedVersion = remaining;
+                                modVm.Version = remaining;
+
+                                // Resolve file path: prefer known VersionFilePaths, otherwise construct expected zip name
+                                string? filePath = GetFilePathofVersion(remaining, modVm);
+
+                                if (!string.IsNullOrEmpty(filePath))
+                                {
+                                    modVm.FilePath = filePath;
+                                }
+
+                                // Trigger property updates
+                                modVm.RaisePropertyChanged(nameof(modVm.HasMultipleVersions));
+                            }
+                        }
+                    });
+                }
+                catch (Exception exPersist)
+                {
+                    _logService.LogWarning($"Failed to persist remaining active version for {ModName}: {exPersist.Message}");
+                }
+            }
+        }
+
+        private string? GetFilePathofVersion(string remaining, ModViewModel modVm)
+        {
+            string? filePath = null;
+            var idx = modVm.AvailableVersions.IndexOf(remaining);
+            if (idx >= 0 && idx < modVm.VersionFilePaths.Count)
+            {
+                filePath = modVm.VersionFilePaths[idx];
+            }
+            else
+            {
+                var modsDirectory = FolderPathHelper.GetModsDirectory();
+                var expected = Path.Combine(modsDirectory, $"{ModName}_{remaining}.zip");
+                if (File.Exists(expected))
+                {
+                    filePath = expected;
+                }
+                else
+                {
+                    // try to find any matching file name containing the version substring
+                    try
+                    {
+                        var files = Directory.GetFiles(FolderPathHelper.GetModsDirectory(), $"{ModName}_*.zip");
+                        filePath = files.FirstOrDefault(f => Path.GetFileNameWithoutExtension(f).EndsWith($"_{remaining}", StringComparison.OrdinalIgnoreCase));
+                    }
+                    catch
+                    {
+                        filePath = null;
+                    }
+                }
+            }
+            return filePath;
         }
 
         private void UpdateCanDeleteFlags()
@@ -333,7 +414,7 @@ namespace FactorioModManager.ViewModels.Dialogs
 
                     modVm.InstalledCount = modVm.AvailableVersions.Count;
 
-                    // Ensure SelectedVersion points to an installed version (prefer the active Version)
+                    // Ensure SelectedVersion points to an installed version
                     if (!string.IsNullOrEmpty(modVm.Version) && modVm.AvailableVersions.Contains(modVm.Version))
                     {
                         modVm.SelectedVersion = modVm.Version;

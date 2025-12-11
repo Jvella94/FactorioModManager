@@ -20,12 +20,16 @@ namespace FactorioModManager.Services
     public interface IAppUpdateChecker
     {
         Task<AppUpdateInfo?> CheckForUpdatesAsync(string currentVersion);
+
+        // New: check for updates and notify the user via UI service when appropriate
+        Task CheckForUpdatesAndNotifyAsync(string currentVersion);
     }
 
-    public class AppUpdateChecker(ILogService logService, HttpClient httpClient) : IAppUpdateChecker
+    public class AppUpdateChecker(ILogService logService, HttpClient httpClient, IUIService uiService) : IAppUpdateChecker
     {
         private readonly ILogService _logService = logService;
         private readonly HttpClient _httpClient = httpClient;
+        private readonly IUIService _uiService = uiService;
 
         public async Task<AppUpdateInfo?> CheckForUpdatesAsync(string currentVersion)
         {
@@ -34,12 +38,11 @@ namespace FactorioModManager.Services
                 _logService.Log("Checking for app updates on GitHub...", LogLevel.Info);
 
                 var url = "https://api.github.com/repos/jvella94/FactorioModManager/releases/latest";
-                _httpClient.DefaultRequestHeaders.Add("User-Agent", "FactorioModManager/1.0");
+                _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("FactorioModManager/1.0");
 
                 var response = await _httpClient.GetStringAsync(url);
                 var release = JsonSerializer.Deserialize<GitHubRelease>(response, Constants.JsonHelper.CaseInsensitive);
 
-                // Fix: Check for null values before proceeding
                 if (release?.TagName == null || release.HtmlUrl == null)
                 {
                     _logService.Log("Invalid release data from GitHub", LogLevel.Warning);
@@ -49,11 +52,10 @@ namespace FactorioModManager.Services
                 var latestVersion = release.TagName.TrimStart('v');
                 var isNewer = IsNewerVersion(latestVersion, currentVersion);
 
-                // Fix: Find asset with null-safe checks
                 var downloadUrl = release.Assets?
                     .FirstOrDefault(a => !string.IsNullOrEmpty(a.Name) && a.Name.Contains(".zip"))
                     ?.BrowserDownloadUrl
-                    ?? release.HtmlUrl; // Now safe because we checked it's not null above
+                    ?? release.HtmlUrl;
 
                 return new AppUpdateInfo
                 {
@@ -68,6 +70,20 @@ namespace FactorioModManager.Services
             {
                 _logService.LogError("Failed to check for app updates", ex);
                 return null;
+            }
+        }
+
+        public async Task CheckForUpdatesAndNotifyAsync(string currentVersion)
+        {
+            var updateInfo = await CheckForUpdatesAsync(currentVersion);
+            if (updateInfo?.IsNewer == true)
+            {
+                await _uiService.InvokeAsync(() =>
+                {
+                    _uiService.ShowMessageAsync("Update Available",
+                        $"A new version {updateInfo.Version} of Factorio Mod Manager is available!\n\nRelease notes: {updateInfo.HtmlUrl}");
+                    _logService.Log($"New version {updateInfo.Version} available (notified user)");
+                });
             }
         }
 

@@ -42,9 +42,14 @@
         <MenuItem Header="_Settings" Command="{Binding OpenSettingsCommand}" />
       </MenuItem>
 
-      <MenuItem Header="Check for Mod _Updates" Command="{Binding CheckUpdatesCustomCommand}" />
-      <MenuItem Header="Check for Mod Manager Updates"
-                Command="{Binding CheckForAppUpdatesCommand}" />
+      <!-- Combined Updates menu -->
+      <MenuItem Header="_Updates">
+        <MenuItem Header="Check for Mod _Updates" Command="{Binding CheckUpdatesCustomCommand}" />
+        <MenuItem Header="_Update All" Command="{Binding UpdateAllCommand}" />
+        <Separator />
+        <MenuItem Header="Check for Mod Manager Updates"
+                  Command="{Binding CheckForAppUpdatesCommand}" />
+      </MenuItem>
 
       <MenuItem Header="_Help">
         <MenuItem Header="_About" Click="ShowAbout_Click" />
@@ -110,6 +115,17 @@
               <TextBlock Text="Pending Updates" />
             </StackPanel>
           </ToggleButton>
+
+          <!-- Update All quick button -->
+          <Button Command="{Binding UpdateAllCommand}"
+                  VerticalAlignment="Center"
+                  Padding="10,7"
+                  ToolTip.Tip="Update all mods with pending updates">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <TextBlock Text="⬆" FontSize="14" />
+              <TextBlock Text="Update All" />
+            </StackPanel>
+          </Button>
         </StackPanel>
 
         <StackPanel Grid.Column="3"
@@ -310,22 +326,55 @@
                            Foreground="#888" />
 
                 <!-- Version selector -->
-                <StackPanel Spacing="5" IsVisible="{Binding HasMultipleVersions}">
-                  <TextBlock Text="Installed Versions:" FontWeight="Bold" />
-                  <ComboBox ItemsSource="{Binding AvailableVersions}"
-                            SelectedItem="{Binding SelectedVersion, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                            HorizontalAlignment="Stretch"
-                            Margin="0,0,15,0" />
+                <Grid IsVisible="{Binding HasMultipleVersions}" Margin="0,4,15,0">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="2*" />
+                    <ColumnDefinition Width="1*" />
+                  </Grid.ColumnDefinitions>
 
-                  <!-- Delete old version button (only shown for non-current versions) -->
-                  <Button Content="Delete This Version"
-                    Command="{Binding ElementName=RootWindow, Path=DataContext.DeleteOldVersionCommand}"
-                    CommandParameter="{Binding SelectedVersion}"
-                    HorizontalAlignment="Stretch"
-                    Background="#8B0000"
-                    IsVisible="{Binding IsOldVersionSelected}"
-                    Margin="0,0,15,0" />
-                </StackPanel>
+                  <TextBlock Grid.ColumnSpan="2" Text="Installed Versions:" FontWeight="Bold" />
+
+                  <!-- Left: ComboBox wrapped in a Border for consistent background/rounded corners -->
+                  <Border Grid.Column="0"
+                          CornerRadius="6"
+                          Background="#2B2B2B"
+                          Padding="4"
+                          Margin="0,26,8,0"
+                          VerticalAlignment="Top">
+                    <ComboBox ItemsSource="{Binding AvailableVersions}"
+                              SelectedItem="{Binding SelectedVersion, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                              HorizontalAlignment="Stretch"
+                              VerticalAlignment="Center"
+                              Background="Transparent"
+                              BorderThickness="0"
+                              MinHeight="32" />
+                  </Border>
+
+                  <!-- Right: Set Active button -->
+                  <Button Grid.Column="1"
+                          Content="Set Active"
+                          Command="{Binding ElementName=RootWindow, Path=DataContext.SetActiveVersionCommand}"
+                          CommandParameter="{Binding SelectedVersion}"
+                          IsEnabled="{Binding IsOldVersionSelected}"
+                          HorizontalAlignment="Stretch"
+                          HorizontalContentAlignment="Center"
+                          VerticalContentAlignment="Center"
+                          VerticalAlignment="Top"
+                          Margin="0,26,0,0"
+                          MinHeight="40"
+                          Padding="8,6"
+                          Background="#2D5016"
+                          Foreground="White" />
+                </Grid>
+
+                <!-- Delete old version button (only shown for non-current versions) -->
+                <Button Content="Delete This Version"
+                        Command="{Binding ElementName=RootWindow, Path=DataContext.DeleteOldVersionCommand}"
+                        CommandParameter="{Binding SelectedVersion}"
+                        HorizontalAlignment="Stretch"
+                        Background="#8B0000"
+                        IsVisible="{Binding IsOldVersionSelected}"
+                        Margin="0,4,15,0" />
 
                 <TextBlock Text="{Binding UpdateText}"
                            Foreground="LightGreen"
@@ -551,33 +600,42 @@
                    Text="{Binding StatusText}"
                    VerticalAlignment="Center" />
 
-        <!-- Factorio version and Space Age icon on the right -->
+        <!-- Right area: Factorio version, DLC icon, and Update All progress -->
         <StackPanel Grid.Column="1"
                     Orientation="Horizontal"
                     Spacing="10"
-                    VerticalAlignment="Center"
-                    IsVisible="{Binding HasFactorioVersion}">
+                    VerticalAlignment="Center">
+
+          <!-- Update All progress (shown when running) -->
+          <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"
+                      IsVisible="{Binding IsUpdatingAll}">
+            <ProgressBar Width="120" Height="6" IsIndeterminate="False" Minimum="0" Maximum="100"
+                         Value="{Binding UpdateAllProgressPercent, Mode=OneWay}" />
+            <TextBlock Text="{Binding UpdateAllProgressText}" Foreground="#DDD" VerticalAlignment="Center" />
+          </StackPanel>
 
           <!-- Factorio Version -->
-          <TextBlock Text="{Binding FactorioVersionText}"
-                     Foreground="#888"
-                     FontSize="15"
-                     VerticalAlignment="Center" />
+          <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" IsVisible="{Binding HasFactorioVersion}">
+            <TextBlock Text="{Binding FactorioVersionText}"
+                       Foreground="#888"
+                       FontSize="15"
+                       VerticalAlignment="Center" />
 
-          <!-- Factorio Icon -->
-          <Image Source="/Assets/base.png"
-                     Width="20"
-                     Height="20"
-                     VerticalAlignment="Center"
-                     ToolTip.Tip="{Binding FactorioVersionText}" />
+            <!-- Factorio Icon -->
+            <Image Source="/Assets/base.png"
+                       Width="20"
+                       Height="20"
+                       VerticalAlignment="Center"
+                       ToolTip.Tip="{Binding FactorioVersionText}" />
 
-          <!-- Space Age Icon -->
-          <Image Source="/Assets/space-age.png"
-                    Width="20"
-                    Height="20"
-                    VerticalAlignment="Center"
-                    ToolTip.Tip="Space Age DLC Detected!"
-                    IsVisible="{Binding HasSpaceAgeDlc}" />
+            <!-- Space Age Icon -->
+            <Image Source="/Assets/space-age.png"
+                      Width="20"
+                      Height="20"
+                      VerticalAlignment="Center"
+                      ToolTip.Tip="Space Age DLC Detected!"
+                      IsVisible="{Binding HasSpaceAgeDlc}" />
+          </StackPanel>
         </StackPanel>
       </Grid>
     </Border>

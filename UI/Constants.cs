@@ -272,6 +272,109 @@ namespace FactorioModManager
                     .Distinct(StringComparer.OrdinalIgnoreCase)];
             }
 
+            /// <summary>
+            /// Parses a raw dependency string and returns prefix, name, version operator and version.
+            /// Example: "? modname >= 1.2.3" -> ("?","modname", ">=", "1.2.3")
+            /// </summary>
+            public static (string? Prefix, string Name, string? VersionOperator, string? Version)? ParseDependency(string raw)
+            {
+                if (string.IsNullOrWhiteSpace(raw))
+                    return null;
+
+                var trimmed = raw.Trim();
+                string? prefix = null;
+
+                if (trimmed.StartsWith("(!)", StringComparison.Ordinal) ||
+                    trimmed.StartsWith("(?)", StringComparison.Ordinal))
+                {
+                    prefix = trimmed[..3];
+                    trimmed = trimmed[3..].TrimStart();
+                }
+                else if (trimmed.Length > 0 && (trimmed[0] == '!' || trimmed[0] == '?' || trimmed[0] == '~'))
+                {
+                    prefix = trimmed[0].ToString();
+                    trimmed = trimmed[1..].TrimStart();
+                }
+
+                if (string.IsNullOrEmpty(trimmed))
+                    return null;
+
+                // Split name and possible constraint
+                var parts = trimmed.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+                var name = parts[0];
+                string? op = null;
+                string? ver = null;
+
+                if (parts.Length > 1)
+                {
+                    var constraint = parts[1].Trim();
+                    // Look for operators >=, <=, >, <, =
+                    if (constraint.StartsWith(">=", StringComparison.Ordinal))
+                    {
+                        op = ">=";
+                        ver = constraint[2..].Trim();
+                    }
+                    else if (constraint.StartsWith("<=", StringComparison.Ordinal))
+                    {
+                        op = "<=";
+                        ver = constraint[2..].Trim();
+                    }
+                    else if (constraint.StartsWith(">", StringComparison.Ordinal))
+                    {
+                        op = ">";
+                        ver = constraint[1..].Trim();
+                    }
+                    else if (constraint.StartsWith("<", StringComparison.Ordinal))
+                    {
+                        op = "<";
+                        ver = constraint[1..].Trim();
+                    }
+                    else if (constraint.StartsWith("=", StringComparison.Ordinal))
+                    {
+                        op = "=";
+                        ver = constraint[1..].Trim();
+                    }
+                    else
+                    {
+                        // If constraint doesn't start with an operator, try to extract numeric token
+                        var firstToken = constraint.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+                        if (!string.IsNullOrEmpty(firstToken))
+                        {
+                            // assume '='
+                            op = "=";
+                            ver = firstToken;
+                        }
+                    }
+                }
+
+                return (prefix, name, op, ver);
+            }
+
+            /// <summary>
+            /// Checks whether a given version satisfies the operator/version constraint.
+            /// If operator or version is null, returns true.
+            /// </summary>
+            public static bool SatisfiesVersionConstraint(string? actualVersion, string? op, string? requiredVersion)
+            {
+                if (string.IsNullOrEmpty(op) || string.IsNullOrEmpty(requiredVersion))
+                    return true;
+
+                if (string.IsNullOrEmpty(actualVersion))
+                    return false;
+
+                var cmp = VersionHelper.CompareVersions(actualVersion, requiredVersion);
+
+                return op switch
+                {
+                    ">" => cmp > 0,
+                    ">=" => cmp >= 0,
+                    "<" => cmp < 0,
+                    "<=" => cmp <= 0,
+                    "=" => cmp == 0,
+                    _ => true,
+                };
+            }
+
             private static (string? Prefix, string Name)? ParseDependencyNameAndPrefix(string raw)
             {
                 if (string.IsNullOrWhiteSpace(raw))
@@ -312,9 +415,22 @@ namespace FactorioModManager
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase
             };
 
+            public static readonly JsonSerializerOptions ModList = new()
+            {
+                WriteIndented = true,
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+            };
+
             public static readonly JsonSerializerOptions IndentedOnly = new()
             {
                 WriteIndented = true,
+            };
+
+            public static readonly JsonSerializerOptions ModMetaData = new()
+            {
+                WriteIndented = true,
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault
             };
 
             public static readonly JsonSerializerOptions CaseInsensitive = new()

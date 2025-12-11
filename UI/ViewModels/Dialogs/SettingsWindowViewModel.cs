@@ -22,6 +22,8 @@ namespace FactorioModManager.ViewModels.Dialogs
 
         private string? _factorioExePath;
 
+        private int _updateConcurrency = 3; // sensible default
+
         public string? FactorioExePath
         {
             get => _factorioExePath;
@@ -56,6 +58,17 @@ namespace FactorioModManager.ViewModels.Dialogs
         {
             get => _keepOldModFiles;
             set => this.RaiseAndSetIfChanged(ref _keepOldModFiles, value);
+        }
+
+        // New: concurrency for Update All
+        public int UpdateConcurrency
+        {
+            get => _updateConcurrency;
+            set
+            {
+                var clamped = Math.Max(1, value);
+                this.RaiseAndSetIfChanged(ref _updateConcurrency, clamped);
+            }
         }
 
         private bool _checkForAppUpdates;
@@ -107,6 +120,9 @@ namespace FactorioModManager.ViewModels.Dialogs
             LastAppUpdateCheck = _settingsService.GetLastAppUpdateCheck();
             ShowHiddenDependencies = _settingsService.GetShowHiddenDependencies();
 
+            // Load update concurrency
+            UpdateConcurrency = _settingsService.GetUpdateConcurrency();
+
             // ✅ SaveCommand with validation
             var canSave = this.WhenAnyValue(x => x.ModsPath)
                 .Select(_ => Validate())
@@ -136,6 +152,13 @@ namespace FactorioModManager.ViewModels.Dialogs
                 return false;
             }
 
+            // Validate update concurrency
+            if (UpdateConcurrency <= 0)
+            {
+                ValidationError = "Update concurrency must be at least 1";
+                return false;
+            }
+
             ValidationError = null;
             return true;
         }
@@ -161,6 +184,7 @@ namespace FactorioModManager.ViewModels.Dialogs
             _settingsService.SetKeepOldModFiles(KeepOldModFiles);
             _settingsService.SetCheckForAppUpdates(CheckForAppUpdates);
             _settingsService.SetShowHiddenDependencies(ShowHiddenDependencies);
+            _settingsService.SetUpdateConcurrency(UpdateConcurrency);
         }
 
         protected override void Dispose(bool disposing)

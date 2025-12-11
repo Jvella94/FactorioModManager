@@ -12,7 +12,6 @@ using FactorioModManager.ViewModels;
 using FactorioModManager.ViewModels.MainWindow;
 using System;
 using System.Collections.ObjectModel;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reactive.Linq;
@@ -22,11 +21,14 @@ namespace FactorioModManager.Views
     public partial class MainWindow : Window
     {
         private readonly MouseNavigationHandler _mouseNavHandler;
+        private readonly IUIService _uiService;
 
         public MainWindow()
         {
             // Set DataContext from DI
             DataContext = ServiceContainer.Instance.Resolve<MainWindowViewModel>();
+            _uiService = ServiceContainer.Instance.Resolve<IUIService>();
+
             _mouseNavHandler = new MouseNavigationHandler(this);
             using var stream = AssetLoader.Open(
                 new Uri("avares://FactorioModManager/Assets/FMM.png"));
@@ -45,7 +47,7 @@ namespace FactorioModManager.Views
 
         private void OpenLogs(object? sender, RoutedEventArgs e)
         {
-            var logWindow = new LogWindow(ServiceContainer.Instance.Resolve<ILogService>());
+            var logWindow = new LogWindow(ServiceContainer.Instance.Resolve<ILogService>(), ServiceContainer.Instance.Resolve<IUIService>());
             logWindow.Show();
         }
 
@@ -92,7 +94,7 @@ namespace FactorioModManager.Views
             }
         }
 
-        private void OpenModFile(object? sender, RoutedEventArgs e)
+        private async void OpenModFile(object? sender, RoutedEventArgs e)
         {
             if (DataContext is MainWindowViewModel vm && vm.SelectedMod?.FilePath is string filePath)
             {
@@ -100,49 +102,18 @@ namespace FactorioModManager.Views
                 {
                     if (!File.Exists(filePath))
                     {
-                        ShowError($"File not found: {filePath}");
+                        await _uiService.ShowMessageAsync("Error", $"File not found: {filePath}", this);
                         return;
                     }
 
-                    if (OperatingSystem.IsWindows())
-                    {
-                        // Open Explorer and select the file
-                        Process.Start(new ProcessStartInfo
-                        {
-                            FileName = "explorer.exe",
-                            Arguments = $"/select,\"{filePath}\"",
-                            UseShellExecute = false
-                        });
-                    }
-                    else if (OperatingSystem.IsMacOS())
-                    {
-                        // Reveal in Finder
-                        Process.Start(new ProcessStartInfo
-                        {
-                            FileName = "open",
-                            Arguments = $"-R \"{filePath}\"",
-                            UseShellExecute = false
-                        });
-                    }
-                    else if (OperatingSystem.IsLinux())
-                    {
-                        // Best-effort: open containing folder with default file manager
-                        var directory = Path.GetDirectoryName(filePath) ?? ".";
-                        Process.Start(new ProcessStartInfo
-                        {
-                            FileName = "xdg-open",
-                            Arguments = $"\"{directory}\"",
-                            UseShellExecute = false
-                        });
-                    }
-                    else
-                    {
-                        ShowError("Opening files is not supported on this OS.");
-                    }
+                    var directory = Path.GetDirectoryName(filePath) ?? ".";
+
+                    // Use IUIService to open the containing folder (cross-platform)
+                    _uiService.OpenFolder(directory);
                 }
                 catch (Exception ex)
                 {
-                    ShowError($"Failed to open mod file: {ex.Message}");
+                    await _uiService.ShowMessageAsync("Error", $"Failed to open mod file: {ex.Message}", this);
                 }
             }
         }

@@ -158,6 +158,24 @@
                      FontSize="11"
                      Margin="20,5,0,0"
                     Text="{Binding LastAppUpdateCheck, StringFormat='Last app update check: {0:g}', FallbackValue='Last app update check: Never'}" />
+
+          <!-- Concurrency for Update All -->
+          <StackPanel Orientation="Horizontal" Spacing="8" Margin="20,8,0,0" VerticalAlignment="Center">
+            <TextBlock Text="Update concurrency:" Foreground="#DDD" VerticalAlignment="Center" />
+            <NumericUpDown Minimum="1" Maximum="20" Width="110"
+                           Value="{Binding UpdateConcurrency, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, FallbackValue=3}"
+                           Foreground="#DDD"
+                           FormatString="0"
+                           Classes="dialog-input"
+                           Increment="1"
+                           Background="Transparent"
+                           HorizontalContentAlignment="Center">
+              <ToolTip.Tip>
+                <TextBlock TextWrapping="Wrap">Recommended 2-5 for most users. Increase only if you have a fast, stable connection and want faster parallel downloads. Minimum is 1.</TextBlock>
+              </ToolTip.Tip>
+            </NumericUpDown>
+            <TextBlock Text="(parallel downloads)" Foreground="#888" FontSize="11" VerticalAlignment="Center" Margin="8,0,0,0" />
+          </StackPanel>
         </StackPanel>
 
         <Separator Background="#333" />

@@ -6,13 +6,15 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Disposables;
+using System.IO;
 
 namespace FactorioModManager.ViewModels.Dialogs
 {
     public class LogWindowViewModel : ViewModelBase
     {
         private readonly ILogService _logService;
-        private readonly CompositeDisposable _disposables = [];
+        private readonly IUIService _uiService;
+        private readonly CompositeDisposable _disposables = new CompositeDisposable();
 
         private ObservableCollection<LogEntry> _logs;
         private bool _isLoading = true;
@@ -36,10 +38,11 @@ namespace FactorioModManager.ViewModels.Dialogs
         public ReactiveCommand<Unit, Unit> ArchiveLogsCommand { get; }
         public ReactiveCommand<Unit, Unit> OpenLogFileCommand { get; }
 
-        public LogWindowViewModel(ILogService logService)
+        public LogWindowViewModel(ILogService logService, IUIService uiService)
         {
             _logService = logService;
-            _logs = [];
+            _uiService = uiService;
+            _logs = new ObservableCollection<LogEntry>();
 
             RefreshCommand = ReactiveCommand.CreateFromTask(async () =>
             {
@@ -67,11 +70,8 @@ namespace FactorioModManager.ViewModels.Dialogs
             OpenLogFileCommand = ReactiveCommand.Create(() =>
             {
                 var logFilePath = _logService.GetLogFilePath();
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = logFilePath,
-                    UseShellExecute = true
-                });
+                var dir = Path.GetDirectoryName(logFilePath) ?? string.Empty;
+                _uiService.OpenFolder(dir);
             });
         }
 

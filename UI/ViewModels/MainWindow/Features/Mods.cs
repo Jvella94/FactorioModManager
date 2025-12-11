@@ -164,8 +164,6 @@ namespace FactorioModManager.ViewModels.MainWindow
             ApplyAuthorFilter();
         }
 
-  
-
         private ModViewModel CreateModViewModel(
             Models.ModInfo info,
             bool isEnabled,
@@ -252,7 +250,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                 if (lastCheck.HasValue)
                     _logService.Log($"Checking for updates on Portal since {lastCheck.Value}");
 
-                var hours = lastCheck.HasValue ? (DateTime.UtcNow - lastCheck.Value).Hours : 1;
+                var hours = lastCheck.HasValue ? (DateTime.UtcNow - lastCheck.Value).Hours + 1 : 1;
                 _settingsService.SetLastModUpdateCheck(DateTime.UtcNow);
                 await CheckForUpdatesAsync(hours);
             }
@@ -288,10 +286,6 @@ namespace FactorioModManager.ViewModels.MainWindow
                 "Mods depending on this",
                 $"The following mods depend on '{mod.Title}':{Environment.NewLine}{Environment.NewLine}{list}");
         }
-
-        // Find installed mods by name (case-insensitive)
-        private ModViewModel? FindMod(string name) =>
-            _allMods.FirstOrDefault(m => m.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
 
         // All mods that depend on a given mod (mandatory dependency)
         private IEnumerable<ModViewModel> GetDependents(string modName)

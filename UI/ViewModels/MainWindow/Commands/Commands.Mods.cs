@@ -22,11 +22,18 @@ namespace FactorioModManager.ViewModels.MainWindow
         public ReactiveCommand<Unit, Unit> CheckUpdatesCustomCommand { get; private set; } = null!;
         public ReactiveCommand<ModViewModel, Unit> DownloadUpdateCommand { get; private set; } = null!;
         public ReactiveCommand<string, Unit> DeleteOldVersionCommand { get; private set; } = null!;
+
+        // New: set active version command (accepts version string)
+        public ReactiveCommand<string, Unit> SetActiveVersionCommand { get; private set; } = null!;
+
         public ReactiveCommand<Unit, Unit> CheckSingleModUpdateCommand { get; private set; } = null!;
         public ReactiveCommand<Unit, Unit> RefreshSelectedModCommand { get; private set; } = null!;
         public ReactiveCommand<ModViewModel, Unit> ViewDependentsCommand { get; private set; } = null!;
         public ReactiveCommand<Unit, Unit> LaunchFactorioCommand { get; private set; } = null!;
         public ReactiveCommand<Unit, Unit> CheckForAppUpdatesCommand { get; private set; } = null!;
+
+        // New command to update all mods that have pending updates
+        public ReactiveCommand<Unit, Unit> UpdateAllCommand { get; private set; } = null!;
 
         private void InitializeModCommands()
         {
@@ -41,12 +48,21 @@ namespace FactorioModManager.ViewModels.MainWindow
             OpenVersionHistoryCommand = ReactiveCommand.CreateFromTask(OpenVersionHistoryAsync);
             CheckUpdatesCustomCommand = ReactiveCommand.CreateFromTask(CheckUpdatesCustomAsync);
             DownloadUpdateCommand = ReactiveCommand.CreateFromTask<ModViewModel>(DownloadUpdateAsync);
+
+            // Changed: accept version string (CommandParameter="{Binding SelectedVersion}")
             DeleteOldVersionCommand = ReactiveCommand.Create<string>(DeleteOldVersion);
+
+            // New: command to set selected version as active
+            SetActiveVersionCommand = ReactiveCommand.Create<string>(SetActiveVersion);
+
             CheckSingleModUpdateCommand = ReactiveCommand.CreateFromTask(CheckSingleModUpdateAsync);
             RefreshSelectedModCommand = ReactiveCommand.CreateFromTask(RefreshSelectedModAsync);
             ViewDependentsCommand = ReactiveCommand.CreateFromTask<ModViewModel>(ViewDependentsAsync);
             LaunchFactorioCommand = ReactiveCommand.Create(LaunchFactorio);
             CheckForAppUpdatesCommand = ReactiveCommand.CreateFromTask(CheckForAppUpdatesCustomAsync);
+
+            // Initialize new UpdateAllCommand
+            UpdateAllCommand = ReactiveCommand.CreateFromTask(UpdateAllAsync);
         }
 
         /// <summary>
@@ -126,7 +142,7 @@ namespace FactorioModManager.ViewModels.MainWindow
 
             if (success)
             {
-                await CheckForUpdatesAsync(hours);
+                await CheckForUpdatesAsync(hours, isManual: true);
             }
         }
 

@@ -18,7 +18,8 @@ namespace FactorioModManager.Services.API
 
         Task<ModDetailsFullDTO?> GetModDetailsFullAsync(string modName);
 
-        Task<List<string>> GetRecentlyUpdatedModsAsync(int hoursAgo);
+        // Added isManual parameter - when true, do a full scan and do NOT stop at the last cached known update
+        Task<List<string>> GetRecentlyUpdatedModsAsync(int hoursAgo, bool isManual = false);
 
         void ClearCache();
 
@@ -94,12 +95,12 @@ namespace FactorioModManager.Services.API
             }
         }
 
-        public async Task<List<string>> GetRecentlyUpdatedModsAsync(int hoursAgo)
+        public async Task<List<string>> GetRecentlyUpdatedModsAsync(int hoursAgo, bool isManual = false)
         {
             try
             {
                 var sinceTime = DateTime.UtcNow.AddHours(-hoursAgo);
-                _logService.LogDebug($"Started looking for updates since {sinceTime.ToLocalTime():yyyy-MM-dd HH:mm:ss} on the portal.");
+                _logService.LogDebug($"Started looking for updates since {sinceTime.ToLocalTime():yyyy-MM-dd HH:mm:ss} on the portal. (isManual={isManual})");
                 var recentModNames = new HashSet<string>();
                 var pageSize = 100;
                 var maxPages = 5;
@@ -123,21 +124,38 @@ namespace FactorioModManager.Services.API
                     }
 
                     var foundRecentMod = false;
+                    var hitLastKnown = false;
+
                     foreach (var mod in result.Results)
                     {
                         if (mod.LatestRelease is null) continue;
-                        // Check if we've gone past hour range requested or have seen this mod before.
-                        if (mod.LatestRelease.ReleasedAt == _lastUpdateTime) break;
-                        if (mod.LatestRelease.ReleasedAt >= sinceTime)
+
+                        var releasedAt = mod.LatestRelease.ReleasedAt.ToUniversalTime();
+
+                        // If this is an automatic check (not manual) and we encounter the last cached known update,
+                        // stop scanning to avoid re-processing previously seen updates.
+                        if (!isManual && _lastUpdateTime != DateTime.MinValue && releasedAt == _lastUpdateTime)
+                        {
+                            hitLastKnown = true;
+                            break;
+                        }
+
+                        if (releasedAt >= sinceTime)
                         {
                             recentModNames.Add(mod.Name);
-                            if (_lastUpdateTime < mod.LatestRelease.ReleasedAt)
+                            if (_lastUpdateTime < releasedAt)
                             {
-                                _lastUpdateTime = mod.LatestRelease.ReleasedAt.ToUniversalTime();
+                                _lastUpdateTime = releasedAt;
                                 _lastModName = mod.Name;
                             }
                             foundRecentMod = true;
                         }
+                    }
+
+                    if (hitLastKnown)
+                    {
+                        // stop pagination early when automatic and we've reached known boundary
+                        break;
                     }
 
                     if (!foundRecentMod)
