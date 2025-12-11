@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using System.Reflection;
 
 namespace FactorioModManager
 {
@@ -15,13 +16,68 @@ namespace FactorioModManager
     /// </summary>
     public static class Constants
     {
-        public const string AboutMessage = "Factorio Mod Manager\nVersion 1.0.0\n\n" +
-                                     "A modern mod manager for Factorio.\n\n" +
-                                     "Features:\n" +
-                                     "• Manage and organize mods\n" +
-                                     "• Check for updates\n" +
-                                     "• Group management\n" +
-                                     "• Download from Mod Portal";
+        // About message is built at runtime using the assembly version (populated from csproj)
+        public static readonly string AboutMessage = BuildAboutMessage();
+
+        private static string GetAppVersion()
+        {
+            try
+            {
+                var asm = Assembly.GetEntryAssembly() ?? Assembly.GetExecutingAssembly();
+                var info = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+                var verString = !string.IsNullOrEmpty(info) ? info : asm.GetName().Version?.ToString();
+                if (string.IsNullOrEmpty(verString))
+                    return "0.0.0";
+
+                // Strip build metadata after '+' (e.g. 1.0.0+githash)
+                var plusIdx = verString.IndexOf('+');
+                if (plusIdx >= 0)
+                    verString = verString.Substring(0, plusIdx);
+
+                // Preserve prerelease (after '-') but limit numeric parts to major.minor.patch
+                string prerelease = null;
+                var dashIdx = verString.IndexOf('-');
+                if (dashIdx >= 0)
+                {
+                    prerelease = verString.Substring(dashIdx);
+                    verString = verString.Substring(0, dashIdx);
+                }
+
+                var parts = verString.Split('.');
+                if (parts.Length > 3)
+                    verString = string.Join('.', parts.Take(3));
+
+                if (!string.IsNullOrEmpty(prerelease))
+                    verString += prerelease;
+
+                return verString;
+            }
+            catch
+            {
+                return "0.0.0";
+            }
+        }
+
+        private static string BuildAboutMessage()
+        {
+            var version = GetAppVersion();
+            return "Factorio Mod Manager\nVersion " + version + "\n\n" +
+                   "A modern mod manager for Factorio.\n\n" +
+                   "Features:\n" +
+                   "• Manage and organize mods (enable/disable, grouping)\n" +
+                   "• Install from local file or URL and remove mods\n" +
+                   "• Download mods and specific versions from the Factorio Mod Portal\n" +
+                   "• Manage multiple installed versions (download, delete, set active)\n" +
+                   "• Check for updates for installed mods and update individually or in bulk\n" +
+                   "• View changelogs and version history\n" +
+                   "• Dependency resolution (validate mandatory deps, view dependents, handle conflicts)\n" +
+                   "• Launch Factorio directly from the app and auto-detect installation\n" +
+                   "• Settings with automatic Factorio detection and configurable options\n" +
+                   "• Built-in logging with viewer and automatic log pruning\n" +
+                   "• Cross-platform UI (Windows/Linux/macOS) via Avalonia\n" +
+                   "\n" +
+                   "For more information, visit the project repository.";
+        }
 
         private static readonly Lazy<Bitmap> _lazyPlaceholder = new(() =>
         {

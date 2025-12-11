@@ -10,6 +10,14 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{8972F7B2-06BE-45C7-9B45-E8895C94E58D}"
 	ProjectSection(SolutionItems) = preProject
 		.editorconfig = .editorconfig
+		Build.ps1 = Build.ps1
+		build.sh = build.sh
+		CONTRIBUTING.md = CONTRIBUTING.md
+		LICENSE.txt = LICENSE.txt
+		Publish.ps1 = Publish.ps1
+		publish.sh = publish.sh
+		README.md = README.md
+		SCRIPTS.md = SCRIPTS.md
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FMM.Tests", "FMM.Tests\FMM.Tests.csproj", "{989E43EB-968C-4084-AE5A-B21987D6E32E}"

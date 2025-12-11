@@ -1,0 +1,42 @@
+name: Tag
+
+on:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: write
+
+jobs:
+  create-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read version from csproj
+        id: read_version
+        run: |
+          version=$(xmllint --xpath "string(//Project/PropertyGroup/Version)" UI/FactorioModManager.csproj)
+          if [ -z "$version" ]; then
+            echo "No <Version> found in csproj" >&2
+            exit 1
+          fi
+          echo "version=$version" >> $GITHUB_OUTPUT
+
+      - name: Create annotated git tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          tag="v${{ steps.read_version.outputs.version }}"
+          echo "Creating tag $tag"
+          # create annotated tag only if it doesn't already exist
+          if git rev-parse "$tag" >/dev/null 2>&1; then
+            echo "Tag $tag already exists, skipping"
+          else
+            git tag -a "$tag" -m "Release $tag"
+            git push origin "$tag"
+          fi
