@@ -81,6 +81,7 @@ namespace FactorioModManager.Views
                                .ToList();
 
             vm.SelectedMods = new ObservableCollection<ModViewModel>(selected);
+            ModDetailsScroller.ScrollToHome();
         }
 
         private void CancelRename(object? sender, RoutedEventArgs e)

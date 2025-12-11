@@ -272,7 +272,7 @@
       <!-- Mod Details Panel -->
       <Border Grid.Column="2" Background="#1E1E1E" Padding="15">
 
-        <ScrollViewer>
+        <ScrollViewer x:Name="ModDetailsScroller">
           <Grid>
             <!-- Real details only when a mod is selected -->
             <Grid IsVisible="{Binding ElementName=RootWindow, Path=DataContext.HasSelectedMod}">
@@ -359,81 +359,135 @@
 
                 <Separator />
 
-                <TextBlock Text="Author:" FontWeight="Bold" />
-                <TextBlock Text="{Binding Author, TargetNullValue={x:Null}}" />
+                <StackPanel Orientation="Horizontal" Spacing="5">
+                  <TextBlock Text="Author:" FontWeight="Bold" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding Author, TargetNullValue='-'}" VerticalAlignment="Center" />
+                </StackPanel>
 
-                <TextBlock Text="Category:" FontWeight="Bold" />
-                <TextBlock Text="{Binding Category, TargetNullValue={x:Null}}" />
+                <StackPanel Orientation="Horizontal" Spacing="5">
+                  <TextBlock Text="Category:" FontWeight="Bold" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding Category, TargetNullValue='-'}" VerticalAlignment="Center" />
+                </StackPanel>
 
-                <TextBlock Text="Group:" FontWeight="Bold" />
-                <TextBlock Text="{Binding GroupName, TargetNullValue={x:Null}}" />
+                <StackPanel Orientation="Horizontal" Spacing="5">
+                  <TextBlock Text="Group:" FontWeight="Bold" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding GroupName, TargetNullValue='-'}" VerticalAlignment="Center" />
+                </StackPanel>
 
                 <TextBlock Text="Description:" FontWeight="Bold" Margin="0,10,0,0" />
                 <TextBlock Text="{Binding Description, TargetNullValue={x:Null}}"
                            TextWrapping="Wrap" />
-                <StackPanel Orientation="Horizontal">
-                  <TextBlock VerticalAlignment="Center" Text="Dependencies" FontWeight="Bold" />
-                  <Button Content="{Binding IsDependencyListExpanded, Converter={StaticResource ExpandCollapseConverter}}"
-                          Command="{Binding ToggleDependencyListCommand}"
-                          IsVisible="{Binding SortedDependencies.Count, Converter={StaticResource GreaterThanFiveConverter}}"
-                          FontSize ="12"
-                          HorizontalAlignment="Right" />
-                </StackPanel>
 
                 <StackPanel>
-                  <!-- Game dependency icons in a horizontal row -->
-                  <ItemsControl ItemsSource="{Binding Dependencies}" Margin="0,10">
-                    <!-- Make all items share one horizontal strip -->
+                  
+                  <TextBlock Text="Dependencies"
+                               FontWeight="Bold"
+                               VerticalAlignment="Center" />
+
+                  <!-- Dependencies header with compact rounded expand button -->
+                  <Grid Margin="0,10,10,4">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <!-- Game dependency icons in a horizontal row -->
+                    <ItemsControl ItemsSource="{Binding Dependencies}" Margin="0,10">
+                      <!-- Make all items share one horizontal strip -->
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                          <StackPanel Orientation="Horizontal" Spacing="4" />
+                        </ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                          <!-- Show only for game dependencies (using invert parameter) -->
+                          <StackPanel Orientation="Horizontal"
+                                      Spacing="1"
+                                      Margin="2,0"
+                                      IsVisible="{Binding Converter={StaticResource IsNotGameDependencyConverter}, ConverterParameter=invert}">
+
+                            <!-- Base game version, only for 'base' -->
+                            <TextBlock Text="{Binding Converter={StaticResource BaseGameVersionConverter}}"
+                                       Foreground="Gray"
+                                       FontSize="15"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,5,0"
+                                       IsVisible="{Binding Converter={StaticResource IsBaseDependencyConverter}}" />
+
+                            <!-- Icon for base / space-age / quality / elevated-rails -->
+                            <Image Width="24"
+                                   Height="24"
+                                   VerticalAlignment="Center"
+                                   Source="{Binding Converter={StaticResource GameDependencyIconPathConverter}}" />
+                          </StackPanel>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+               
+
+                    <!-- Compact rounded expand/collapse control (NO CommandParameter) -->
+                    <Border Grid.Column="1"
+                            Background="#2F2F2F"
+                            BorderBrush="#555"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Padding="0"
+                            VerticalAlignment="Center"
+                            IsVisible="{Binding SortedDependencies.Count, Converter={StaticResource GreaterThanFiveConverter}}">
+                      <Button Command="{Binding ToggleDependencyListCommand}"
+                              Background="Transparent"
+                              BorderThickness="0"
+                              Padding="10,6"
+                              MinWidth="70"
+                              HorizontalAlignment="Center"
+                              HorizontalContentAlignment="Center"
+                              VerticalAlignment="Center"
+                              ToolTip.Tip="Expand / collapse dependency list">
+                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                          <TextBlock Text="{Binding IsDependencyListExpanded, Converter={StaticResource ExpandCollapseConverter}}"
+                                     Foreground="White"
+                                     FontSize="12"
+                                     VerticalAlignment="Center" />
+                        </StackPanel>
+                      </Button>
+                    </Border>
+                  </Grid>
+
+                  
+
+                  <!-- Dependency list: vertical stack of pill buttons -->
+                  <ItemsControl ItemsSource="{Binding VisibleDependencies}" Margin="0,6,10,0">
                     <ItemsControl.ItemsPanel>
                       <ItemsPanelTemplate>
-                        <StackPanel Orientation="Horizontal" Spacing="4" />
+                        <StackPanel Orientation="Vertical" Spacing="6" />
                       </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
 
                     <ItemsControl.ItemTemplate>
                       <DataTemplate>
-                        <!-- Show only for game dependencies (using invert parameter) -->
-                        <StackPanel Orientation="Horizontal"
-                                    Spacing="1"
-                                    Margin="2,0"
-                                    IsVisible="{Binding Converter={StaticResource IsNotGameDependencyConverter}, ConverterParameter=invert}">
-
-                          <!-- Base game version, only for 'base' -->
-                          <TextBlock Text="{Binding Converter={StaticResource BaseGameVersionConverter}}"
-                                     Foreground="Gray"
-                                     FontSize="15"
-                                     VerticalAlignment="Center"
-                                     Margin="0,0,5,0"
-                                     IsVisible="{Binding Converter={StaticResource IsBaseDependencyConverter}}" />
-
-                          <!-- Icon for base / space-age / quality / elevated-rails -->
-                          <Image Width="24"
-                                 Height="24"
-                                 VerticalAlignment="Center"
-                                 Source="{Binding Converter={StaticResource GameDependencyIconPathConverter}}" />
-                        </StackPanel>
-                      </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                  </ItemsControl>
-
-                  <!-- Dependency List -->
-                  <ItemsControl ItemsSource="{Binding VisibleDependencies}">
-
-                    <ItemsControl.ItemTemplate>
-                      <DataTemplate>
-                        <Button Content="{Binding Name}"
+                        <!-- Pill-style control. Border and Button kept identical size by Stretch + MinWidth -->
+                        <Border CornerRadius="6"
                                 Background="{Binding Status, Converter={StaticResource DependencyColorConverter}}"
-                                Command="{Binding ElementName=RootWindow, Path=DataContext.NavigateToDependencyCommand}"
-                                CommandParameter="{Binding Name}"
-                                  Margin="5,2,0,2"
-                                HorizontalAlignment="Left"
-                                IsVisible="{Binding Converter={StaticResource IsNotGameDependencyConverter}}" />
+                                IsVisible="{Binding Name, Converter={StaticResource IsNotGameDependencyConverter}}"
+                                Padding="0"
+                                MinWidth="200">
+                          <Button Content="{Binding Name}"
+                                  Background="Transparent"
+                                  Foreground="White"
+                                  BorderThickness="0"
+                                  Padding="10,8"
+                                  HorizontalAlignment="Stretch"
+                                  MinWidth="200"
+                                  Command="{Binding ElementName=RootWindow, Path=DataContext.NavigateToDependencyCommand}"
+                                  CommandParameter="{Binding Name}" />
+                        </Border>
                       </DataTemplate>
                     </ItemsControl.ItemTemplate>
                   </ItemsControl>
                 </StackPanel>
 
-                <StackPanel Orientation="Vertical" Spacing="10" Margin="0,20,15,0">
+                <StackPanel Orientation="Vertical" Spacing="10" Margin="0,10,15,0">
                   <Button Content="Open Mod File"
                           Click="OpenModFile"
                           HorizontalAlignment="Stretch" />

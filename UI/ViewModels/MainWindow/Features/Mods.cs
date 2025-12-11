@@ -149,7 +149,7 @@ namespace FactorioModManager.ViewModels.MainWindow
             string filePath,
             List<ModGroup> loadedGroups)
         {
-            var modVm = new ModViewModel(_modVersionManager)
+            var modVm = new ModViewModel()
             {
                 Name = info.Name,
                 Title = info.DisplayTitle ?? info.Name,

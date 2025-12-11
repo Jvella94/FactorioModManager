@@ -15,7 +15,7 @@ namespace FactorioModManager.Views.Converters
                 {
                     DependencyStatus.Mandatory => Brushes.Green,
                     DependencyStatus.OptionalInstalled => Brushes.LightGreen,
-                    DependencyStatus.OptionalNotInstalled => Brushes.Gold,
+                    DependencyStatus.OptionalNotInstalled => Brushes.DarkGoldenrod,
                     DependencyStatus.Incompatible => Brushes.Red,
                     _ => Brushes.Gray
                 };

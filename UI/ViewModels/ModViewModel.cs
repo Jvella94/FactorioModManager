@@ -272,11 +272,8 @@ namespace FactorioModManager.ViewModels
 
         public ReactiveCommand<Unit, Unit> ToggleDependencyListCommand { get; }
 
-        private readonly IModVersionManager _modVersionManager;
-
-        public ModViewModel(IModVersionManager modVersionManager)
+        public ModViewModel()
         {
-            ArgumentNullException.ThrowIfNull(modVersionManager);
             // ✅ Properly managed subscriptions
             this.WhenAnyValue(x => x.HasUpdate, x => x.IsUnusedInternal)
                 .Subscribe(_ => this.RaisePropertyChanged(nameof(RowBrush)))
@@ -298,8 +295,6 @@ namespace FactorioModManager.ViewModels
                 IsDependencyListExpanded = !IsDependencyListExpanded;
                 this.RaisePropertyChanged(nameof(VisibleDependencies));
             });
-
-            _modVersionManager = modVersionManager;
         }
 
         private void OnAvailableVersionsChanged(object? sender, NotifyCollectionChangedEventArgs e)
