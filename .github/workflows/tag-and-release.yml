@@ -76,7 +76,13 @@ jobs:
 
 
       - name: Generate AppIcon.icns
-        run: ./scripts/generate-iconset.sh
+        run: |
+          if [ -f scripts/generate-iconset.sh ]; then
+            ./scripts/generate-iconset.sh
+          else
+            echo "Error: scripts/generate-iconset.sh not found" >&2
+            exit 1
+          fi
 
 
       - name: Upload AppIcon.icns artifact
@@ -164,7 +170,7 @@ jobs:
             cp /tmp/appicon/AppIcon.icns "${APP_BUNDLE}/Contents/Resources/AppIcon.icns"
             echo "AppIcon.icns copied to ${APP_BUNDLE}/Contents/Resources/"
           else
-            echo "Warning: AppIcon.icns not found in /tmp/appicon/"
+            echo "Warning: AppIcon.icns not found in /tmp/appicon/ - the application will use default icon" >&2
             ls -la /tmp/appicon/ || echo "Directory doesn't exist"
           fi
 

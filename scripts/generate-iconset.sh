@@ -15,10 +15,11 @@ create_png() {
   local w="$3"
   local h="$4"
   if command -v convert >/dev/null 2>&1; then
-    convert "$input" -background none -resize ${w}x${h} "$out"
+    convert "$input" -background none -resize "${w}x${h}" "$out"
   else
     # sips is macOS-native but only works with raster images like PNG
-    if [[ "${input,,}" == *.ico ]] && [[ -f "$SRC_PNG" ]]; then
+    local input_lower=$(echo "$input" | tr '[:upper:]' '[:lower:]')
+    if [[ "$input_lower" == *.ico ]] && [[ -f "$SRC_PNG" ]]; then
       # if source is ico and no convert, use the provided PNG fallback
       sips -z "$h" "$w" "$SRC_PNG" --out "$out" >/dev/null
     else
