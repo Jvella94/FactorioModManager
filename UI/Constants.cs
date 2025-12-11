@@ -32,15 +32,15 @@ namespace FactorioModManager
                 // Strip build metadata after '+' (e.g. 1.0.0+githash)
                 var plusIdx = verString.IndexOf('+');
                 if (plusIdx >= 0)
-                    verString = verString.Substring(0, plusIdx);
+                    verString = verString[..plusIdx];
 
                 // Preserve prerelease (after '-') but limit numeric parts to major.minor.patch
-                string prerelease = null;
+                string prerelease = string.Empty;
                 var dashIdx = verString.IndexOf('-');
                 if (dashIdx >= 0)
                 {
-                    prerelease = verString.Substring(dashIdx);
-                    verString = verString.Substring(0, dashIdx);
+                    prerelease = verString[dashIdx..];
+                    verString = verString[..dashIdx];
                 }
 
                 var parts = verString.Split('.');
@@ -375,17 +375,17 @@ namespace FactorioModManager
                         op = "<=";
                         ver = constraint[2..].Trim();
                     }
-                    else if (constraint.StartsWith(">", StringComparison.Ordinal))
+                    else if (constraint.StartsWith('>'))
                     {
                         op = ">";
                         ver = constraint[1..].Trim();
                     }
-                    else if (constraint.StartsWith("<", StringComparison.Ordinal))
+                    else if (constraint.StartsWith('<'))
                     {
                         op = "<";
                         ver = constraint[1..].Trim();
                     }
-                    else if (constraint.StartsWith("=", StringComparison.Ordinal))
+                    else if (constraint.StartsWith('='))
                     {
                         op = "=";
                         ver = constraint[1..].Trim();
