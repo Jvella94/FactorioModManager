@@ -53,14 +53,14 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           cd publish/${{ matrix.platform }}
-          tar -czf ../../${{ matrix.artifact_name }}.tar.gz *
+          tar -czf ../../${{ matrix.artifact_name }}.tar.gz ./*
 
       - name: Create archive (Windows)
         if: runner.os == 'Windows'
+        shell: pwsh
         run: |
           cd publish/${{ matrix.platform }}
-          Compress-Archive -Path * `
-            -DestinationPath ../../${{ matrix.artifact_name }}.zip
+          Compress-Archive -Path * -DestinationPath ../../${{ matrix.artifact_name }}.zip
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -88,19 +88,19 @@ jobs:
         id: release_type
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
           # Check if tag contains pre-release indicators
           if echo "$TAG" | grep -qE '(alpha|beta|rc|dev|preview|pre)'; then
-            echo "prerelease=true" >> $GITHUB_OUTPUT
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
             echo "Release type: Bleeding Edge (pre-release)"
           else
-            echo "prerelease=false" >> $GITHUB_OUTPUT
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
             echo "Release type: Stable"
           fi
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           name: Release ${{ steps.release_type.outputs.tag }}
           tag_name: ${{ steps.release_type.outputs.tag }}
