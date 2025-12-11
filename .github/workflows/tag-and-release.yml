@@ -83,6 +83,7 @@ jobs:
             --runtime ${{ matrix.platform }} \
             --self-contained true \
             --output ./publish/${{ matrix.platform }}
+        shell: bash
 
       - name: Create archive (Linux/macOS)
         if: runner.os != 'Windows'
