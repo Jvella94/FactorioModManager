@@ -39,14 +39,14 @@ jobs:
             echo "No <Version> found in csproj" >&2
             exit 1
           fi
-          
+
           # Read ApplicationIcon path
           icon_path=$(xmllint --xpath "string(//Project/PropertyGroup/ApplicationIcon)" UI/FactorioModManager.csproj)
           if [ -z "$icon_path" ]; then
             echo "Warning: No <ApplicationIcon> found in csproj" >&2
             icon_path=""
           fi
-          
+
           # construct tag like v1.2.3 or v1.2.3-beta.1
           tag="v$version"
           echo "version=$version" >> $GITHUB_OUTPUT
@@ -139,7 +139,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: appicon
-          path: publish/${{ matrix.platform }}/FactorioModManager.app/Contents/Resources/
+          path: /tmp/appicon/
 
 
       - name: Create macOS .app bundle
@@ -150,19 +150,24 @@ jobs:
           VERSION="${{ needs.set-version.outputs.version }}"
           PUBLISH_DIR="./publish/${PLATFORM}"
           APP_BUNDLE="${PUBLISH_DIR}/${APP_NAME}.app"
-          
+
           # Create .app structure
           mkdir -p "${APP_BUNDLE}/Contents/MacOS"
           mkdir -p "${APP_BUNDLE}/Contents/Resources"
-          
+
           # Move executable into bundle
           mv "${PUBLISH_DIR}/${APP_NAME}" "${APP_BUNDLE}/Contents/MacOS/"
           chmod +x "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}"
-          
-          # Icon is already downloaded by the previous step
-          echo "AppIcon.icns should already be in ${APP_BUNDLE}/Contents/Resources/"
-          ls -la "${APP_BUNDLE}/Contents/Resources/"
-          
+
+          # Copy the downloaded icon to the correct location
+          if [ -f "/tmp/appicon/AppIcon.icns" ]; then
+            cp /tmp/appicon/AppIcon.icns "${APP_BUNDLE}/Contents/Resources/AppIcon.icns"
+            echo "AppIcon.icns copied to ${APP_BUNDLE}/Contents/Resources/"
+          else
+            echo "Warning: AppIcon.icns not found in /tmp/appicon/"
+            ls -la /tmp/appicon/ || echo "Directory doesn't exist"
+          fi
+
           # Create Info.plist with version
           cat > "${APP_BUNDLE}/Contents/Info.plist" << EOF
           <?xml version="1.0" encoding="UTF-8"?>
@@ -192,7 +197,7 @@ jobs:
           </dict>
           </plist>
           EOF
-          
+
           # Remove loose executable and other files from publish root (keep only .app)
           find "${PUBLISH_DIR}" -maxdepth 1 -type f -delete
           find "${PUBLISH_DIR}" -maxdepth 1 -type d ! -name "${APP_NAME}.app" ! -path "${PUBLISH_DIR}" -exec rm -rf {} +
