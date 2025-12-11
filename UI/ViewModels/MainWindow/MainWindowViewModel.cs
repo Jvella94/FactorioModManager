@@ -397,6 +397,7 @@ namespace FactorioModManager.ViewModels.MainWindow
 
                     // Update SourceUrl using metadata service
                     value.SourceUrl = _metadataService.GetSourceUrl(value.Name);
+                    value.InstalledDependencies = [.. value.Dependencies.Where(dependency => _modVersionManager.GetInstalledVersions(dependency).Count != 0)];
                 }
             }
         }

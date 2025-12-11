@@ -172,6 +172,9 @@
           <CheckBox Content="Keep old mod files when updating"
                     IsChecked="{Binding KeepOldModFiles}"
                     Foreground="White" />
+
+          <CheckBox Content="Show Hidden Dependencies"
+          IsChecked="{Binding ShowHiddenDependencies}" />
         </StackPanel>
       </StackPanel>
     </ScrollViewer>

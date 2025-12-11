@@ -45,13 +45,6 @@ namespace FactorioModManager
         public static Bitmap LoadPlaceholderThumbnail() => _lazyPlaceholder.Value;
 
         /// <summary>
-        /// Official Factorio game dependencies
-        /// </summary>
-        public static class GameDependencies
-        {
-        }
-
-        /// <summary>
         /// Character separators used for parsing strings
         /// </summary>
         public static class Separators

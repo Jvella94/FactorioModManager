@@ -149,7 +149,7 @@ namespace FactorioModManager.ViewModels.MainWindow
             string filePath,
             List<ModGroup> loadedGroups)
         {
-            var modVm = new ModViewModel
+            var modVm = new ModViewModel(_modVersionManager)
             {
                 Name = info.Name,
                 Title = info.DisplayTitle ?? info.Name,
@@ -244,17 +244,9 @@ namespace FactorioModManager.ViewModels.MainWindow
                 return;
 
             // ✅ Query from _allMods collection
-            var dependents = _allMods
-                .Where(m => m.Dependencies != null &&
-                           m.Dependencies.Any(dep =>
-                           {
-                               var depName = DependencyHelper.ExtractDependencyName(dep);
-                               return depName.Equals(targetName, StringComparison.OrdinalIgnoreCase);
-                           }))
-                .OrderBy(m => m.Title)
-                .ToList();
+            var dependents = GetDependents(targetName);
 
-            if (dependents.Count == 0)
+            if (!dependents.Any())
             {
                 await _uiService.ShowMessageAsync(
                     "Mods depending on this",
@@ -275,11 +267,16 @@ namespace FactorioModManager.ViewModels.MainWindow
             _allMods.FirstOrDefault(m => m.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
 
         // All mods that depend on a given mod (mandatory dependency)
-        private List<ModViewModel> GetDependents(string modName) =>
-            [.. _allMods.Where(m =>
-                m.Dependencies != null &&
-                DependencyHelper.GetMandatoryDependencies(m.Dependencies)
-                    .Any(d => d.Equals(modName, StringComparison.OrdinalIgnoreCase)))];
+        private IEnumerable<ModViewModel> GetDependents(string modName)
+        {
+            return _allMods.Where(mod =>
+                mod.Dependencies.Any(dependency =>
+                {
+                    var dependencyName = DependencyHelper.ExtractDependencyName(dependency);
+                    return dependencyName.Equals(modName, StringComparison.OrdinalIgnoreCase) &&
+                           !DependencyHelper.IsOptionalDependency(dependency);
+                }));
+        }
 
         // Mods that conflict with the given mod (incompatible dependencies)
         private List<ModViewModel> GetIncompatibleMods(ModViewModel mod) =>

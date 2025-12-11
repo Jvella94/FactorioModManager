@@ -1,4 +1,5 @@
 ﻿using Avalonia.Data.Converters;
+using FactorioModManager.ViewModels;
 using System;
 using System.Globalization;
 
@@ -16,23 +17,22 @@ namespace FactorioModManager.Views.Converters
         /// </summary>
         public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
         {
-            if (value is string dependency)
-            {
-                var parts = dependency.Split(Constants.Separators.Dependency, StringSplitOptions.RemoveEmptyEntries);
-                if (parts.Length == 0)
-                    return true;
+            var modName = string.Empty;
+            if (value is string) modName = value as string;
+            if (value is DependencyViewModel) modName = (value as DependencyViewModel)!.Name;
+            if (string.IsNullOrEmpty(modName)) return true;
+            var parts = modName.Split(Constants.Separators.Dependency, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 0)
+                return true;
 
-                var depName = parts[0];
-                bool isUserMod = !Constants.DependencyHelper.IsGameDependency(depName);
+            var depName = parts[0];
+            bool isUserMod = !Constants.DependencyHelper.IsGameDependency(depName);
 
-                // If parameter == "invert", return the opposite (true for game deps)
-                if (parameter is string p && string.Equals(p, "invert", StringComparison.OrdinalIgnoreCase))
-                    return !isUserMod;
+            // If parameter == "invert", return the opposite (true for game deps)
+            if (parameter is string p && string.Equals(p, "invert", StringComparison.OrdinalIgnoreCase))
+                return !isUserMod;
 
-                return isUserMod;
-            }
-
-            return true;
+            return isUserMod;
         }
 
         /// <summary>

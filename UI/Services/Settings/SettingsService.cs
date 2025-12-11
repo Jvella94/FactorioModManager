@@ -56,6 +56,10 @@ namespace FactorioModManager.Services.Settings
 
         void SetFactorioDataPath(string? path);
 
+        bool GetShowHiddenDependencies();
+
+        void SetShowHiddenDependencies(bool value);
+
         public event Action? FactorioPathChanged;
     }
 
@@ -73,6 +77,7 @@ namespace FactorioModManager.Services.Settings
         public string? FactorioVersion { get; set; }
         public bool HasSpaceAgeDlc { get; set; }
         public string? FactorioDataPath { get; set; }
+        public bool ShowHiddenDependencies { get; set; } = false;
     }
 
     public class SettingsService : ISettingsService
@@ -310,5 +315,16 @@ namespace FactorioModManager.Services.Settings
         }
 
         public event Action? FactorioPathChanged;
+
+        public bool GetShowHiddenDependencies()
+        {
+            return _settings.ShowHiddenDependencies;
+        }
+
+        public void SetShowHiddenDependencies(bool value)
+        {
+            _settings.ShowHiddenDependencies = value;
+            SaveSettings();
+        }
     }
 }

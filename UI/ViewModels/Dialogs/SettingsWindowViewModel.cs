@@ -81,6 +81,14 @@ namespace FactorioModManager.ViewModels.Dialogs
             private set => this.RaiseAndSetIfChanged(ref _validationError, value);
         }
 
+        private bool _showHiddenDependencies;
+
+        public bool ShowHiddenDependencies
+        {
+            get => _showHiddenDependencies;
+            set => this.RaiseAndSetIfChanged(ref _showHiddenDependencies, value);
+        }
+
         public ReactiveCommand<Unit, Unit> SaveCommand { get; }
         public ReactiveCommand<Unit, Unit> CancelCommand { get; }
 
@@ -97,6 +105,7 @@ namespace FactorioModManager.ViewModels.Dialogs
             FactorioExePath = _settingsService.GetFactorioExecutablePath();
             CheckForAppUpdates = _settingsService.GetCheckForAppUpdates();
             LastAppUpdateCheck = _settingsService.GetLastAppUpdateCheck();
+            ShowHiddenDependencies = _settingsService.GetShowHiddenDependencies();
 
             // ✅ SaveCommand with validation
             var canSave = this.WhenAnyValue(x => x.ModsPath)
@@ -151,6 +160,7 @@ namespace FactorioModManager.ViewModels.Dialogs
             _settingsService.SetToken(string.IsNullOrWhiteSpace(Token) ? null : Token);
             _settingsService.SetKeepOldModFiles(KeepOldModFiles);
             _settingsService.SetCheckForAppUpdates(CheckForAppUpdates);
+            _settingsService.SetShowHiddenDependencies(ShowHiddenDependencies);
         }
 
         protected override void Dispose(bool disposing)

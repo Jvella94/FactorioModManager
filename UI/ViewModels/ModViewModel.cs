@@ -1,10 +1,14 @@
 ﻿using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using FactorioModManager.Services.Mods;
+using FactorioModManager.Views.Converters;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
+using System.Linq;
+using System.Reactive;
 using System.Reactive.Disposables;
 using System.Reactive.Disposables.Fluent;
 using System.Reactive.Linq;
@@ -210,14 +214,69 @@ namespace FactorioModManager.ViewModels
             }
         }
 
+        // Add new properties for dependency visibility and organization
+        private bool _showHiddenDependencies = false;
+
+        private bool _isDependencyListExpanded = false;
+
+        public bool ShowHiddenDependencies
+        {
+            get => _showHiddenDependencies;
+            set => this.RaiseAndSetIfChanged(ref _showHiddenDependencies, value);
+        }
+
+        public bool IsDependencyListExpanded
+        {
+            get => _isDependencyListExpanded;
+            set => this.RaiseAndSetIfChanged(ref _isDependencyListExpanded, value);
+        }
+
+        // Add a backing field for installed dependencies
+        private List<string> _installedDependencies = [];
+
+        // Property to expose installed dependencies
+        public List<string> InstalledDependencies
+        {
+            get => _installedDependencies;
+            set => this.RaiseAndSetIfChanged(ref _installedDependencies, value);
+        }
+
+        // Computed properties for organized dependencies
         public IReadOnlyList<string> MandatoryDependencies =>
             DependencyHelper.GetMandatoryDependencies(Dependencies);
+
+        public IReadOnlyList<string> OptionalDependencies =>
+            [.. Dependencies.Where(DependencyHelper.IsOptionalDependency)];
 
         public IReadOnlyList<string> IncompatibleDependencies =>
             DependencyHelper.GetIncompatibleDependencies(Dependencies);
 
-        public ModViewModel()
+        // Add new computed property for sorted dependencies
+        public IReadOnlyList<DependencyViewModel> SortedDependencies =>
+        [
+            .. MandatoryDependencies.Select(d => new DependencyViewModel(d, DependencyStatus.Mandatory)),
+            .. OptionalDependencies.Where(IsInstalled).Select(d => new DependencyViewModel(d, DependencyStatus.OptionalInstalled)),
+            .. OptionalDependencies.Where(d => !IsInstalled(d)).Select(d => new DependencyViewModel(d, DependencyStatus.OptionalNotInstalled)),
+            .. IncompatibleDependencies.Select(d => new DependencyViewModel(d, DependencyStatus.Incompatible)),
+        ];
+
+        public IReadOnlyList<DependencyViewModel> OnlyModSortedDepedencies =>
+            [.. SortedDependencies.Where(sd => DependencyHelper.IsGameDependency(sd.Name) == false)];
+
+        public IReadOnlyList<DependencyViewModel> VisibleDependencies =>
+            IsDependencyListExpanded ? OnlyModSortedDepedencies : [.. OnlyModSortedDepedencies.Take(5)];
+
+        // Helper method to check if a dependency is installed
+        private bool IsInstalled(string dependency) =>
+            InstalledDependencies.Contains(dependency, StringComparer.OrdinalIgnoreCase);
+
+        public ReactiveCommand<Unit, Unit> ToggleDependencyListCommand { get; }
+
+        private readonly IModVersionManager _modVersionManager;
+
+        public ModViewModel(IModVersionManager modVersionManager)
         {
+            ArgumentNullException.ThrowIfNull(modVersionManager);
             // ✅ Properly managed subscriptions
             this.WhenAnyValue(x => x.HasUpdate, x => x.IsUnusedInternal)
                 .Subscribe(_ => this.RaisePropertyChanged(nameof(RowBrush)))
@@ -233,6 +292,14 @@ namespace FactorioModManager.ViewModels
 
             // ✅ Notify when collection changes
             AvailableVersions.CollectionChanged += OnAvailableVersionsChanged;
+
+            ToggleDependencyListCommand = ReactiveCommand.Create(() =>
+            {
+                IsDependencyListExpanded = !IsDependencyListExpanded;
+                this.RaisePropertyChanged(nameof(VisibleDependencies));
+            });
+
+            _modVersionManager = modVersionManager;
         }
 
         private void OnAvailableVersionsChanged(object? sender, NotifyCollectionChangedEventArgs e)
