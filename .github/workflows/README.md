@@ -29,10 +29,11 @@ The workflow automatically determines the release type based on the tag name:
 
 ### Build Platforms
 
-The workflow builds the application for three platforms:
+The workflow builds the application for four platforms:
 - **Linux** (linux-x64)
 - **Windows** (win-x64)
-- **macOS** (osx-x64)
+- **macOS Intel** (osx-x64)
+- **macOS Apple Silicon** (osx-arm64)
 
 ### Artifacts
 
