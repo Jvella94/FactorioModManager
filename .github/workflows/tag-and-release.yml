@@ -1,4 +1,5 @@
-name: Tag
+# Single workflow: read version, build for all targets, create release and upload assets
+name: Tag, Build and Release
 
 on:
   push:
@@ -7,10 +8,15 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 jobs:
-  create-tag:
+  set-version:
+    name: Read version and set tag
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.read_version.outputs.tag }}
+      prerelease: ${{ steps.read_version.outputs.prerelease }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,20 +32,107 @@ jobs:
             echo "No <Version> found in csproj" >&2
             exit 1
           fi
+          # construct tag like v1.2.3 or v1.2.3-beta.1
+          tag="v$version"
           echo "version=$version" >> $GITHUB_OUTPUT
+          echo "tag=$tag" >> $GITHUB_OUTPUT
 
-      - name: Create annotated git tag
+          # determine prerelease from semver prerelease part or common identifiers
+          if echo "$version" | grep -qE '[-](alpha|beta|rc|dev|preview|pre|[A-Za-z])'; then
+            echo "prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "prerelease=false" >> $GITHUB_OUTPUT
+          fi
+
+  build:
+    name: Build and package
+    needs: set-version
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-x64
+            artifact_name: FactorioModManager-linux-x64
+          - os: windows-latest
+            platform: win-x64
+            artifact_name: FactorioModManager-win-x64
+          - os: macos-latest
+            platform: osx-x64
+            artifact_name: FactorioModManager-osx-x64
+          - os: macos-latest
+            platform: osx-arm64
+            artifact_name: FactorioModManager-osx-arm64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Publish
+        run: |
+          dotnet publish UI/FactorioModManager.csproj \
+            --configuration Release \
+            --runtime ${{ matrix.platform }} \
+            --self-contained true \
+            --output ./publish/${{ matrix.platform }}
+
+      - name: Create archive (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          cd publish/${{ matrix.platform }}
+          tar -czf ../../${{ matrix.artifact_name }}.tar.gz ./*
+
+      - name: Create archive (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cd publish/${{ matrix.platform }}
+          Compress-Archive -Path * -DestinationPath ../../${{ matrix.artifact_name }}.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: |
+            ${{ matrix.artifact_name }}.tar.gz
+            ${{ matrix.artifact_name }}.zip
+          if-no-files-found: ignore
+
+  release:
+    name: Create GitHub Release
+    needs: [set-version, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Determine release metadata
+        id: release_type
+        run: |
+          TAG="${{ needs.set-version.outputs.tag }}"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "prerelease=${{ needs.set-version.outputs.prerelease }}" >> $GITHUB_OUTPUT
+
+      - name: Create Release and upload assets
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release ${{ steps.release_type.outputs.tag }}
+          tag_name: ${{ steps.release_type.outputs.tag }}
+          prerelease: ${{ steps.release_type.outputs.prerelease }}
+          draft: false
+          generate_release_notes: true
+          files: |
+            artifacts/**/*.tar.gz
+            artifacts/**/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          tag="v${{ steps.read_version.outputs.version }}"
-          echo "Creating tag $tag"
-          # create annotated tag only if it doesn't already exist
-          if git rev-parse "$tag" >/dev/null 2>&1; then
-            echo "Tag $tag already exists, skipping"
-          else
-            git tag -a "$tag" -m "Release $tag"
-            git push origin "$tag"
-          fi
