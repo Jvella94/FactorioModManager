@@ -379,7 +379,7 @@
                            TextWrapping="Wrap" />
 
                 <StackPanel>
-                  
+
                   <TextBlock Text="Dependencies"
                                FontWeight="Bold"
                                VerticalAlignment="Center" />
@@ -424,7 +424,6 @@
                         </DataTemplate>
                       </ItemsControl.ItemTemplate>
                     </ItemsControl>
-               
 
                     <!-- Compact rounded expand/collapse control (NO CommandParameter) -->
                     <Border Grid.Column="1"
@@ -453,8 +452,6 @@
                       </Button>
                     </Border>
                   </Grid>
-
-                  
 
                   <!-- Dependency list: vertical stack of pill buttons -->
                   <ItemsControl ItemsSource="{Binding VisibleDependencies}" Margin="0,6,10,0">
@@ -502,8 +499,8 @@
                           Command="{Binding ElementName=RootWindow, Path=DataContext.OpenSourceUrlCommand}"
                           HorizontalAlignment="Stretch"
                           IsEnabled="{Binding SourceUrl, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                  <Button Content="Check for Update"
-                          Command="{Binding ElementName=RootWindow, Path=DataContext.CheckSingleModUpdateCommand}"
+                  <Button Content="Refresh Mod Info &amp; Check Update"
+                          Command="{Binding ElementName=RootWindow, Path=DataContext.RefreshSelectedModCommand}"
                           HorizontalAlignment="Stretch" />
                   <Button Content="View Changelog"
                           Command="{Binding ElementName=RootWindow, Path=DataContext.OpenChangelogCommand}"
