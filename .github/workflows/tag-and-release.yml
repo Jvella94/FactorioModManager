@@ -62,9 +62,33 @@ jobs:
           fi
 
 
+  generate-icns:
+    name: Generate macOS icon
+    needs: set-version
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+
+      - name: Make generate-iconset script executable
+        run: chmod +x scripts/generate-iconset.sh
+
+
+      - name: Generate AppIcon.icns
+        run: ./scripts/generate-iconset.sh
+
+
+      - name: Upload AppIcon.icns artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: appicon
+          path: publish/osx-x64/FactorioModManager.app/Contents/Resources/AppIcon.icns
+
+
   build:
     name: Build and package
-    needs: set-version
+    needs: [set-version, generate-icns]
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -110,13 +134,20 @@ jobs:
         shell: bash
 
 
+      - name: Download AppIcon.icns
+        if: startsWith(matrix.platform, 'osx-')
+        uses: actions/download-artifact@v4
+        with:
+          name: appicon
+          path: publish/${{ matrix.platform }}/FactorioModManager.app/Contents/Resources/
+
+
       - name: Create macOS .app bundle
         if: startsWith(matrix.platform, 'osx-')
         run: |
           APP_NAME="FactorioModManager"
           PLATFORM="${{ matrix.platform }}"
           VERSION="${{ needs.set-version.outputs.version }}"
-          ICON_PATH="${{ needs.set-version.outputs.icon_path }}"
           PUBLISH_DIR="./publish/${PLATFORM}"
           APP_BUNDLE="${PUBLISH_DIR}/${APP_NAME}.app"
           
@@ -128,33 +159,9 @@ jobs:
           mv "${PUBLISH_DIR}/${APP_NAME}" "${APP_BUNDLE}/Contents/MacOS/"
           chmod +x "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}"
           
-          # Convert and copy icon if it exists
-          if [ -n "$ICON_PATH" ] && [ -f "UI/$ICON_PATH" ]; then
-            echo "Converting icon from UI/$ICON_PATH"
-            
-            # Create temporary iconset directory
-            ICONSET_DIR="${APP_BUNDLE}/Contents/Resources/AppIcon.iconset"
-            mkdir -p "$ICONSET_DIR"
-            
-            # Generate multiple sizes from the source icon using sips
-            # macOS sips can read .ico and .png
-            for size in 16 32 128 256 512; do
-              sips -z $size $size "UI/$ICON_PATH" --out "${ICONSET_DIR}/icon_${size}x${size}.png" 2>/dev/null || true
-              # Also create @2x versions
-              size2x=$((size * 2))
-              sips -z $size2x $size2x "UI/$ICON_PATH" --out "${ICONSET_DIR}/icon_${size}x${size}@2x.png" 2>/dev/null || true
-            done
-            
-            # Convert iconset to icns
-            iconutil -c icns "$ICONSET_DIR" -o "${APP_BUNDLE}/Contents/Resources/AppIcon.icns"
-            
-            # Clean up iconset
-            rm -rf "$ICONSET_DIR"
-            
-            echo "Icon converted successfully"
-          else
-            echo "No icon found at UI/$ICON_PATH, skipping icon conversion"
-          fi
+          # Icon is already downloaded by the previous step
+          echo "AppIcon.icns should already be in ${APP_BUNDLE}/Contents/Resources/"
+          ls -la "${APP_BUNDLE}/Contents/Resources/"
           
           # Create Info.plist with version
           cat > "${APP_BUNDLE}/Contents/Info.plist" << EOF
