@@ -71,18 +71,29 @@ if ($createArchive -eq 'y' -or $createArchive -eq 'Y') {
     if ($Platform -eq 'win-x64') {
         $archivePath = Join-Path $OutputPath "$archiveName.zip"
         Write-Host "Creating ZIP archive: $archivePath" -ForegroundColor Yellow
-        Compress-Archive -Path "$fullOutputPath/*" -DestinationPath $archivePath -Force
+        try {
+            Compress-Archive -Path "$fullOutputPath/*" -DestinationPath $archivePath -Force -ErrorAction Stop
+        } catch {
+            Write-Host "Error: Failed to create ZIP archive - $_" -ForegroundColor Red
+            exit 1
+        }
     } else {
         $archivePath = Join-Path $OutputPath "$archiveName.tar.gz"
         Write-Host "Creating TAR.GZ archive: $archivePath" -ForegroundColor Yellow
+        Write-Host "Note: Archive creation for non-Windows platforms requires 'tar' command." -ForegroundColor Cyan
         # Use tar if available on Windows (Windows 10 1803+ has built-in tar)
         tar -czf $archivePath -C $fullOutputPath .
         if ($LASTEXITCODE -ne 0) {
-            Write-Host "Warning: tar command failed. Archive not created." -ForegroundColor Yellow
+            Write-Host "Error: tar command failed. This is optional for cross-platform builds on Windows." -ForegroundColor Yellow
+            Write-Host "You can manually create the archive on the target platform or install tar on Windows." -ForegroundColor Yellow
+            # Don't exit with error since tar may not be available on all Windows systems
+            return
         }
     }
     
     if (Test-Path $archivePath) {
         Write-Host "Archive created successfully: $archivePath" -ForegroundColor Green
+    } else {
+        Write-Host "Warning: Archive file was not created" -ForegroundColor Yellow
     }
 }

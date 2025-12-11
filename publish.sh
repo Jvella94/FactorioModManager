@@ -75,14 +75,19 @@ if [[ "$CREATE_ARCHIVE" == "y" || "$CREATE_ARCHIVE" == "Y" ]]; then
     if [[ "$PLATFORM" == "win-x64" ]]; then
         ARCHIVE_PATH="$OUTPUT_PATH/$ARCHIVE_NAME.zip"
         echo "Creating ZIP archive: $ARCHIVE_PATH"
-        cd "$FULL_OUTPUT_PATH" && zip -r "../$ARCHIVE_NAME.zip" ./* && cd - > /dev/null
+        cd "$FULL_OUTPUT_PATH" || exit 1
+        zip -r "../$ARCHIVE_NAME.zip" ./* || { echo "Error: Failed to create ZIP archive"; cd - > /dev/null; exit 1; }
+        cd - > /dev/null || exit 1
     else
         ARCHIVE_PATH="$OUTPUT_PATH/$ARCHIVE_NAME.tar.gz"
         echo "Creating TAR.GZ archive: $ARCHIVE_PATH"
-        tar -czf "$ARCHIVE_PATH" -C "$FULL_OUTPUT_PATH" .
+        tar -czf "$ARCHIVE_PATH" -C "$FULL_OUTPUT_PATH" . || { echo "Error: Failed to create TAR.GZ archive"; exit 1; }
     fi
     
     if [ -f "$ARCHIVE_PATH" ]; then
         echo "Archive created successfully: $ARCHIVE_PATH"
+    else
+        echo "Error: Archive file was not created"
+        exit 1
     fi
 fi
