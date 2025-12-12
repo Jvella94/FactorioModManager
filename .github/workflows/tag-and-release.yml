@@ -280,7 +280,8 @@ jobs:
 
       - name: Verify dotnet SDK
         run: |
-          echo "dotnet binary: $(which dotnet)"
+          echo "dotnet binary:
+          $(Get-Command dotnet | Select-Object -ExpandProperty Source)"
           dotnet --info
         shell: pwsh
 
