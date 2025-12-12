@@ -12,6 +12,7 @@ namespace FactorioModManager.Views
 
         public ChangelogWindow(string modTitle, string changelog) : this()
         {
+            Title = $"Changelog - {modTitle}";
             ModTitle.Text = $"{modTitle} - Changelog";
             ChangelogText.Text = changelog;
         }

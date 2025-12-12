@@ -8,7 +8,6 @@ namespace FMM.Tests.ServicesTests
     public class ModMetadataServiceTests
     {
         private readonly Mock<ILogService> _logServiceMock;
-        private readonly IFactorioApiService _apiService = new FactorioApiService(new HttpClient(), new Mock<ILogService>().Object);
         private readonly ModMetadataService _service;
 
         public ModMetadataServiceTests()

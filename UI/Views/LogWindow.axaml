@@ -3,83 +3,129 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:FactorioModManager.ViewModels.Dialogs"
         xmlns:m="using:FactorioModManager.Models"
+        xmlns:conv="using:FactorioModManager.Views.Converters"
         x:Class="FactorioModManager.Views.LogWindow"
         x:DataType="vm:LogWindowViewModel"
+        x:Name="Root"
         Loaded="Window_Loaded"
         Title="Log Viewer"
         Width="900" Height="600">
+
+  <Window.Resources>
+    <conv:LevelToBrushConverter x:Key="LevelBrushConv" />
+  </Window.Resources>
 
   <Grid RowDefinitions="Auto,*,Auto">
 
     <!-- Header -->
     <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
-      <TextBlock Text="{Binding LogCountText}"
-                 FontSize="14"
-                 Margin="10" />
+      <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="8">
+        <ComboBox ItemsSource="{Binding LevelFilters}"
+                  SelectedItem="{Binding SelectedLevelFilter}"
+                  Width="130"
+                  HorizontalAlignment="Left"
+                  Margin="0,0,8,0">
+          <ComboBox.ItemTemplate>
+            <DataTemplate>
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <Rectangle Width="12" Height="12" Fill="{Binding Converter={StaticResource LevelBrushConv}}" RadiusX="2" RadiusY="2" />
+                <TextBlock Text="{Binding}" VerticalAlignment="Center" />
+              </StackPanel>
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+
+        <TextBlock Text="{Binding LogCountText}"
+                   FontSize="13"
+                   VerticalAlignment="Center"
+                   Margin="0,0,12,0" />
+
+        <!-- Level filter combo -->
+      </StackPanel>
 
       <StackPanel Grid.Column="1"
                  Orientation="Horizontal"
-                 Spacing="5"
-                 Margin="10">
+                 Spacing="6"
+                 Margin="8">
         <Button Content="Refresh" Command="{Binding RefreshCommand}" />
         <Button Content="Clear" Command="{Binding ClearLogsCommand}" />
         <Button Content="Archive" Command="{Binding ArchiveLogsCommand}" />
         <Button Content="Open File" Command="{Binding OpenLogFileCommand}" />
+        <Button Content="Copy All" Command="{Binding CopyAllCommand}" />
+        <ToggleButton Content="Follow" IsChecked="{Binding IsFollowing}" />
       </StackPanel>
     </Grid>
 
     <!-- Log Content Area -->
     <Grid Grid.Row="1">
-      <!-- ✅ Loading State - Controlled by IsLoading -->
+      <!-- Loading State -->
       <StackPanel IsVisible="{Binding IsLoading}"
                   VerticalAlignment="Center"
                   HorizontalAlignment="Center"
-                  Spacing="15">
+                  Spacing="8">
 
         <ProgressBar IsIndeterminate="True"
-                     Width="50"
-                     Height="50"
+                     Width="36"
+                     Height="36"
                      Foreground="#4CAF50" />
 
         <TextBlock Text="Loading Logs..."
-                   FontSize="16"
+                   FontSize="14"
                    Foreground="#888"
                    HorizontalAlignment="Center" />
       </StackPanel>
 
-      <!-- ✅ Logs Display -->
+      <!-- Logs Display -->
       <ScrollViewer IsVisible="{Binding !IsLoading}"
                     x:Name="LogScrollViewer"
-                    Background="#1E1E1E">
+                    Background="#1E1E1E"
+                    HorizontalScrollBarVisibility="Disabled"
+                    VerticalScrollBarVisibility="Auto"
+                    Padding="0,0,10,0">
 
-        <ItemsControl ItemsSource="{Binding Logs}">
+        <ItemsControl ItemsSource="{Binding FilteredLogs}">
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="m:LogEntry">
-              <StackPanel Orientation="Horizontal" Margin="5,2">
-                <TextBlock Text="{Binding Timestamp}"
-                           Foreground="Gray"
-                           FontFamily="Consolas" />
-                <TextBlock Text="{Binding LevelText}"
-                           Foreground="{Binding LevelBrush}"
-                           FontWeight="Bold"
-                           FontFamily="Consolas"
-                           Margin="5,0" />
-                <ItemsControl ItemsSource="{Binding MessageSegments}">
-                  <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                      <StackPanel Orientation="Horizontal" />
-                    </ItemsPanelTemplate>
-                  </ItemsControl.ItemsPanel>
-                  <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="m:MessageSegment">
-                      <TextBlock Text="{Binding Text}"
-                                 Foreground="{Binding Foreground}"
-                                 FontWeight="{Binding Weight}"
-                                 FontFamily="Consolas" />
-                    </DataTemplate>
-                  </ItemsControl.ItemTemplate>
-                </ItemsControl>
-              </StackPanel>
+              <!-- Very dense layout: minimal margins/padding, slightly larger font, message as a wrapping TextBlock with context menu to copy -->
+              <Border Margin="0,1" Padding="2" Background="#242424">
+                <Grid ColumnSpacing="6" Margin="0,0,12,0">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="80" />
+                    <ColumnDefinition Width="*" />
+                  </Grid.ColumnDefinitions>
+
+                  <TextBlock Grid.Column="0"
+                             Text="{Binding TimestampFormatted}"
+                             Foreground="Gray"
+                             FontFamily="Consolas"
+                             FontSize="12"
+                             VerticalAlignment="Center" />
+
+                  <TextBlock Grid.Column="1"
+                             Text="{Binding LevelText}"
+                             Foreground="{Binding LevelBrush}"
+                             FontFamily="Consolas"
+                             FontSize="12"
+                             Margin="6,0,6,0"
+                             VerticalAlignment="Center"
+                             HorizontalAlignment="Left" />
+
+                  <TextBlock Grid.Column="2"
+                             Text="{Binding Message}"
+                             Foreground="White"
+                             FontFamily="Consolas"
+                             FontSize="12"
+                             TextWrapping="Wrap"
+                             VerticalAlignment="Center">
+                    <TextBlock.ContextMenu>
+                      <ContextMenu>
+                        <MenuItem Header="Copy" Command="{Binding DataContext.CopySelectedCommand, ElementName=Root}" CommandParameter="{Binding Message}" />
+                      </ContextMenu>
+                    </TextBlock.ContextMenu>
+                  </TextBlock>
+                </Grid>
+              </Border>
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>

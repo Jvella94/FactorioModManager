@@ -19,6 +19,10 @@ namespace FactorioModManager.Services.Infrastructure
         private const int _maxMemoryLogs = 100;
         private bool _disposed;
 
+        private bool _verboseLogging = false;
+
+        public event EventHandler? LogsUpdated;
+
         public LogService(IErrorMessageService errorMessageService)
         {
             var appDataPath = Path.Combine(
@@ -80,6 +84,10 @@ namespace FactorioModManager.Services.Infrastructure
         {
             if (_disposed) return;
 
+            // Respect global verbose setting: drop debug messages unless enabled
+            if (level == LogLevel.Debug && !_verboseLogging)
+                return;
+
             var entry = new LogEntry
             {
                 Timestamp = DateTime.UtcNow,
@@ -92,6 +100,13 @@ namespace FactorioModManager.Services.Infrastructure
             {
                 _logQueue.TryDequeue(out _);
             }
+
+            // Notify subscribers that logs changed
+            try
+            {
+                LogsUpdated?.Invoke(this, EventArgs.Empty);
+            }
+            catch { }
 
             try
             {
@@ -141,6 +156,9 @@ namespace FactorioModManager.Services.Infrastructure
                         _logQueue.Enqueue(entry);
                     }
                 }
+
+                // notify that logs were loaded
+                try { LogsUpdated?.Invoke(this, EventArgs.Empty); } catch { }
             }
             catch (Exception ex)
             {
@@ -219,6 +237,8 @@ namespace FactorioModManager.Services.Infrastructure
                         AutoFlush = false
                     };
                 }
+
+                try { LogsUpdated?.Invoke(this, EventArgs.Empty); } catch { }
             }
             catch (Exception ex)
             {
@@ -258,6 +278,8 @@ namespace FactorioModManager.Services.Infrastructure
                         AutoFlush = false
                     };
                 }
+
+                try { LogsUpdated?.Invoke(this, EventArgs.Empty); } catch { }
 
                 Log("Logs archived");
             }
@@ -301,6 +323,8 @@ namespace FactorioModManager.Services.Infrastructure
                     };
                 }
 
+                try { LogsUpdated?.Invoke(this, EventArgs.Empty); } catch { }
+
                 Log($"Pruned logs older than {daysToKeep} days");
             }
             catch (Exception ex)
@@ -312,6 +336,15 @@ namespace FactorioModManager.Services.Infrastructure
         public void LogException(Exception exception)
         {
             LogDebug(_errorMessageService.GetTechnicalMessage(exception));
+        }
+
+        // Global verbose controls
+        public bool IsVerboseEnabled() => _verboseLogging;
+
+        public void SetVerboseEnabled(bool enabled)
+        {
+            _verboseLogging = enabled;
+            Log($"Verbose logging {(enabled ? "enabled" : "disabled")}");
         }
     }
 }

@@ -100,20 +100,26 @@ namespace FactorioModManager.Views
             {
                 try
                 {
-                    if (!File.Exists(filePath))
+                    // Support both zip file paths and mod directory paths.
+                    if (File.Exists(filePath))
                     {
-                        await _uiService.ShowMessageAsync("Error", $"File not found: {filePath}", this);
+                        // Reveal file in system file manager with the file selected when possible
+                        _uiService.RevealFile(filePath);
                         return;
                     }
 
-                    var directory = Path.GetDirectoryName(filePath) ?? ".";
+                    if (Directory.Exists(filePath))
+                    {
+                        // Directory - open folder in file manager
+                        _uiService.OpenFolder(filePath);
+                        return;
+                    }
 
-                    // Use IUIService to open the containing folder (cross-platform)
-                    _uiService.OpenFolder(directory);
+                    await _uiService.ShowMessageAsync("Error", $"File or directory not found: {filePath}", this);
                 }
                 catch (Exception ex)
                 {
-                    await _uiService.ShowMessageAsync("Error", $"Failed to open mod file: {ex.Message}", this);
+                    await _uiService.ShowMessageAsync("Error", $"Failed to view mod file: {ex.Message}", this);
                 }
             }
         }

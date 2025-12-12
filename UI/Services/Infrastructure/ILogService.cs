@@ -25,5 +25,12 @@ namespace FactorioModManager.Services.Infrastructure
         void ArchiveLogs();
 
         void PruneOldLogs(int daysToKeep = 30);
+
+        // Control global verbose logging for diagnostics
+        bool IsVerboseEnabled();
+        void SetVerboseEnabled(bool enabled);
+
+        // Event fired when logs are appended/changed. Subscribers can debounce as needed.
+        event EventHandler? LogsUpdated;
     }
 }

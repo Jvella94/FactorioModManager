@@ -55,6 +55,16 @@ namespace FactorioModManager.Services.Infrastructure
         void OpenFolder(string path);
 
         /// <summary>
+        /// Opens a file with the system default application
+        /// </summary>
+        void OpenFile(string path);
+
+        /// <summary>
+        /// Reveals a file in the system file manager with the file selected when supported
+        /// </summary>
+        void RevealFile(string path);
+
+        /// <summary>
         /// Gets the main application window
         /// </summary>
         Window? GetMainWindow();
@@ -84,5 +94,10 @@ namespace FactorioModManager.Services.Infrastructure
         /// </summary>
         Task ShowVersionHistoryAsync(string modTitle, string modName,
             List<Models.DTO.ShortReleaseDTO> releases);
+
+        /// <summary>
+        /// Set text to clipboard (platform-specific implementation)
+        /// </summary>
+        Task SetClipboardTextAsync(string text);
     }
 }

@@ -65,6 +65,15 @@ namespace FactorioModManager.Services.Settings
 
         void SetUpdateConcurrency(int concurrency);
 
+        // Verbose detection logging
+        bool GetVerboseDetectionLogging();
+
+        void SetVerboseDetectionLogging(bool enabled);
+
+        // Auto-check mods on startup (new)
+        bool GetAutoCheckModUpdates();
+        void SetAutoCheckModUpdates(bool enabled);
+
         public event Action? FactorioPathChanged;
     }
 
@@ -86,6 +95,12 @@ namespace FactorioModManager.Services.Settings
 
         // New: concurrency limit for Update All
         public int UpdateConcurrency { get; set; } = 3;
+
+        // New: verbose detection logging
+        public bool VerboseDetectionLogging { get; set; } = false;
+
+        // New: auto-check mods on startup
+        public bool AutoCheckModUpdates { get; set; } = true;
     }
 
     public class SettingsService : ISettingsService
@@ -102,6 +117,7 @@ namespace FactorioModManager.Services.Settings
             _settingsPath = Path.Combine(appFolder, "settings.json");
             _logService = logService;
             _settings = LoadSettings();
+            _logService.SetVerboseEnabled(_settings.VerboseDetectionLogging);
         }
 
         private AppSettings LoadSettings()
@@ -326,6 +342,15 @@ namespace FactorioModManager.Services.Settings
             SaveSettings();
         }
 
+        public bool GetVerboseDetectionLogging() => _settings.VerboseDetectionLogging;
+
+        public void SetVerboseDetectionLogging(bool enabled)
+        {
+            _settings.VerboseDetectionLogging = enabled;
+            SaveSettings();
+            _logService.SetVerboseEnabled(enabled);
+        }
+
         public event Action? FactorioPathChanged;
 
         public bool GetShowHiddenDependencies()
@@ -348,6 +373,14 @@ namespace FactorioModManager.Services.Settings
         public void SetUpdateConcurrency(int concurrency)
         {
             _settings.UpdateConcurrency = concurrency;
+            SaveSettings();
+        }
+
+        // Auto-check mods on startup getters/setters
+        public bool GetAutoCheckModUpdates() => _settings.AutoCheckModUpdates;
+        public void SetAutoCheckModUpdates(bool enabled)
+        {
+            _settings.AutoCheckModUpdates = enabled;
             SaveSettings();
         }
     }

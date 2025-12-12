@@ -3,8 +3,8 @@ set -euo pipefail
 
 SRC_ICO="UI/Assets/FMM.ico"
 SRC_PNG="UI/Assets/FMM.png"
-DST_DIR="publish/osx-x64/FactorioModManager.app/Contents/Resources/AppIcon.iconset"
-DST_ICNS="publish/osx-x64/FactorioModManager.app/Contents/Resources/AppIcon.icns"
+DST_DIR="./iconset-temp"
+DST_ICNS="./AppIcon.icns"
 
 mkdir -p "$DST_DIR"
 
@@ -58,5 +58,8 @@ else
   echo "Error: iconutil not found. This script must be run on macOS." >&2
   exit 2
 fi
+
+# Cleanup temp iconset
+rm -rf "$DST_DIR"
 
 exit 0

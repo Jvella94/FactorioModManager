@@ -38,6 +38,7 @@ namespace FactorioModManager.ViewModels.MainWindow
         private string _authorSearchText = string.Empty;
         private bool _showOnlyUnusedInternals = false;
         private bool _showOnlyPendingUpdates = false;
+        private bool _showHiddenDependencies = false;
         private bool _togglingMod = false;
 
         public bool HasSelectedMod => SelectedMod != null;
@@ -92,10 +93,20 @@ namespace FactorioModManager.ViewModels.MainWindow
             _modFilterService = modFilterService;
             ModManagement = new ModManagementViewModel();
 
+            // Initialize ShowHiddenDependencies from persisted settings before creating/modifying VMs
+            _showHiddenDependencies = _settingsService.GetShowHiddenDependencies();
+
             SetupReactiveFiltering();
             InitializeCommands();
 
             _settingsService.FactorioPathChanged += () => DetectFactorioVersionAndDLC();
+
+            // Persist changes when the user toggles the option from the UI (skip initial value)
+            this.WhenAnyValue(x => x.ShowHiddenDependencies)
+                .DistinctUntilChanged()
+                .Skip(1)
+                .Subscribe(v => _settingsService.SetShowHiddenDependencies(v))
+                .DisposeWith(_disposables);
         }
 
         /// <summary>
@@ -428,6 +439,22 @@ namespace FactorioModManager.ViewModels.MainWindow
         {
             get => _showOnlyPendingUpdates;
             set => this.RaiseAndSetIfChanged(ref _showOnlyPendingUpdates, value);
+        }
+
+        public bool ShowHiddenDependencies
+        {
+            get => _showHiddenDependencies;
+            set
+            {
+                // propagate to VMs and notify
+                this.RaiseAndSetIfChanged(ref _showHiddenDependencies, value);
+                foreach (var vm in _allMods)
+                {
+                    vm.ShowHiddenDependencies = value;
+                }
+                if (SelectedMod != null)
+                    SelectedMod.ShowHiddenDependencies = value;
+            }
         }
 
         /// <summary>

@@ -17,11 +17,14 @@ jobs:
     outputs:
       tag: ${{ steps.read_version.outputs.tag }}
       version: ${{ steps.read_version.outputs.version }}
+      full_version: ${{ steps.read_version.outputs.full_version }}
       prerelease: ${{ steps.read_version.outputs.prerelease }}
       icon_path: ${{ steps.read_version.outputs.icon_path }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Needed for commit count
 
       - name: Install xmllint
         run: sudo apt-get update && sudo apt-get install -y libxml2-utils
@@ -35,7 +38,6 @@ jobs:
             exit 1
           fi
 
-
           # Read ApplicationIcon path
           icon_path=$(xmllint --xpath "string(//Project/PropertyGroup/ApplicationIcon)" UI/FactorioModManager.csproj)
           if [ -z "$icon_path" ]; then
@@ -43,20 +45,33 @@ jobs:
             icon_path=""
           fi
 
+          # Get short commit SHA
+          commit_sha=$(git rev-parse --short=7 HEAD)
 
-          # construct tag like v1.2.3 or v1.2.3-beta.1
-          tag="v$version"
+          # Check if version contains prerelease identifier
+          if echo "$version" | grep -qE '[-](alpha|beta|rc|dev|preview|pre|[A-Za-z])'; then
+            # Append build metadata: run number + commit hash
+            full_version="${version}.${GITHUB_RUN_NUMBER}+${commit_sha}"
+            prerelease=true
+          else
+            # Release version - no suffix
+            full_version="$version"
+            prerelease=false
+          fi
+
+          # construct tag like v1.2.3 or v1.2.3-alpha
+          tag="v${version}"
+
           echo "version=$version" >> $GITHUB_OUTPUT
+          echo "full_version=$full_version" >> $GITHUB_OUTPUT
           echo "tag=$tag" >> $GITHUB_OUTPUT
+          echo "prerelease=$prerelease" >> $GITHUB_OUTPUT
           echo "icon_path=$icon_path" >> $GITHUB_OUTPUT
 
-
-          # determine prerelease from semver prerelease part or common identifiers
-          if echo "$version" | grep -qE '[-](alpha|beta|rc|dev|preview|pre|[A-Za-z])'; then
-            echo "prerelease=true" >> $GITHUB_OUTPUT
-          else
-            echo "prerelease=false" >> $GITHUB_OUTPUT
-          fi
+          echo "Base version: $version"
+          echo "Full version: $full_version"
+          echo "Tag: $tag"
+          echo "Prerelease: $prerelease"
 
   generate-icns:
     name: Generate macOS icon
@@ -82,7 +97,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: appicon
-          path: publish/osx-x64/FactorioModManager.app/Contents/Resources/AppIcon.icns
+          path: ./AppIcon.icns
 
   build:
     name: Build and package
@@ -125,6 +140,7 @@ jobs:
             -p:PublishSingleFile=false \
             -p:UseAppHost=true \
             -p:PublishTrimmed=false \
+            -p:Version="${{ needs.set-version.outputs.full_version }}" \
             --output ./publish/${{ matrix.platform }}
         shell: bash
 
@@ -135,16 +151,15 @@ jobs:
           name: appicon
           path: /tmp/appicon/
 
-      # Create macOS .app bundle (replacement snippet)
       - name: Create macOS .app bundle
         if: startsWith(matrix.platform, 'osx-')
         run: |
           APP_NAME="FactorioModManager"
           PLATFORM="${{ matrix.platform }}"
           VERSION="${{ needs.set-version.outputs.version }}"
+          BUNDLE_VERSION=$(echo "$VERSION" | sed 's/-.*$//')
           PUBLISH_DIR="./publish/${PLATFORM}"
           APP_BUNDLE="${PUBLISH_DIR}/${APP_NAME}.app"
-
 
           # Create .app structure
           mkdir -p "${APP_BUNDLE}/Contents/MacOS"
@@ -192,7 +207,7 @@ jobs:
             <key>CFBundleIdentifier</key>
             <string>com.yourname.factoriomodmanager</string>
             <key>CFBundleVersion</key>
-            <string>${VERSION}</string>
+            <string>${BUNDLE_VERSION}</string>
             <key>CFBundleShortVersionString</key>
             <string>${VERSION}</string>
             <key>CFBundlePackageType</key>

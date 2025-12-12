@@ -44,23 +44,65 @@
                      VerticalAlignment="Center" />
             <Button Grid.Column="1"
                     Content="Browse..."
-                    Click="BrowseFactorioPath_Click"
+                    Command="{Binding BrowseFactorioCommand}"
                     Padding="15,8"
                     VerticalAlignment="Center" />
           </Grid>
 
           <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,5,0,0">
             <Button Content="🔍 Auto-Detect"
-                    Click="AutoDetectFactorioPath_Click"
+                    Command="{Binding AutoDetectFactorioCommand}"
                     Padding="10,5"
                     Background="#2D5016" />
             <Button Content="Test Launch"
-                    Click="TestFactorioPath_Click"
+                    Command="{Binding TestFactorioCommand}"
                     Padding="10,5"
                     Background="#1E5A1E" />
           </StackPanel>
 
           <TextBlock x:Name="FactorioPathStatus"
+                     FontSize="11"
+                     Margin="0,5,0,0"
+                     TextWrapping="Wrap"
+                     Foreground="#888" />
+        </StackPanel>
+
+        <Separator Background="#333" />
+
+        <!-- Factorio Data Directory Section -->
+        <StackPanel Spacing="8">
+          <TextBlock Text="Factorio Data Directory"
+                     FontWeight="Bold"
+                     FontSize="14"
+                     Foreground="White" />
+          <TextBlock Text="Location of Factorio 'data' folder (contains core, mods, and DLC folders)"
+                     Foreground="#888"
+                     FontSize="11"
+                     TextWrapping="Wrap"
+                     Margin="0,0,0,5" />
+
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBox Grid.Column="0"
+                     x:Name="FactorioDataPathTextBox"
+                     Text="{Binding FactorioDataPath}"
+                     Watermark="Path will be auto-detected if left empty..."
+                     Margin="0,0,10,0"
+                     VerticalAlignment="Center" />
+            <Button Grid.Column="1"
+                    Content="Browse..."
+                    Command="{Binding BrowseDataCommand}"
+                    Padding="15,8"
+                    VerticalAlignment="Center" />
+          </Grid>
+
+          <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,5,0,0">
+            <Button Content="🔍 Auto-Detect"
+                    Command="{Binding AutoDetectDataCommand}"
+                    Padding="10,5"
+                    Background="#2D5016" />
+          </StackPanel>
+
+          <TextBlock x:Name="FactorioDataPathStatus"
                      FontSize="11"
                      Margin="0,5,0,0"
                      TextWrapping="Wrap"
@@ -142,6 +184,7 @@
 
           <CheckBox x:Name="AutoCheckUpdatesCheckBox"
                     Content="Automatically check for mod updates on startup"
+                    IsChecked="{Binding AutoCheckModUpdates}"
                     Foreground="White" />
 
           <CheckBox Content="Check for Mod Manager updates on startup"
@@ -193,6 +236,15 @@
 
           <CheckBox Content="Show Hidden Dependencies"
           IsChecked="{Binding ShowHiddenDependencies}" />
+
+          <!-- Verbose detection logging toggle -->
+          <CheckBox Content="Enable verbose detection logging (diagnostics)"
+                    IsChecked="{Binding VerboseDetectionLogging}"
+                    ToolTip.Tip="Enable detailed diagnostic logs for Factorio path/data detection. Useful for troubleshooting." />
+          <TextBlock Text="{Binding VerboseStatusMessage}"
+                     Foreground="#CCC"
+                     FontSize="12"
+                     Margin="4,2,0,0" />
         </StackPanel>
       </StackPanel>
     </ScrollViewer>

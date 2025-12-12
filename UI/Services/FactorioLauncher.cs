@@ -19,10 +19,11 @@ namespace FactorioModManager.Services
         (string? Version, bool HasSpaceAgeDlc) DetectVersionAndDLC();
     }
 
-    public class FactorioLauncher(IFactorioEnvironment environment, ILogService logService) : IFactorioLauncher
+    public class FactorioLauncher(IFactorioEnvironment environment, ILogService logService, ISettingsService settingsService) : IFactorioLauncher
     {
         private readonly IFactorioEnvironment _environment = environment;
         private readonly ILogService _logService = logService;
+        private readonly ISettingsService _settingsService = settingsService;
 
         public Result Launch()
         {
@@ -75,7 +76,7 @@ namespace FactorioModManager.Services
 
         public string? DetectFactorioPath()
         {
-            return FolderPathHelper.DetectFactorioExecutable();
+            return FolderPathHelper.DetectFactorioExecutable(_logService);
         }
 
         public bool IsFactorioInstalled()
@@ -112,16 +113,10 @@ namespace FactorioModManager.Services
                 {
                     _logService.LogWarning($"Failed to read Factorio file version: {ex.Message}");
                 }
-                var dataDir = _environment.GetDataPath();
-                if (string.IsNullOrEmpty(dataDir))
-                {
-                    var exeDir = Path.GetDirectoryName(exePath);
-                    var binFolder = Path.GetDirectoryName(exeDir);
-                    var rootDir = Path.GetDirectoryName(binFolder);
 
-                    dataDir = Path.Combine(rootDir ?? string.Empty, "data");
-                }
-                if (!Directory.Exists(dataDir))
+                var dataDir = FolderPathHelper.GetFactorioDataPath(_logService, _settingsService.GetFactorioDataPath(), exePath);
+
+                if (string.IsNullOrEmpty(dataDir) || !Directory.Exists(dataDir))
                 {
                     _logService.LogWarning($"Factorio data directory not found at: {dataDir}");
                     return (version, false);

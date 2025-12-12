@@ -3,6 +3,7 @@ using FactorioModManager.Services;
 using FactorioModManager.Services.API;
 using FactorioModManager.Services.Infrastructure;
 using FactorioModManager.Services.Mods;
+using FactorioModManager.Services.Platform;
 using FactorioModManager.Services.Settings;
 using FactorioModManager.ViewModels.MainWindow;
 using System;
@@ -40,6 +41,9 @@ namespace FactorioModManager
 
             // Core Settings
             RegisterSingleton<ISettingsService>(new SettingsService(Resolve<ILogService>()));
+
+            // Register platform service (Avalonia) so ViewModels can use it via DI
+            RegisterSingleton<IPlatformService>(new AvaloniaPlatformService(Resolve<IUIService>()));
 
             // Settings Adapters
             RegisterSingleton<IModPathSettings>(new ModPathSettings(Resolve<ISettingsService>()));
@@ -116,7 +120,8 @@ namespace FactorioModManager
             // Launcher
             RegisterSingleton<IFactorioLauncher>(new FactorioLauncher(
                 Resolve<IFactorioEnvironment>(),
-                Resolve<ILogService>()));
+                Resolve<ILogService>(),
+                Resolve<ISettingsService>()));
 
             // ViewModels
             // Create with parameterless constructor (partial viewmodels handle wiring)

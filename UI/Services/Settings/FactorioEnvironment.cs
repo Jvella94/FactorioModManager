@@ -42,16 +42,20 @@ namespace FactorioModManager.Services.Settings
 
         public void SetHasSpaceAgeDlc(bool value) => _settingsService.SetHasSpaceAgeDlc(value);
 
-        public string? GetDataPath() => _settingsService.GetFactorioDataPath();
+        public string? GetDataPath()
+        {
+            return FolderPathHelper.GetFactorioDataPath(_logService, _settingsService.GetFactorioDataPath(), _settingsService.GetFactorioExecutablePath());
+        }
 
         public void DetectEnvironment()
         {
             try
             {
                 var exePath = GetExecutablePath();
+
                 if (string.IsNullOrEmpty(exePath))
                 {
-                    exePath = FolderPathHelper.DetectFactorioExecutable();
+                    exePath = FolderPathHelper.DetectFactorioExecutable(_logService);
                     if (!string.IsNullOrEmpty(exePath))
                     {
                         SetExecutablePath(exePath);
@@ -99,12 +103,8 @@ namespace FactorioModManager.Services.Settings
         {
             try
             {
-                var rootDir = Path.GetDirectoryName(exePath);
-                if (string.IsNullOrEmpty(rootDir))
-                    return;
-
-                var dataDir = Path.Combine(rootDir, "data");
-                if (!Directory.Exists(dataDir))
+                var dataDir = FolderPathHelper.GetFactorioDataPath(_logService, _settingsService.GetFactorioDataPath(), exePath);
+                if (string.IsNullOrEmpty(dataDir) || !Directory.Exists(dataDir))
                     return;
 
                 bool hasSpaceAgeDlc =

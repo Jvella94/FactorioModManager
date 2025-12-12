@@ -5,6 +5,13 @@ using FactorioModManager.Views.Dialogs;
 using System;
 using System.Diagnostics;
 using System.Threading.Tasks;
+using System.Linq;
+using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia;
+using Avalonia.Input;
+using Avalonia.Platform;
+using System.Runtime.InteropServices;
+using System.IO;
 
 namespace FactorioModManager.Services.Infrastructure
 {
@@ -117,22 +124,146 @@ namespace FactorioModManager.Services.Infrastructure
             }
         }
 
+        public void OpenFile(string path)
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = path,
+                    UseShellExecute = true
+                });
+                _logService.Log($"Opened file: {path}");
+            }
+            catch (Exception ex)
+            {
+                _logService.LogError($"Error opening file: {ex.Message}", ex);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Reveal a file in the system file manager with the file selected where supported.
+        /// Uses platform-specific invocation:
+        /// - Windows: explorer /select,
+        /// - macOS: open -R
+        /// - Linux: try common file managers that support selecting a file; fall back to xdg-open/gio
+        /// </summary>
+        public void RevealFile(string path)
+        {
+            try
+            {
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                {
+                    var args = $"/select,\"{path}\"";
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = "explorer.exe",
+                        Arguments = args,
+                        UseShellExecute = true
+                    });
+                    _logService.Log($"Revealed file in Explorer: {path}");
+                    return;
+                }
+
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+                {
+                    var args = $"-R \"{path}\"";
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = "open",
+                        Arguments = args,
+                        UseShellExecute = true
+                    });
+                    _logService.Log($"Revealed file in Finder: {path}");
+                    return;
+                }
+
+                // Linux / other: try common file managers that support selecting a file
+                var fileManagers = new[] { "nautilus", "dolphin", "nemo", "thunar", "caja" };
+
+                foreach (var fm in fileManagers)
+                {
+                    var exe = FindExecutableInPath(fm);
+                    if (exe is null)
+                        continue;
+
+                    var psi = new ProcessStartInfo
+                    {
+                        FileName = exe,
+                        Arguments = $"--select \"{path}\"",
+                        UseShellExecute = true
+                    };
+
+                    if (TryStartProcess(psi))
+                    {
+                        _logService.Log($"Revealed file using {fm}: {path}");
+                        return;
+                    }
+                }
+
+                // Fallback: open containing folder with xdg-open or gio
+                var dir = Path.GetDirectoryName(path) ?? path;
+                var opener = FindExecutableInPath("xdg-open") ?? FindExecutableInPath("gio");
+                if (opener != null)
+                {
+                    var psi = new ProcessStartInfo
+                    {
+                        FileName = opener,
+                        Arguments = $"\"{dir}\"",
+                        UseShellExecute = true
+                    };
+
+                    if (TryStartProcess(psi))
+                    {
+                        _logService.Log($"Opened containing folder: {dir}");
+                        return;
+                    }
+                }
+
+                _logService.LogWarning($"No suitable file manager found to reveal file: {path}");
+            }
+            catch (Exception ex)
+            {
+                _logService.LogError($"Error revealing file: {ex.Message}", ex);
+                throw;
+            }
+        }
+
+        private static IClassicDesktopStyleApplicationLifetime? GetDesktopLifetime()
+        {
+            return Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
+        }
+
         public Window? GetMainWindow()
         {
-            return Avalonia.Application.Current?.ApplicationLifetime
-                is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
-                ? desktop.MainWindow
-                : null;
+            return GetDesktopLifetime()?.MainWindow;
         }
 
         public async Task<bool> ShowSettingsDialogAsync()
         {
             return await Dispatcher.UIThread.InvokeAsync(async () =>
             {
+                var desktop = GetDesktopLifetime();
+                var owner = GetMainWindow();
+
+                // If settings window already open, focus and bring to front
+                if (desktop != null)
+                {
+                    var existing = desktop.Windows.OfType<Views.SettingsWindow>().FirstOrDefault();
+                    if (existing != null)
+                    {
+                        existing.Activate();
+                        existing.Topmost = true;
+                        existing.Topmost = false;
+                        existing.Focus();
+                        return false; // already open
+                    }
+                }
+
                 var settingsService = ServiceContainer.Instance.Resolve<ISettingsService>();
                 var loggingService = ServiceContainer.Instance.Resolve<ILogService>();
                 var dialog = new Views.SettingsWindow(settingsService, loggingService);
-                var owner = GetMainWindow();
                 if (owner != null)
                 {
                     return await dialog.ShowDialog<bool>(owner);
@@ -145,8 +276,23 @@ namespace FactorioModManager.Services.Infrastructure
         {
             return await Dispatcher.UIThread.InvokeAsync(async () =>
             {
-                var dialog = new Views.UpdateCheckDialog();
+                var desktop = GetDesktopLifetime();
                 var owner = GetMainWindow();
+
+                if (desktop != null)
+                {
+                    var existing = desktop.Windows.OfType<Views.UpdateCheckDialog>().FirstOrDefault();
+                    if (existing != null)
+                    {
+                        existing.Activate();
+                        existing.Topmost = true;
+                        existing.Topmost = false;
+                        existing.Focus();
+                        return (false, 0);
+                    }
+                }
+
+                var dialog = new Views.UpdateCheckDialog();
                 if (owner != null)
                 {
                     return await dialog.ShowDialog<(bool, int)>(owner);
@@ -169,23 +315,124 @@ namespace FactorioModManager.Services.Infrastructure
             });
         }
 
-        public Task ShowChangelogAsync(string modTitle, string changelog)
+        public async Task ShowChangelogAsync(string modTitle, string changelog)
         {
-            return Dispatcher.UIThread.InvokeAsync(() =>
+            await Dispatcher.UIThread.InvokeAsync(async () =>
             {
+                var desktop = GetDesktopLifetime();
+                var owner = GetMainWindow();
+
+                // If a changelog window for this mod exists, bring to front
+                if (desktop != null)
+                {
+                    var existing = desktop.Windows.OfType<Views.ChangelogWindow>().FirstOrDefault(w => w.ModTitle?.Text?.StartsWith(modTitle) == true);
+                    if (existing != null)
+                    {
+                        existing.Activate();
+                        existing.Topmost = true;
+                        existing.Topmost = false;
+                        existing.Focus();
+                        return; // already focused
+                    }
+                }
+
                 var window = new Views.ChangelogWindow(modTitle, changelog);
                 window.Show();
-            }).GetTask();
+            });
         }
 
-        public Task ShowVersionHistoryAsync(string modTitle, string modName,
+        public async Task ShowVersionHistoryAsync(string modTitle, string modName,
             System.Collections.Generic.List<Models.DTO.ShortReleaseDTO> releases)
         {
-            return Dispatcher.UIThread.InvokeAsync(() =>
+            await Dispatcher.UIThread.InvokeAsync(async () =>
             {
+                var desktop = GetDesktopLifetime();
+                var owner = GetMainWindow();
+
+                if (desktop != null)
+                {
+                    var existing = desktop.Windows.OfType<Views.VersionHistoryWindow>().FirstOrDefault(w => (w.DataContext as ViewModels.Dialogs.VersionHistoryViewModel)?.ModName == modName);
+                    if (existing != null)
+                    {
+                        existing.Activate();
+                        existing.Topmost = true;
+                        existing.Topmost = false;
+                        existing.Focus();
+                        return; // already focused
+                    }
+                }
+
                 var window = new Views.VersionHistoryWindow(modTitle, modName, releases);
                 window.Show();
-            }).GetTask();
+            });
+        }
+
+        public async Task SetClipboardTextAsync(string text)
+        {
+            await Dispatcher.UIThread.InvokeAsync(async () =>
+            {
+                try
+                {
+                    var top = TopLevel.GetTopLevel(GetMainWindow());
+                    if (top?.Clipboard is not null)
+                    {
+                        await top.Clipboard.SetTextAsync(text);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logService.LogError($"Clipboard error: {ex.Message}", ex);
+                }
+            });
+        }
+
+        private static string? FindExecutableInPath(string name)
+        {
+            var path = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+            var paths = path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries);
+
+            string[] exts;
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                var pathext = Environment.GetEnvironmentVariable("PATHEXT") ?? ".EXE";
+                exts = pathext.Split(';', StringSplitOptions.RemoveEmptyEntries);
+            }
+            else
+            {
+                exts = [string.Empty];
+            }
+
+            foreach (var dir in paths)
+            {
+                foreach (var ext in exts)
+                {
+                    var candidate = Path.Combine(dir, name + ext);
+                    try
+                    {
+                        if (File.Exists(candidate))
+                            return candidate;
+                    }
+                    catch
+                    {
+                        // ignore directories we can't access
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        private static bool TryStartProcess(ProcessStartInfo psi)
+        {
+            try
+            {
+                Process.Start(psi);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
         }
     }
 }
