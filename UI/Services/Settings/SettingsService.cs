@@ -100,8 +100,8 @@ namespace FactorioModManager.Services.Settings
             var appFolder = Path.Combine(appDataPath, "FactorioModManager");
             Directory.CreateDirectory(appFolder);
             _settingsPath = Path.Combine(appFolder, "settings.json");
-            _settings = LoadSettings();
             _logService = logService;
+            _settings = LoadSettings();
         }
 
         private AppSettings LoadSettings()
