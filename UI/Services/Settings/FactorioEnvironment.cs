@@ -2,6 +2,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Text.RegularExpressions;
 
 namespace FactorioModManager.Services.Settings
 {
@@ -25,10 +26,12 @@ namespace FactorioModManager.Services.Settings
         void DetectEnvironment();
     }
 
-    public class FactorioEnvironment(ISettingsService settingsService, ILogService logService) : IFactorioEnvironment
+    public partial class FactorioEnvironment(ISettingsService settingsService, ILogService logService) : IFactorioEnvironment
     {
         private readonly ISettingsService _settingsService = settingsService;
         private readonly ILogService _logService = logService;
+
+        private static readonly Regex _versionRegex = VersionRegex();
 
         public string? GetExecutablePath() => _settingsService.GetFactorioExecutablePath();
 
@@ -87,16 +90,117 @@ namespace FactorioModManager.Services.Settings
             try
             {
                 var fvi = FileVersionInfo.GetVersionInfo(exePath);
-                if (!string.IsNullOrEmpty(fvi.FileVersion))
+
+                // Prefer FileVersion (loads better on Windows), then ProductVersion
+                string? rawVersion = !string.IsNullOrEmpty(fvi.FileVersion) ? fvi.FileVersion :
+                                    !string.IsNullOrEmpty(fvi.ProductVersion) ? fvi.ProductVersion : null;
+
+                string? version = null;
+
+                if (!string.IsNullOrEmpty(rawVersion))
                 {
-                    SetVersion(fvi.FileVersion);
-                    _logService.Log($"Detected Factorio version: {fvi.FileVersion}");
+                    var m = _versionRegex.Match(rawVersion);
+                    version = m.Success ? m.Groups[1].Value : rawVersion.Trim();
+                }
+
+                // If still not found, try invoking the executable with --version and parse output
+                if (string.IsNullOrEmpty(version))
+                {
+                    version = GetVersionFromRunningApp(exePath);
+                }
+
+                if (!string.IsNullOrEmpty(version))
+                {
+                    SetVersion(version);
+                    _logService.Log($"Detected Factorio version: {version}");
                 }
             }
             catch (Exception ex)
             {
                 _logService.LogWarning($"Failed to read Factorio version: {ex.Message}");
             }
+        }
+
+        private string GetVersionFromRunningApp(string exePath)
+        {
+            string versionResult = string.Empty;
+            Process? proc = null;
+            try
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = exePath,
+                    Arguments = "--version",
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+
+                proc = Process.Start(psi);
+                if (proc != null)
+                {
+                    // Read output asynchronously with timeout to avoid blocking if process doesn't exit
+                    var outputTask = proc.StandardOutput.ReadToEndAsync();
+                    if (outputTask.Wait(1500))
+                    {
+                        var output = outputTask.Result ?? string.Empty;
+
+                        // Prefer lines starting with 'Version:' (common in Factorio output)
+                        var versionLineMatch = VersionRegex().Match(output);
+                        if (versionLineMatch.Success)
+                        {
+                            versionResult = versionLineMatch.Groups[1].Value;
+                        }
+                        else
+                        {
+                            var m2 = _versionRegex.Match(output);
+                            if (m2.Success)
+                                versionResult = m2.Groups[1].Value;
+                        }
+
+                        // Ensure the process is not left running
+                        try
+                        {
+                            if (!proc.HasExited)
+                            {
+                                proc.Kill(true);
+                                proc.WaitForExit(1000);
+                            }
+                        }
+                        catch { }
+                    }
+                    else
+                    {
+                        // Timed out reading output -> ensure process is terminated
+                        try
+                        {
+                            if (!proc.HasExited)
+                            {
+                                proc.Kill(true);
+                                proc.WaitForExit(1000);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logService.LogWarning($"Failed to kill Factorio process after timeout: {ex.Message}");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logService.LogWarning($"Failed to execute Factorio for version detection: {ex.Message}");
+            }
+            finally
+            {
+                try
+                {
+                    proc?.Dispose();
+                }
+                catch { }
+            }
+
+            return versionResult;
         }
 
         private void DetectDLC(string exePath)
@@ -120,5 +224,8 @@ namespace FactorioModManager.Services.Settings
                 _logService.LogWarning($"Failed to detect DLC: {ex.Message}");
             }
         }
+
+        [GeneratedRegex("^Version:\\s*(\\d+\\.\\d+(?:\\.\\d+)*)", RegexOptions.Multiline)]
+        private static partial Regex VersionRegex();
     }
 }

@@ -146,13 +146,13 @@ namespace FactorioModManager.Services
                     return candidate;
 
                 // macOS app bundle resources
-                candidate = Path.Combine(root, "Contents", "Resources", "data");
+                candidate = Path.Combine(root, "Contents", "data");
                 log.LogDebug($"GetDataFromRoot (macOS): checking {candidate}");
                 if (Directory.Exists(candidate))
                     return candidate;
 
                 // Some steam layouts might embed factorio.app further down
-                candidate = Path.Combine(root, "factorio.app", "Contents", "Resources", "data");
+                candidate = Path.Combine(root, "factorio.app", "Contents", "data");
                 log.LogDebug($"GetDataFromRoot (alt macOS): checking {candidate}");
                 if (Directory.Exists(candidate))
                     return candidate;
@@ -224,7 +224,7 @@ namespace FactorioModManager.Services
                     }
 
                     // macOS app layout fallback
-                    dataDir = Path.Combine(rootDir, "Contents", "Resources", "data");
+                    dataDir = Path.Combine(rootDir, "Contents", "data");
                     log.LogDebug($"Derived macOS-style data dir from exe: {dataDir}");
                     if (Directory.Exists(dataDir))
                     {

@@ -1,4 +1,8 @@
-# Single workflow: read version, build for all targets, create release and upload assets
+# Full replacement workflow with self-hosted Windows runner preferred and windows-latest as fallback.
+# - Checks for an online self-hosted Windows runner labeled "windows"
+# - If available, runs Windows build on [self-hosted, windows]; otherwise falls back to windows-latest
+# - Keeps Linux/macOS matrix builds separate
+# - NuGet caching, separate restore & publish, MSBuild parallelism, binary logs uploaded
 name: Tag, Build and Release
 
 on:
@@ -99,8 +103,35 @@ jobs:
           name: appicon
           path: ./AppIcon.icns
 
+  # Helper: check for an online self-hosted Windows runner with the 'windows' label
+  check-self-hosted-windows:
+    name: Check self-hosted Windows runner availability
+    runs-on: ubuntu-latest
+    outputs:
+      windows_runner_online: ${{ steps.check.outputs.windows_runner_online }}
+    steps:
+      - name: Install jq (for JSON parsing)
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Query repository runners and detect online Windows runners
+        id: check
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          # Get list of runners for this repository
+          resp=$(curl -s -H "Accept: application/vnd.github+json" -H "Authorization: Bearer $GITHUB_TOKEN" "https://api.github.com/repos/${{ github.repository }}/actions/runners")
+          # Count runners that are online and have a label named "windows"
+          count=$(echo "$resp" | jq '[.runners[] | select(.status=="online") | select(.labels[].name=="windows")] | length')
+          if [ "$count" -gt 0 ]; then
+            echo "windows_runner_online=true" >> $GITHUB_OUTPUT
+          else
+            echo "windows_runner_online=false" >> $GITHUB_OUTPUT
+          fi
+
+  # Build job for Linux and macOS (matrix excludes Windows)
   build:
-    name: Build and package
+    name: Build and package (Linux & macOS)
     needs: [set-version, generate-icns]
     runs-on: ${{ matrix.os }}
     strategy:
@@ -109,9 +140,6 @@ jobs:
           - os: ubuntu-latest
             platform: linux-x64
             artifact_name: FactorioModManager-linux-x64
-          - os: windows-latest
-            platform: win-x64
-            artifact_name: FactorioModManager-win-x64
           - os: macos-latest
             platform: osx-x64
             artifact_name: FactorioModManager-osx-x64
@@ -128,21 +156,30 @@ jobs:
         with:
           dotnet-version: "9.0.x"
 
-      - name: Restore dependencies
-        run: dotnet restore
+      - name: Cache NuGet (Linux/macOS)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.nuget/packages
+            ~/.local/share/NuGet
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/Directory.Packages.props','**/packages.lock.json', '**/*.csproj', '**/*.sln', 'global.json') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
 
-      - name: Publish
-        run: |
-          dotnet publish UI/FactorioModManager.csproj \
-            --configuration Release \
-            --runtime ${{ matrix.platform }} \
-            --self-contained true \
-            -p:PublishSingleFile=false \
-            -p:UseAppHost=true \
-            -p:PublishTrimmed=false \
-            -p:Version="${{ needs.set-version.outputs.full_version }}" \
-            --output ./publish/${{ matrix.platform }}
+      - name: Restore dependencies
+        run: dotnet restore UI/FactorioModManager.csproj
         shell: bash
+
+      - name: Publish with parallel MSBuild and binary log
+        run: dotnet publish UI/FactorioModManager.csproj --configuration Release --runtime ${{ matrix.platform }} --self-contained true -p:PublishSingleFile=false -p:UseAppHost=true -p:PublishTrimmed=false -p:Version="${{ needs.set-version.outputs.full_version }}" --output ./publish/${{ matrix.platform }} --no-restore -p:MaxCpuCount=0 -clp:PerformanceSummary /bl:publish-${{ matrix.platform }}.binlog
+        shell: bash
+
+      - name: Upload msbuild binlog
+        uses: actions/upload-artifact@v4
+        with:
+          name: msbuild-binlog-${{ matrix.platform }}
+          path: publish-${{ matrix.platform }}.binlog
+          if-no-files-found: ignore
 
       - name: Download AppIcon.icns
         if: startsWith(matrix.platform, 'osx-')
@@ -161,32 +198,26 @@ jobs:
           PUBLISH_DIR="./publish/${PLATFORM}"
           APP_BUNDLE="${PUBLISH_DIR}/${APP_NAME}.app"
 
-          # Create .app structure
           mkdir -p "${APP_BUNDLE}/Contents/MacOS"
           mkdir -p "${APP_BUNDLE}/Contents/Resources"
 
-          # Move executable into bundle (if present)
           if [ -f "${PUBLISH_DIR}/${APP_NAME}" ]; then
             mv "${PUBLISH_DIR}/${APP_NAME}" "${APP_BUNDLE}/Contents/MacOS/" || true
             chmod +x "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}" || true
           fi
 
-          # Move managed assemblies and runtime files into bundle
           for f in "${PUBLISH_DIR}"/*.dll "${PUBLISH_DIR}"/*.deps.json "${PUBLISH_DIR}"/*.runtimeconfig.json "${PUBLISH_DIR}"/*.pdb; do
             if [ -f "$f" ]; then
               mv "$f" "${APP_BUNDLE}/Contents/MacOS/" || true
             fi
           done
 
-          # Move entire 'runtimes' directory if present (contains architecture-specific native assets)
           if [ -d "${PUBLISH_DIR}/runtimes" ]; then
             mv "${PUBLISH_DIR}/runtimes" "${APP_BUNDLE}/Contents/MacOS/" || true
           fi
 
-          # Move SkiaSharp and other native dylibs from publish tree into the bundle
           find "${PUBLISH_DIR}" -type f -name '*.dylib' -exec mv {} "${APP_BUNDLE}/Contents/MacOS/" \; || true
 
-          # Copy the downloaded icon to the correct location
           if [ -f "/tmp/appicon/AppIcon.icns" ]; then
             cp /tmp/appicon/AppIcon.icns "${APP_BUNDLE}/Contents/Resources/AppIcon.icns"
             echo "AppIcon.icns copied to ${APP_BUNDLE}/Contents/Resources/"
@@ -194,7 +225,6 @@ jobs:
             echo "Warning: AppIcon.icns not found in /tmp/appicon/ - the application will use default icon" >&2
           fi
 
-          # Create Info.plist with version
           cat > "${APP_BUNDLE}/Contents/Info.plist" << EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -224,36 +254,89 @@ jobs:
           </plist>
           EOF
 
-          # Now clean up the publish root but keep the .app
           find "${PUBLISH_DIR}" -maxdepth 1 -type f -not -name "${APP_NAME}.app" -delete || true
           find "${PUBLISH_DIR}" -maxdepth 1 -type d ! -name "${APP_NAME}.app" ! -path "${PUBLISH_DIR}" -exec rm -rf {} + || true
         shell: bash
 
       - name: Create archive (Linux/macOS)
-        if: runner.os != 'Windows'
         run: |
           cd publish/${{ matrix.platform }}
           tar -czf ../../${{ matrix.artifact_name }}.tar.gz ./*
+        shell: bash
 
-      - name: Create archive (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          cd publish/${{ matrix.platform }}
-          Compress-Archive -Path * -DestinationPath ../../${{ matrix.artifact_name }}.zip
-
-      - name: Upload artifact
+      - name: Upload artifact (Linux/macOS)
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
           path: |
             ${{ matrix.artifact_name }}.tar.gz
+          if-no-files-found: ignore
+
+  # Windows build job: choose self-hosted if available, otherwise windows-latest
+  build-windows:
+    name: Build and package (Windows)
+    needs: [set-version, generate-icns, check-self-hosted-windows]
+    # First label is chosen dynamically: 'self-hosted' if a self-hosted Windows runner is online; otherwise 'windows-latest'
+    runs-on:
+      - ${{ needs.check-self-hosted-windows.outputs.windows_runner_online == 'true' && 'self-hosted' || 'windows-latest' }}
+      - windows
+    strategy:
+      matrix:
+        include:
+          - platform: win-x64
+            artifact_name: FactorioModManager-win-x64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Cache NuGet on Windows
+        uses: actions/cache@v4
+        with:
+          path: |
+            %USERPROFILE%\.nuget\packages
+            %USERPROFILE%\.nuget\plugins
+          key: nuget-windows-${{ hashFiles('**/Directory.Packages.props','**/packages.lock.json', '**/*.csproj', '**/*.sln', 'global.json') }}
+          restore-keys: |
+            nuget-windows-
+
+      - name: Restore dependencies (Windows)
+        run: dotnet restore UI/FactorioModManager.csproj
+        shell: pwsh
+
+      - name: Publish (Windows) with parallel MSBuild and binary log
+        run: dotnet publish UI/FactorioModManager.csproj --configuration Release --runtime ${{ matrix.platform }} --self-contained true -p:PublishSingleFile=false -p:UseAppHost=true -p:PublishTrimmed=false -p:Version="${{ needs.set-version.outputs.full_version }}" --output ./publish/${{ matrix.platform }} --no-restore -p:MaxCpuCount=0 -clp:PerformanceSummary /bl:publish-${{ matrix.platform }}.binlog
+        shell: pwsh
+
+      - name: Upload msbuild binlog (Windows)
+        uses: actions/upload-artifact@v4
+        with:
+          name: msbuild-binlog-${{ matrix.platform }}
+          path: publish-${{ matrix.platform }}.binlog
+          if-no-files-found: ignore
+
+      - name: Create archive (Windows)
+        shell: pwsh
+        run: |
+          cd publish/${{ matrix.platform }}
+          Compress-Archive -Path * -DestinationPath ../../${{ matrix.artifact_name }}.zip
+
+      - name: Upload artifact (Windows)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: |
             ${{ matrix.artifact_name }}.zip
           if-no-files-found: ignore
 
   release:
     name: Create GitHub Release
-    needs: [set-version, build]
+    needs: [set-version, build, build-windows]
     runs-on: ubuntu-latest
     steps:
       - name: Download build artifacts
