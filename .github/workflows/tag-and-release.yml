@@ -118,11 +118,24 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -e
-          # Get list of runners for this repository
-          resp=$(curl -s -H "Accept: application/vnd.github+json" -H "Authorization: Bearer $GITHUB_TOKEN" "https://api.github.com/repos/${{ github.repository }}/actions/runners")
-          # Count runners that are online and have a label named "windows"
-          count=$(echo "$resp" | jq '[.runners[] | select(.status=="online") | select(.labels[].name=="windows")] | length')
+          set -euo pipefail
+
+          # Query repo runners
+          resp=$(curl -sSL -H "Accept: application/vnd.github+json" -H "Authorization: Bearer $GITHUB_TOKEN" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/runners")
+
+          # If response is empty or not JSON, treat as no runners available
+          if [ -z "$resp" ] || ! echo "$resp" | jq -e . >/dev/null 2>&1; then
+            echo "Warning: unexpected response from GitHub API; assuming no self-hosted Windows runners" >&2
+            echo "windows_runner_online=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Safely handle missing/null .runners and missing labels
+          count=$(echo "$resp" | jq '[ (.runners // [])[] 
+            | select(.status == "online") 
+            | select((.labels // [])[]? | .name == "windows") ] | length')
+
           if [ "$count" -gt 0 ]; then
             echo "windows_runner_online=true" >> $GITHUB_OUTPUT
           else
