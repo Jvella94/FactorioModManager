@@ -93,6 +93,7 @@ jobs:
             exit 1
           fi
 
+
           # Read ApplicationIcon path
           icon_path=$(xmllint --xpath "string(//Project/PropertyGroup/ApplicationIcon)" UI/FactorioModManager.csproj)
           if [ -z "$icon_path" ]; then
@@ -100,8 +101,10 @@ jobs:
             icon_path=""
           fi
 
+
           # Get short commit SHA
           commit_sha=$(git rev-parse --short=7 HEAD)
+
 
           # Check if version contains prerelease identifier
           if echo "$version" | grep -qE '[-](alpha|beta|rc|dev|preview|pre|[A-Za-z])'; then
@@ -114,14 +117,17 @@ jobs:
             prerelease=false
           fi
 
+
           # construct tag like v1.2.3 or v1.2.3-alpha
           tag="v${version}"
+
 
           echo "version=$version" >> $GITHUB_OUTPUT
           echo "full_version=$full_version" >> $GITHUB_OUTPUT
           echo "tag=$tag" >> $GITHUB_OUTPUT
           echo "prerelease=$prerelease" >> $GITHUB_OUTPUT
           echo "icon_path=$icon_path" >> $GITHUB_OUTPUT
+
 
           echo "Base version: $version"
           echo "Full version: $full_version"
@@ -234,13 +240,16 @@ jobs:
           PUBLISH_DIR="./publish/${PLATFORM}"
           APP_BUNDLE="${PUBLISH_DIR}/${APP_NAME}.app"
 
+
           mkdir -p "${APP_BUNDLE}/Contents/MacOS"
           mkdir -p "${APP_BUNDLE}/Contents/Resources"
+
 
           if [ -f "${PUBLISH_DIR}/${APP_NAME}" ]; then
             mv "${PUBLISH_DIR}/${APP_NAME}" "${APP_BUNDLE}/Contents/MacOS/" || true
             chmod +x "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}" || true
           fi
+
 
           for f in "${PUBLISH_DIR}"/*.dll "${PUBLISH_DIR}"/*.deps.json "${PUBLISH_DIR}"/*.runtimeconfig.json "${PUBLISH_DIR}"/*.pdb; do
             if [ -f "$f" ]; then
@@ -248,11 +257,14 @@ jobs:
             fi
           done
 
+
           if [ -d "${PUBLISH_DIR}/runtimes" ]; then
             mv "${PUBLISH_DIR}/runtimes" "${APP_BUNDLE}/Contents/MacOS/" || true
           fi
 
+
           find "${PUBLISH_DIR}" -type f -name '*.dylib' -exec mv {} "${APP_BUNDLE}/Contents/MacOS/" \; || true
+
 
           if [ -f "/tmp/appicon/AppIcon.icns" ]; then
             cp /tmp/appicon/AppIcon.icns "${APP_BUNDLE}/Contents/Resources/AppIcon.icns"
@@ -260,6 +272,7 @@ jobs:
           else
             echo "Warning: AppIcon.icns not found in /tmp/appicon/ - the application will use default icon" >&2
           fi
+
 
           cat > "${APP_BUNDLE}/Contents/Info.plist" << EOF
           <?xml version="1.0" encoding="UTF-8"?>
@@ -290,6 +303,7 @@ jobs:
           </plist>
           EOF
 
+
           find "${PUBLISH_DIR}" -maxdepth 1 -type f -not -name "${APP_NAME}.app" -delete || true
           find "${PUBLISH_DIR}" -maxdepth 1 -type d ! -name "${APP_NAME}.app" ! -path "${PUBLISH_DIR}" -exec rm -rf {} + || true
         shell: bash
@@ -308,12 +322,11 @@ jobs:
             ${{ matrix.artifact_name }}.tar.gz
           if-no-files-found: ignore
 
-  # Windows build job: always use self-hosted Windows runner
+  # Windows build job: SKIPS setup-dotnet to use pre-installed SDK
   build-windows:
     name: Build and package (Windows)
     needs: [set-version, generate-icns]
-    runs-on:
-      - windows-latest
+    runs-on: windows-latest
     strategy:
       matrix:
         include:
@@ -324,15 +337,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "10.0.x"
+      # REMOVED: Setup .NET step - using pre-installed SDK on windows-latest
 
-      - name: Verify dotnet SDK
+      - name: Verify dotnet SDK (pre-installed)
         run: |
-          echo "dotnet binary:
-          $(Get-Command dotnet | Select-Object -ExpandProperty Source)"
+          echo "dotnet binary: $(Get-Command dotnet | Select-Object -ExpandProperty Source)"
           dotnet --info
         shell: pwsh
 
@@ -345,8 +354,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            %USERPROFILE%\.nuget\packages
-            %USERPROFILE%\.nuget\plugins
+            ~\.nuget\packages
           key: nuget-windows-${{ hashFiles('**/Directory.Packages.props','**/packages.lock.json', '**/*.csproj', '**/*.sln', 'global.json') }}
           restore-keys: |
             nuget-windows-
