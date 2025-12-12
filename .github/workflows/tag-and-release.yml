@@ -12,10 +12,57 @@ on:
 permissions:
   contents: write
   packages: write
+  pull-requests: read
+  issues: read
 
 jobs:
+  check-pr-label:
+    name: Check PR labels
+    runs-on: ubuntu-latest
+    outputs:
+      skip: ${{ steps.set_skip.outputs.skip }}
+    steps:
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Find PR for commit (if any)
+        id: find_pr
+        run: |
+          echo "Looking for PRs associated with commit ${GITHUB_SHA}"
+          pulls=$(curl -s -H "Accept: application/vnd.github.groot-preview+json" -H "Authorization: token ${GITHUB_TOKEN}" "https://api.github.com/repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls")
+          if [ -z "$pulls" ] || [ "$(echo "$pulls" | jq 'length')" -eq 0 ]; then
+            echo "no_pr=true" >> $GITHUB_OUTPUT
+            echo "pr_number=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          pr_number=$(echo "$pulls" | jq -r '.[0].number')
+          echo "pr_number=$pr_number" >> $GITHUB_OUTPUT
+
+      - name: Determine if PR has skip label
+        id: set_skip
+        env:
+          SKIP_LABEL: nuget
+        run: |
+          pr_number="${{ steps.find_pr.outputs.pr_number }}"
+          if [ -z "$pr_number" ]; then
+            echo "skip=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          echo "Checking labels for PR #$pr_number"
+          labels=$(curl -s -H "Authorization: token ${GITHUB_TOKEN}" "https://api.github.com/repos/${GITHUB_REPOSITORY}/issues/$pr_number" | jq -r '.labels[].name' || true)
+          skip=false
+          for lbl in $labels; do
+            if [ "$lbl" = "${SKIP_LABEL}" ]; then
+              skip=true
+              break
+            fi
+          done
+          echo "skip=$skip" >> $GITHUB_OUTPUT
+
   set-version:
     name: Read version and set tag
+    needs: check-pr-label
+    if: ${{ needs.check-pr-label.outputs.skip != 'true' }}
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.read_version.outputs.tag }}
@@ -261,8 +308,7 @@ jobs:
     name: Build and package (Windows)
     needs: [set-version, generate-icns]
     runs-on:
-      - self-hosted
-      - windows
+      - windows-latest
     strategy:
       matrix:
         include:
@@ -287,7 +333,7 @@ jobs:
 
       - name: Clear build artifacts (ensure fresh restore)
         run: |
-          Remove-Item -Recurse -Force UI/bin, UI/obj
+          Remove-Item -Recurse -Force UI/bin, UI/obj -ErrorAction SilentlyContinue
         shell: pwsh
 
       - name: Cache NuGet on Windows
