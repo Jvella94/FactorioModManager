@@ -175,14 +175,7 @@ jobs:
             ls -la /tmp/appicon/ || echo "Directory doesn't exist"
           fi
 
-          # Move SkiaSharp and other native dylibs into the bundle (search publish tree)
-          # This will catch libSkiaSharp.dylib whether it's at the publish root or under runtimes/*
-          if find "${PUBLISH_DIR}" -type f -name 'libSkiaSharp*.dylib' | grep -q .; then
-            find "${PUBLISH_DIR}" -type f -name 'libSkiaSharp*.dylib' -exec mv {} "${APP_BUNDLE}/Contents/MacOS/" \; || true
-            echo "Moved libSkiaSharp dylibs into ${APP_BUNDLE}/Contents/MacOS/"
-          fi
-
-          # Move any other native .dylib files that might be required (optional)
+          # Move any native .dylib files that might be required
           if find "${PUBLISH_DIR}" -type f -name '*.dylib' | grep -q .; then
             find "${PUBLISH_DIR}" -type f -name '*.dylib' -exec mv {} "${APP_BUNDLE}/Contents/MacOS/" \; || true
             echo "Moved other .dylib files into ${APP_BUNDLE}/Contents/MacOS/"
