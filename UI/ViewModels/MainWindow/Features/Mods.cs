@@ -79,9 +79,6 @@ namespace FactorioModManager.ViewModels.MainWindow
             var allDependencies = new HashSet<string>();
             var modViewModels = new List<ModViewModel>();
 
-            // Refresh global ShowHiddenDependencies from persisted settings in case it changed via Settings dialog
-            ShowHiddenDependencies = _settingsService.GetShowHiddenDependencies();
-
             foreach (var (info, isEnabled, lastUpdated, thumbnailPath, filePath) in latestMods)
             {
                 var modVm = CreateModViewModel(info, isEnabled, lastUpdated, thumbnailPath, filePath, loadedGroups);
@@ -175,7 +172,7 @@ namespace FactorioModManager.ViewModels.MainWindow
          string filePath,
          List<ModGroup> loadedGroups)
         {
-            var modVm = new ModViewModel
+            var modVm = new ModViewModel(_settingsService)
             {
                 Name = info.Name,
                 Title = info.DisplayTitle ?? info.Name,
@@ -193,8 +190,6 @@ namespace FactorioModManager.ViewModels.MainWindow
                 FilePath = filePath,
                 // Load persisted size if available (fast)
                 SizeOnDiskBytes = _metadataService.GetSizeOnDisk(info.Name),
-                // Apply global setting for showing hidden dependencies
-                ShowHiddenDependencies = ShowHiddenDependencies
             };
 
             var group = loadedGroups.FirstOrDefault(g => g.ModNames.Contains(modVm.Title));

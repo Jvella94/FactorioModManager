@@ -8,8 +8,6 @@ using System.Threading.Tasks;
 using System.Linq;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia;
-using Avalonia.Input;
-using Avalonia.Platform;
 using System.Runtime.InteropServices;
 using System.IO;
 

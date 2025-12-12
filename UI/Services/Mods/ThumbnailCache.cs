@@ -4,16 +4,16 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
-using System.Linq;
 using System.Threading.Tasks;
-
 
 namespace FactorioModManager.Services.Mods
 {
     public interface IThumbnailCache
     {
         Task<Bitmap?> LoadThumbnailAsync(string thumbnailPath);
+
         void ClearCache();
+
         (int CacheSize, int Hits, int Misses, double HitRate) GetCacheStats();
     }
 

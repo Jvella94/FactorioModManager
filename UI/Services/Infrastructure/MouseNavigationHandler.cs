@@ -4,7 +4,7 @@ using FactorioModManager.ViewModels.MainWindow;
 using System;
 using System.Reactive;
 
-namespace FactorioModManager.Infrastructure
+namespace FactorioModManager.Services.Infrastructure
 {
     /// <summary>
     /// Handles mouse button navigation (back/forward buttons)
@@ -45,6 +45,7 @@ namespace FactorioModManager.Infrastructure
                 return;
 
             _window.PointerPressed -= OnPointerPressed;
+            GC.SuppressFinalize(this);
             _disposed = true;
         }
     }

@@ -18,7 +18,7 @@ namespace FactorioModManager.ViewModels.Dialogs
     {
         private readonly ILogService _logService;
         private readonly IUIService _uiService;
-        private readonly CompositeDisposable _disposables = new CompositeDisposable();
+        private readonly CompositeDisposable _disposables = [];
 
         private ObservableCollection<LogEntry> _logs;
         private ObservableCollection<LogEntry> _filteredLogs;
@@ -77,8 +77,8 @@ namespace FactorioModManager.ViewModels.Dialogs
         {
             _logService = logService;
             _uiService = uiService;
-            _logs = new ObservableCollection<LogEntry>();
-            _filteredLogs = new ObservableCollection<LogEntry>();
+            _logs = [];
+            _filteredLogs = [];
 
             RefreshCommand = ReactiveCommand.CreateFromTask(async () =>
             {
@@ -190,7 +190,7 @@ namespace FactorioModManager.ViewModels.Dialogs
             var filter = SelectedLevelFilter ?? "All";
             var items = filter == "All"
                 ? Logs.ToList()
-                : Logs.Where(l => l.Level.ToString() == filter).ToList();
+                : [.. Logs.Where(l => l.Level.ToString() == filter)];
 
             FilteredLogs.Clear();
             foreach (var it in items)

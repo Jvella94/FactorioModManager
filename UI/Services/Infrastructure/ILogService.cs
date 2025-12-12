@@ -32,5 +32,8 @@ namespace FactorioModManager.Services.Infrastructure
 
         // Event fired when logs are appended/changed. Subscribers can debounce as needed.
         event EventHandler? LogsUpdated;
+
+        // Structured/telemetry-style logging
+        void LogEvent(string eventName, IDictionary<string, object?>? properties = null, LogLevel level = LogLevel.Info);
     }
 }

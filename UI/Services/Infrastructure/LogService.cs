@@ -67,20 +67,36 @@ namespace FactorioModManager.Services.Infrastructure
 
         public void Log(string message, LogLevel level = LogLevel.Info)
         {
-            LogInternal(message, level);
+            LogInternal(message, level, null);
         }
 
-        public void LogDebug(string message) => LogInternal(message, LogLevel.Debug);
+        public void LogDebug(string message) => LogInternal(message, LogLevel.Debug, null);
 
-        public void LogWarning(string message) => LogInternal(message, LogLevel.Warning);
+        public void LogWarning(string message) => LogInternal(message, LogLevel.Warning, null);
 
         public void LogError(string message, Exception exception)
         {
-            LogInternal(message, LogLevel.Error);
+            LogInternal(message, LogLevel.Error, null);
             LogDebug(_errorMessageService.GetTechnicalMessage(exception));
         }
 
-        private void LogInternal(string message, LogLevel level)
+        public void LogException(Exception exception)
+        {
+            LogInternal(_errorMessageService.GetTechnicalMessage(exception), LogLevel.Error, null);
+        }
+
+        // New structured/telemetry-style logging
+        public void LogEvent(string eventName, IDictionary<string, object?>? properties = null, LogLevel level = LogLevel.Info)
+        {
+            var props = properties != null
+                ? new Dictionary<string, object?>(properties)
+                : new Dictionary<string, object?>();
+
+            props["event"] = eventName;
+            LogInternal($"Event: {eventName}", level, props);
+        }
+
+        private void LogInternal(string message, LogLevel level, IDictionary<string, object?>? properties)
         {
             if (_disposed) return;
 
@@ -94,6 +110,23 @@ namespace FactorioModManager.Services.Infrastructure
                 Message = message,
                 Level = level
             };
+
+            // If structured properties provided, include them in the Message as JSON suffix for file logs
+            if (properties != null && properties.Count > 0)
+            {
+                try
+                {
+                    var json = System.Text.Json.JsonSerializer.Serialize(properties);
+                    // Replace use of 'with' expression (LogEntry isn't a record) with creating a new LogEntry when adding JSON
+                    entry = new LogEntry
+                    {
+                        Timestamp = entry.Timestamp,
+                        Level = entry.Level,
+                        Message = entry.Message + " | " + json
+                    };
+                }
+                catch { }
+            }
 
             _logQueue.Enqueue(entry);
             while (_logQueue.Count > _maxMemoryLogs)
@@ -113,7 +146,21 @@ namespace FactorioModManager.Services.Infrastructure
                 lock (_fileLock)
                 {
                     if (_disposed) return;
+
+                    // Write base line
                     var line = $"[{entry.Timestamp:yyyy-MM-dd HH:mm:ss}] [{entry.Level}] {entry.Message}";
+
+                    // Append structured properties as JSON when present
+                    if (properties != null && properties.Count > 0)
+                    {
+                        try
+                        {
+                            var json = System.Text.Json.JsonSerializer.Serialize(properties);
+                            line += " | " + json;
+                        }
+                        catch { }
+                    }
+
                     _logWriter?.WriteLine(line);
                 }
             }
@@ -186,15 +233,23 @@ namespace FactorioModManager.Services.Infrastructure
 
                 var levelStr = line[(levelStart + 1)..levelEnd].Trim();
 
-                // ✅ Add <LogLevel> generic type parameter
                 if (!Enum.TryParse<LogLevel>(levelStr, true, out var level))
                     level = LogLevel.Info;
 
                 var message = line[(levelEnd + 1)..].Trim();
 
+                // If message contains structured JSON (" | {..}"), strip it from Message field
+                var pipeIndex = message.IndexOf('|');
+                if (pipeIndex != -1)
+                {
+                    var msgPart = message.Substring(0, pipeIndex).Trim();
+                    // leave JSON part out of in-memory Message to keep UI concise
+                    message = msgPart;
+                }
+
                 return new LogEntry
                 {
-                    Timestamp = DateTime.UtcNow,
+                    Timestamp = ts,
                     Message = message,
                     Level = level
                 };
@@ -331,11 +386,6 @@ namespace FactorioModManager.Services.Infrastructure
             {
                 LogError($"Failed to prune old logs: {ex.Message}", ex);
             }
-        }
-
-        public void LogException(Exception exception)
-        {
-            LogDebug(_errorMessageService.GetTechnicalMessage(exception));
         }
 
         // Global verbose controls

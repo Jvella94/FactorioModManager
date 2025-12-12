@@ -58,10 +58,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                     {
                         SetStatus($"Download failed for {modTitle}: {result.Error}", LogLevel.Error);
 
-                        if (modForProgress != null)
-                        {
-                            modForProgress.DownloadStatusText = $"Failed: {result.Error}";
-                        }
+                        modForProgress?.DownloadStatusText = $"Failed: {result.Error}";
                     });
                 }
 
@@ -75,10 +72,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                 {
                     SetStatus($"Error downloading {modTitle}: {ex.Message}", LogLevel.Error);
 
-                    if (modForProgress != null)
-                    {
-                        modForProgress.DownloadStatusText = $"Error: {ex.Message}";
-                    }
+                    modForProgress?.DownloadStatusText = $"Error: {ex.Message}";
                 });
 
                 return Result<bool>.Fail(ex.Message, ErrorCode.DownloadFailed);

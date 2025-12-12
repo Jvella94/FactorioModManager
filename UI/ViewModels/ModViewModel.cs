@@ -1,6 +1,5 @@
 ﻿using Avalonia.Media;
 using Avalonia.Media.Imaging;
-using FactorioModManager.Services.Mods;
 using FactorioModManager.Views.Converters;
 using ReactiveUI;
 using System;
@@ -19,6 +18,7 @@ namespace FactorioModManager.ViewModels
     public class ModViewModel : ViewModelBase
     {
         private readonly CompositeDisposable _disposables = [];
+        private readonly Services.Settings.ISettingsService? _settingsService;
 
         // Static brushes - frozen for performance
         private static readonly IBrush _updateBrush = CreateFrozenBrush(60, 120, 60);
@@ -307,8 +307,25 @@ namespace FactorioModManager.ViewModels
 
         public ReactiveCommand<Unit, Unit> ToggleDependencyListCommand { get; }
 
-        public ModViewModel()
+        public ModViewModel(Services.Settings.ISettingsService settingsService)
         {
+            _settingsService = settingsService;
+
+            // Initialize ShowHiddenDependencies from settings if available
+            if (_settingsService != null)
+            {
+                try
+                {
+                    ShowHiddenDependencies = _settingsService.GetShowHiddenDependencies();
+                    // subscribe to changes so VMs update themselves
+                    void handler() => ShowHiddenDependencies = _settingsService.GetShowHiddenDependencies();
+                    _settingsService.ShowHiddenDependenciesChanged += handler;
+                    // store removal on dispose
+                    _disposables.Add(Disposable.Create(() => _settingsService.ShowHiddenDependenciesChanged -= handler));
+                }
+                catch { }
+            }
+
             // ✅ Properly managed subscriptions
             this.WhenAnyValue(x => x.HasUpdate, x => x.IsUnusedInternal)
                 .Subscribe(_ => this.RaisePropertyChanged(nameof(RowBrush)))
@@ -351,6 +368,9 @@ namespace FactorioModManager.ViewModels
                     _thumbnail?.Dispose();
                 }
                 _thumbnail = null;
+
+                // Unsubscribe from settings event if we stored it
+                // (we used Disposable to remove it above)
             }
 
             base.Dispose(disposing);

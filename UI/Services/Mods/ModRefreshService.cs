@@ -1,6 +1,4 @@
 using FactorioModManager.Models;
-using FactorioModManager.Services.Mods;
-using FactorioModManager.Services.Settings;
 using FactorioModManager.Services.Infrastructure;
 using System.Collections.Generic;
 using System.Linq;

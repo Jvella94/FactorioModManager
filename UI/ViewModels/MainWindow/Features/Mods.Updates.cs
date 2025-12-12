@@ -16,6 +16,7 @@ namespace FactorioModManager.ViewModels.MainWindow
     {
         // Progress properties for Update All
         private bool _isUpdatingAll;
+
         private int _updateAllTotal;
         private int _updateAllCompleted;
         private string? _updateAllProgressText;
@@ -80,7 +81,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                 .Where(m => m.HasUpdate && !string.IsNullOrEmpty(m.LatestVersion))
                 .ToList();
 
-            if (!modsToUpdate.Any())
+            if (modsToUpdate.Count == 0)
             {
                 await _uiService.InvokeAsync(() => SetStatus("No pending updates to apply."));
                 return;
@@ -140,12 +141,10 @@ namespace FactorioModManager.ViewModels.MainWindow
                     else
                     {
                         // Not installed; add required constraint if any
-                        if (!aggregatedMissing.ContainsKey(depName))
+                        if (!aggregatedMissing.TryGetValue(depName, out (string? Op, string? Version) existing))
                             aggregatedMissing[depName] = (op, ver);
                         else
                         {
-                            // If existing entry has no version but this one has a constraint, prefer the stricter one
-                            var existing = aggregatedMissing[depName];
                             if (existing.Op == null && op != null)
                                 aggregatedMissing[depName] = (op, ver);
                         }
@@ -296,9 +295,9 @@ namespace FactorioModManager.ViewModels.MainWindow
             var failedCount = resultList.Count - successCount;
 
             var summary = $"Update All finished. {successCount} succeeded, {failedCount} failed or skipped." + Environment.NewLine + Environment.NewLine;
-            foreach (var r in resultList.OrderByDescending(r => r.Success))
+            foreach (var (Mod, Success, Message) in resultList.OrderByDescending(r => r.Success))
             {
-                summary += $"- {r.Mod}: {(r.Success ? "Success" : r.Message)}" + Environment.NewLine;
+                summary += $"- {Mod}: {(Success ? "Success" : Message)}" + Environment.NewLine;
             }
 
             // Show summary dialog

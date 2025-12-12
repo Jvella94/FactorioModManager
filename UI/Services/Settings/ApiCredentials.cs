@@ -1,22 +1,19 @@
 namespace FactorioModManager.Services.Settings
 {
-
     public interface IApiCredentials
     {
         (string? Username, string? Token) GetCredentials();
+
         void SetCredentials(string? username, string? token);
+
         string? GetApiKey();
+
         void SetApiKey(string? apiKey);
     }
 
-    public class ApiCredentials : IApiCredentials
+    public class ApiCredentials(ISettingsService settingsService) : IApiCredentials
     {
-        private readonly ISettingsService _settingsService;
-
-        public ApiCredentials(ISettingsService settingsService)
-        {
-            _settingsService = settingsService;
-        }
+        private readonly ISettingsService _settingsService = settingsService;
 
         public (string? Username, string? Token) GetCredentials()
         {

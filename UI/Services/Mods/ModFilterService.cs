@@ -1,5 +1,4 @@
 using FactorioModManager.ViewModels;
-using FactorioModManager.ViewModels.MainWindow;
 using System.Collections.Generic;
 using System.Linq;
 using System;

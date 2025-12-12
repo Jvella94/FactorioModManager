@@ -6,7 +6,6 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using FactorioModManager.Infrastructure;
 using FactorioModManager.Services.Infrastructure;
 using FactorioModManager.ViewModels;
 using FactorioModManager.ViewModels.MainWindow;

@@ -1,7 +1,5 @@
 ﻿using FactorioModManager.Services.Infrastructure;
 using System;
-using System.IO;
-using System.Text.Json;
 
 namespace FactorioModManager.Services.Settings
 {
@@ -75,6 +73,12 @@ namespace FactorioModManager.Services.Settings
         void SetAutoCheckModUpdates(bool enabled);
 
         public event Action? FactorioPathChanged;
+
+        // New optional events for reactive updates
+        public event Action? ModsPathChanged;
+        public event Action? ShowHiddenDependenciesChanged;
+        // Fired when Factorio data path changes (used to re-run DLC/version detection)
+        public event Action? FactorioDataPathChanged;
     }
 
     public class AppSettings
@@ -103,125 +107,10 @@ namespace FactorioModManager.Services.Settings
         public bool AutoCheckModUpdates { get; set; } = true;
     }
 
-    public class SettingsService : ISettingsService
+    public class SettingsService : SettingsServiceBase, ISettingsService
     {
-        private readonly string _settingsPath;
-        private readonly AppSettings _settings;
-        private readonly ILogService _logService;
-
-        public SettingsService(ILogService logService)
+        public SettingsService(ILogService logService) : base(logService)
         {
-            var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            var appFolder = Path.Combine(appDataPath, "FactorioModManager");
-            Directory.CreateDirectory(appFolder);
-            _settingsPath = Path.Combine(appFolder, "settings.json");
-            _logService = logService;
-            _settings = LoadSettings();
-            _logService.SetVerboseEnabled(_settings.VerboseDetectionLogging);
-        }
-
-        private AppSettings LoadSettings()
-        {
-            if (!File.Exists(_settingsPath))
-            {
-                // Try to load defaults from Factorio's player-data.json
-                var (Username, Token) = LoadFactorioDefaults();
-                return new AppSettings
-                {
-                    FactorioModsPath = FolderPathHelper.GetModsDirectory(),
-                    Username = Username,
-                    Token = Token
-                };
-            }
-
-            try
-            {
-                var json = File.ReadAllText(_settingsPath);
-                var settings = JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
-
-                // If mods path is not set, use default
-                if (string.IsNullOrEmpty(settings.FactorioModsPath))
-                {
-                    settings.FactorioModsPath = FolderPathHelper.GetModsDirectory();
-                }
-
-                // If username/token not set, try to load from Factorio
-                if (string.IsNullOrEmpty(settings.Username) || string.IsNullOrEmpty(settings.Token))
-                {
-                    var (Username, Token) = LoadFactorioDefaults();
-                    settings.Username ??= Username;
-                    settings.Token ??= Token;
-                }
-
-                // Ensure concurrency has sensible default
-                if (settings.UpdateConcurrency <= 0)
-                    settings.UpdateConcurrency = 3;
-
-                return settings;
-            }
-            catch (Exception ex)
-            {
-                _logService.LogError("Failed to load settings, using defaults", ex);
-                var (Username, Token) = LoadFactorioDefaults();
-                return new AppSettings
-                {
-                    FactorioModsPath = FolderPathHelper.GetModsDirectory(),
-                    Username = Username,
-                    Token = Token
-                };
-            }
-        }
-
-        private (string? Username, string? Token) LoadFactorioDefaults()
-        {
-            try
-            {
-                var playerDataPath = FolderPathHelper.GetPlayerDataPath();
-
-                if (File.Exists(playerDataPath))
-                {
-                    var json = File.ReadAllText(playerDataPath);
-
-                    // Parse the JSON to extract service-username and service-token
-                    using var doc = JsonDocument.Parse(json);
-                    var root = doc.RootElement;
-
-                    var username = root.TryGetProperty("service-username", out var usernameElement)
-                        ? usernameElement.GetString()
-                        : null;
-
-                    var token = root.TryGetProperty("service-token", out var tokenElement)
-                        ? tokenElement.GetString()
-                        : null;
-
-                    _logService.LogDebug($"Loaded Factorio credentials from player-data.json: Username={username}, Token={(token != null ? "***" : "null")}");
-
-                    return (username, token);
-                }
-                else
-                {
-                    _logService.LogDebug($"player-data.json not found at {playerDataPath}");
-                }
-            }
-            catch (Exception ex)
-            {
-                _logService.LogError($"Error loading Factorio player-data.json: {ex.Message}", ex);
-            }
-
-            return (null, null);
-        }
-
-        private void SaveSettings()
-        {
-            try
-            {
-                var json = JsonSerializer.Serialize(_settings, Constants.JsonHelper.IndentedOnly);
-                File.WriteAllText(_settingsPath, json);
-            }
-            catch (Exception ex)
-            {
-                _logService.LogError($"Error saving settings: {ex.Message}", ex);
-            }
         }
 
         public string GetModsPath()
@@ -231,157 +120,172 @@ namespace FactorioModManager.Services.Settings
 
         public void SetModsPath(string path)
         {
-            _settings.FactorioModsPath = path;
-            SaveSettings();
+            // Only update and raise event when actual value changed
+            var current = _settings.FactorioModsPath ?? string.Empty;
+            var candidate = path ?? string.Empty;
+            if (string.Equals(current, candidate, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            UpdateAndSave(s => s.FactorioModsPath = path);
+            _logService.LogDebug($"Settings: ModsPath changed from '{current}' to '{candidate}'");
+            ModsPathChanged?.Invoke();
         }
 
-        public string? GetApiKey()
-        {
-            return _settings.ApiKey;
-        }
-
+        public string? GetApiKey() => _settings.ApiKey;
         public void SetApiKey(string? apiKey)
         {
-            _settings.ApiKey = apiKey;
-            SaveSettings();
+            var current = _settings.ApiKey ?? string.Empty;
+            var candidate = apiKey ?? string.Empty;
+            if (string.Equals(current, candidate, StringComparison.Ordinal))
+                return;
+
+            UpdateAndSave(s => s.ApiKey = apiKey);
+            _logService.LogDebug("Settings: ApiKey changed (masked)");
         }
 
-        public string? GetUsername()
-        {
-            return _settings.Username;
-        }
-
+        public string? GetUsername() => _settings.Username;
         public void SetUsername(string? username)
         {
-            _settings.Username = username;
-            SaveSettings();
+            var current = _settings.Username ?? string.Empty;
+            var candidate = username ?? string.Empty;
+            if (string.Equals(current, candidate, StringComparison.Ordinal))
+                return;
+
+            UpdateAndSave(s => s.Username = username);
+            _logService.LogDebug($"Settings: Username changed from '{current}' to '{candidate}'");
         }
 
-        public string? GetToken()
-        {
-            return _settings.Token;
-        }
-
+        public string? GetToken() => _settings.Token;
         public void SetToken(string? token)
         {
-            _settings.Token = token;
-            SaveSettings();
+            var current = _settings.Token ?? string.Empty;
+            var candidate = token ?? string.Empty;
+            if (string.Equals(current, candidate, StringComparison.Ordinal))
+                return;
+
+            UpdateAndSave(s => s.Token = token);
+            _logService.LogDebug("Settings: Token changed (masked)");
         }
 
-        public DateTime? GetLastModUpdateCheck()
-        {
-            return _settings.LastModUpdateCheck;
-        }
+        public DateTime? GetLastModUpdateCheck() => _settings.LastModUpdateCheck;
+        public void SetLastModUpdateCheck(DateTime dateTime) => UpdateAndSave(s => s.LastModUpdateCheck = dateTime);
 
-        public void SetLastModUpdateCheck(DateTime dateTime)
-        {
-            _settings.LastModUpdateCheck = dateTime;
-            SaveSettings();
-        }
-
-        public bool GetKeepOldModFiles()
-        {
-            return _settings.KeepOldModFiles;
-        }
-
+        public bool GetKeepOldModFiles() => _settings.KeepOldModFiles;
         public void SetKeepOldModFiles(bool keepOldFiles)
         {
-            _settings.KeepOldModFiles = keepOldFiles;
-            SaveSettings();
+            if (_settings.KeepOldModFiles == keepOldFiles)
+                return;
+
+            UpdateAndSave(s => s.KeepOldModFiles = keepOldFiles);
+            _logService.LogDebug($"Settings: KeepOldModFiles changed to {keepOldFiles}");
         }
 
-        public string? GetFactorioExecutablePath()
-        {
-            return _settings.FactorioExePath;
-        }
-
+        public string? GetFactorioExecutablePath() => _settings.FactorioExePath;
         public void SetFactorioExecutablePath(string path)
         {
-            _settings.FactorioExePath = path;
-            SaveSettings();
+            var current = _settings.FactorioExePath ?? string.Empty;
+            var candidate = path ?? string.Empty;
+            if (string.Equals(current, candidate, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            UpdateAndSave(s => s.FactorioExePath = path);
+            _logService.LogDebug($"Settings: FactorioExePath changed from '{current}' to '{candidate}'");
             FactorioPathChanged?.Invoke();
         }
 
         public DateTime? GetLastAppUpdateCheck() => _settings.LastAppUpdateCheck;
-
-        public void SetLastAppUpdateCheck(DateTime timestamp)
-        {
-            _settings.LastAppUpdateCheck = timestamp;
-            SaveSettings();
-        }
+        public void SetLastAppUpdateCheck(DateTime timestamp) => UpdateAndSave(s => s.LastAppUpdateCheck = timestamp);
 
         public bool GetCheckForAppUpdates() => _settings.CheckForAppUpdates;
-
         public void SetCheckForAppUpdates(bool enabled)
         {
-            _settings.CheckForAppUpdates = enabled;
-            SaveSettings();
+            if (_settings.CheckForAppUpdates == enabled)
+                return;
+
+            UpdateAndSave(s => s.CheckForAppUpdates = enabled);
+            _logService.LogDebug($"Settings: CheckForAppUpdates changed to {enabled}");
         }
 
         public string? GetFactorioVersion() => _settings.FactorioVersion;
-
         public void SetFactorioVersion(string? version)
         {
-            _settings.FactorioVersion = version;
-            SaveSettings();
+            var current = _settings.FactorioVersion ?? string.Empty;
+            var candidate = version ?? string.Empty;
+            if (string.Equals(current, candidate, StringComparison.Ordinal))
+                return;
+
+            UpdateAndSave(s => s.FactorioVersion = version);
+            _logService.LogDebug($"Settings: FactorioVersion changed from '{current}' to '{candidate}'");
         }
 
         public bool GetHasSpaceAgeDLC() => _settings.HasSpaceAgeDlc;
-
         public void SetHasSpaceAgeDlc(bool value)
         {
-            _settings.HasSpaceAgeDlc = value;
-            SaveSettings();
+            if (_settings.HasSpaceAgeDlc == value)
+                return;
+
+            UpdateAndSave(s => s.HasSpaceAgeDlc = value);
+            _logService.LogDebug($"Settings: HasSpaceAgeDlc changed to {value}");
         }
 
         public string? GetFactorioDataPath() => _settings.FactorioDataPath;
-
         public void SetFactorioDataPath(string? path)
         {
-            _settings.FactorioDataPath = path;
-            SaveSettings();
+            var current = _settings.FactorioDataPath ?? string.Empty;
+            var candidate = path ?? string.Empty;
+            if (string.Equals(current, candidate, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            UpdateAndSave(s => s.FactorioDataPath = path);
+            _logService.LogDebug($"Settings: FactorioDataPath changed from '{current}' to '{candidate}'");
+            FactorioDataPathChanged?.Invoke();
         }
 
         public bool GetVerboseDetectionLogging() => _settings.VerboseDetectionLogging;
-
         public void SetVerboseDetectionLogging(bool enabled)
         {
-            _settings.VerboseDetectionLogging = enabled;
-            SaveSettings();
+            if (_settings.VerboseDetectionLogging == enabled)
+                return;
+
+            UpdateAndSave(s => s.VerboseDetectionLogging = enabled);
             _logService.SetVerboseEnabled(enabled);
+            _logService.LogDebug($"Settings: VerboseDetectionLogging changed to {enabled}");
         }
 
         public event Action? FactorioPathChanged;
+        public event Action? ModsPathChanged;
+        public event Action? ShowHiddenDependenciesChanged;
+        public event Action? FactorioDataPathChanged;
 
-        public bool GetShowHiddenDependencies()
-        {
-            return _settings.ShowHiddenDependencies;
-        }
-
+        public bool GetShowHiddenDependencies() => _settings.ShowHiddenDependencies;
         public void SetShowHiddenDependencies(bool value)
         {
-            _settings.ShowHiddenDependencies = value;
-            SaveSettings();
+            if (_settings.ShowHiddenDependencies == value)
+                return;
+
+            UpdateAndSave(s => s.ShowHiddenDependencies = value);
+            _logService.LogDebug($"Settings: ShowHiddenDependencies changed to {value}");
+            ShowHiddenDependenciesChanged?.Invoke();
         }
 
-        // Concurrency getter/setter
-        public int GetUpdateConcurrency()
-        {
-            return _settings.UpdateConcurrency <= 0 ? 1 : _settings.UpdateConcurrency;
-        }
-
+        public int GetUpdateConcurrency() => _settings.UpdateConcurrency <= 0 ? 1 : _settings.UpdateConcurrency;
         public void SetUpdateConcurrency(int concurrency)
         {
-            _settings.UpdateConcurrency = concurrency;
-            SaveSettings();
+            if (_settings.UpdateConcurrency == concurrency)
+                return;
+
+            UpdateAndSave(s => s.UpdateConcurrency = concurrency);
+            _logService.LogDebug($"Settings: UpdateConcurrency changed to {concurrency}");
         }
 
-        // Auto-check mods on startup getters/setters
         public bool GetAutoCheckModUpdates() => _settings.AutoCheckModUpdates;
         public void SetAutoCheckModUpdates(bool enabled)
         {
-            _settings.AutoCheckModUpdates = enabled;
-            SaveSettings();
+            if (_settings.AutoCheckModUpdates == enabled)
+                return;
+
+            UpdateAndSave(s => s.AutoCheckModUpdates = enabled);
+            _logService.LogDebug($"Settings: AutoCheckModUpdates changed to {enabled}");
         }
     }
 }
