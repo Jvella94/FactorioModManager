@@ -134,8 +134,9 @@ jobs:
             --configuration Release \
             --runtime ${{ matrix.platform }} \
             --self-contained true \
-            -p:PublishSingleFile=true \
+            -p:PublishSingleFile=false \
             -p:UseAppHost=true \
+            -p:PublishTrimmed=false \
             --output ./publish/${{ matrix.platform }}
         shell: bash
 
@@ -162,8 +163,8 @@ jobs:
           mkdir -p "${APP_BUNDLE}/Contents/Resources"
 
           # Move executable into bundle
-          mv "${PUBLISH_DIR}/${APP_NAME}" "${APP_BUNDLE}/Contents/MacOS/"
-          chmod +x "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}"
+          mv "${PUBLISH_DIR}/${APP_NAME}" "${APP_BUNDLE}/Contents/MacOS/" || true
+          chmod +x "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}" || true
 
           # Copy the downloaded icon to the correct location
           if [ -f "/tmp/appicon/AppIcon.icns" ]; then
@@ -172,6 +173,19 @@ jobs:
           else
             echo "Warning: AppIcon.icns not found in /tmp/appicon/ - the application will use default icon" >&2
             ls -la /tmp/appicon/ || echo "Directory doesn't exist"
+          fi
+
+          # Move SkiaSharp and other native dylibs into the bundle (search publish tree)
+          # This will catch libSkiaSharp.dylib whether it's at the publish root or under runtimes/*
+          if find "${PUBLISH_DIR}" -type f -name 'libSkiaSharp*.dylib' | grep -q .; then
+            find "${PUBLISH_DIR}" -type f -name 'libSkiaSharp*.dylib' -exec mv {} "${APP_BUNDLE}/Contents/MacOS/" \; || true
+            echo "Moved libSkiaSharp dylibs into ${APP_BUNDLE}/Contents/MacOS/"
+          fi
+
+          # Move any other native .dylib files that might be required (optional)
+          if find "${PUBLISH_DIR}" -type f -name '*.dylib' | grep -q .; then
+            find "${PUBLISH_DIR}" -type f -name '*.dylib' -exec mv {} "${APP_BUNDLE}/Contents/MacOS/" \; || true
+            echo "Moved other .dylib files into ${APP_BUNDLE}/Contents/MacOS/"
           fi
 
           # Create Info.plist with version
@@ -205,8 +219,9 @@ jobs:
           EOF
 
           # Remove loose executable and other files from publish root (keep only .app)
-          find "${PUBLISH_DIR}" -maxdepth 1 -type f -delete
-          find "${PUBLISH_DIR}" -maxdepth 1 -type d ! -name "${APP_NAME}.app" ! -path "${PUBLISH_DIR}" -exec rm -rf {} +
+          # At this point native dylibs should already be moved into the .app bundle
+          find "${PUBLISH_DIR}" -maxdepth 1 -type f -not -name "${APP_NAME}.app" -delete || true
+          find "${PUBLISH_DIR}" -maxdepth 1 -type d ! -name "${APP_NAME}.app" ! -path "${PUBLISH_DIR}" -exec rm -rf {} + || true
         shell: bash
 
 
@@ -215,7 +230,6 @@ jobs:
         run: |
           cd publish/${{ matrix.platform }}
           tar -czf ../../${{ matrix.artifact_name }}.tar.gz ./*
-
 
       - name: Create archive (Windows)
         if: runner.os == 'Windows'
