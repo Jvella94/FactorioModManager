@@ -3,7 +3,8 @@ set -euo pipefail
 
 SRC_ICO="UI/Assets/FMM.ico"
 SRC_PNG="UI/Assets/FMM.png"
-DST_DIR="./iconset-temp"
+# MUST end with .iconset for iconutil to accept it
+DST_DIR="./AppIcon.iconset"
 DST_ICNS="./AppIcon.icns"
 
 mkdir -p "$DST_DIR"
@@ -47,8 +48,26 @@ for s in "${sizes[@]}"; do
   create_png "$SRC" "$double" "$((s*2))" "$((s*2))"
 done
 
-# Sanity check
+# Sanity check - show what was created
 ls -la "$DST_DIR"
+
+# Validate required files exist
+missing=()
+for s in "${sizes[@]}"; do
+  for variant in "" "@2x"; do
+    fname="$DST_DIR/icon_${s}x${s}${variant}.png"
+    if [[ ! -f "$fname" ]]; then
+      missing+=("$fname")
+    fi
+  done
+done
+
+if [[ ${#missing[@]} -ne 0 ]]; then
+  echo "Error: Missing iconset files:" >&2
+  for m in "${missing[@]}"; do echo "  $m" >&2; done
+  echo "Cannot build .icns from incomplete iconset." >&2
+  exit 1
+fi
 
 # Create ICNS using macOS iconutil
 if command -v iconutil >/dev/null 2>&1; then
