@@ -231,7 +231,7 @@ jobs:
           PLATFORM="${{ matrix.platform }}"
           VERSION="${{ needs.set-version.outputs.version }}"
           BUNDLE_VERSION=$(echo "$VERSION" | sed 's/-.*$//')
-          PUBLISH_DIR=".${PLATFORM}/publish/"
+          PUBLISH_DIR="./publish/${PLATFORM}"
           APP_BUNDLE="${PUBLISH_DIR}/${APP_NAME}.app"
 
           mkdir -p "${APP_BUNDLE}/Contents/MacOS"
