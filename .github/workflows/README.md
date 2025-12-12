@@ -1,82 +1,163 @@
+````markdown name=.github/workflows/README.md url=https://github.com/Jvella94/FactorioModManager/blob/main/.github/workflows/README.md
 # GitHub Actions Release Workflow
 
 ## Overview
 
-This repository uses GitHub Actions to automatically build and release the Factorio Mod Manager application for multiple platforms.
+This repository uses a single GitHub Actions workflow to build, package and publish the Factorio Mod Manager application for multiple platforms when a release tag is pushed. The workflow performs:
 
-## How It Works
+- Read version from the UI project CSProj and construct the release tag
+- Build/publish the app per-platform (Linux, Windows, macOS Intel, macOS Apple Silicon)
+- Package platform artifacts (tar.gz / zip)
+- Create a GitHub Release and attach artifacts
 
-### Triggering Releases
+This README documents the key behavior and the recent changes made to support native libraries (SkiaSharp) on macOS.
 
-The workflow is triggered when you push a git tag starting with `v`:
+## Triggering releases
+
+Create and push a tag starting with `v`:
 
 ```bash
-# For stable releases
+# stable
 git tag v1.0.0
 git push origin v1.0.0
 
-# For bleeding edge releases
+# prerelease
 git tag v1.0.0-beta
 git push origin v1.0.0-beta
 ```
 
-### Release Types
+When a tag is present this workflow will run (the workflow is set to run on changes to master in the repo — tagging behavior is handled by the set-version job).
 
-The workflow automatically determines the release type based on the tag name:
+## Build targets
 
-- **Stable Release**: Tags without pre-release indicators (e.g., `v1.0.0`, `v2.1.3`)
-- **Bleeding Edge (Pre-release)**: Tags containing keywords like `alpha`, `beta`, `rc`, `dev`, `preview`, or `pre` (e.g., `v1.0.0-beta`, `v2.0.0-rc1`, `v1.5.0-dev`)
+The workflow builds/publishes for:
 
-### Build Platforms
+- linux-x64
+- win-x64
+- osx-x64 (Intel mac)
+- osx-arm64 (Apple Silicon)
 
-The workflow builds the application for four platforms:
-- **Linux** (linux-x64)
-- **Windows** (win-x64)
-- **macOS Intel** (osx-x64)
-- **macOS Apple Silicon** (osx-arm64)
+Each platform is produced as a self-contained publish.
 
-### Artifacts
+## Important changes (why they were needed)
 
-For each platform, the workflow creates:
-- **Linux/macOS**: `.tar.gz` archives
-- **Windows**: `.zip` archives
+To fix runtime errors on macOS related to missing native SkiaSharp libraries (System.DllNotFoundException: libSkiaSharp), the workflow was updated:
 
-All artifacts are automatically attached to the GitHub release.
+- PublishSingleFile disabled for all platform publishes:
+  -p:PublishSingleFile=false
 
-### Workflow Steps
+  Single-file publish bundles native assets inside the host, which prevents dlopen from finding native .dylib files at runtime. Disabling single-file causes native runtime assets (like libSkiaSharp.dylib) to be emitted as separate files.
 
-1. **Build**: Compiles the application in Release configuration for each platform
-2. **Publish**: Creates self-contained executables for each platform
-3. **Archive**: Packages the builds into platform-appropriate archives
-4. **Release**: Creates a GitHub release with all artifacts attached
+- Trimming disabled for publish:
+  -p:PublishTrimmed=false
 
-## Examples
+  Trimming can remove code used via reflection or native interop; disabling trimming avoids accidental removal of needed code.
 
-### Creating a Stable Release
+- Packaging step enhanced for macOS:
 
-```bash
-git tag v1.0.0
-git push origin v1.0.0
-```
+  - The macOS packaging step now scans the entire publish output and moves native .dylib files (including libSkiaSharp\*.dylib) into the .app bundle's Contents/MacOS directory before the publish root is cleaned.
+  - This ensures dyld can find the native libraries inside the .app bundle at runtime.
 
-This creates a stable release marked as the latest release on GitHub.
-
-### Creating a Bleeding Edge Release
-
-```bash
-git tag v1.1.0-beta
-git push origin v1.1.0-beta
-```
-
-This creates a pre-release that is clearly marked as bleeding edge/unstable.
+- The workflow continues to publish per-RID (osx-x64 and osx-arm64) so the correct native assets are produced per platform.
 
 ## Requirements
 
-- .NET 9.0 SDK (automatically installed by the workflow)
-- Valid git tags following semantic versioning
+- .NET SDK 9.0 (workflow uses setup-dotnet@v4 dotnet-version: '9.0.x')
+- If you build locally for macOS you should publish for the correct RID:
+  - Intel: osx-x64
+  - Apple Silicon: osx-arm64
 
-## Notes
+## Project change required
 
-- Release notes are automatically generated from commit messages
-- The workflow requires `contents: write` permission to create releases
-- All builds are self-contained and include the .NET runtime
+Make sure the UI project includes the Skia native assets package for macOS so libSkiaSharp.dylib is included in the publish output. Add to UI/FactorioModManager.csproj:
+
+```xml
+<ItemGroup>
+  <PackageReference Include="SkiaSharp.NativeAssets.macOS" Version="2.88.0" />
+</ItemGroup>
+```
+
+(Replace `2.88.0` with the SkiaSharp.NativeAssets.macOS version that matches the SkiaSharp managed package(s) you use.)
+
+## How the macOS packaging works
+
+- dotnet publish outputs a directory like `publish/osx-x64/`
+- The workflow creates an `.app` bundle skeleton and moves the built executable into:
+  `publish/osx-x64/FactorioModManager.app/Contents/MacOS/FactorioModManager`
+- Then the workflow searches the publish output (root and runtimes/\*) for:
+  - libSkiaSharp\*.dylib
+  - other `.dylib` files
+- Those native libraries are moved into `Contents/MacOS/` so the runtime loader can locate them
+- The rest of the publish directory is cleaned and the `.app` bundle is archived
+
+This approach ensures native libraries shipped by NuGet native assets packages are present inside the .app bundle.
+
+## Local test / publish commands
+
+To reproduce locally for Intel mac:
+
+```bash
+# from repo root
+dotnet restore
+
+# publish for osx-x64 (do not single-file)
+dotnet publish UI/FactorioModManager.csproj -c Release -r osx-x64 --self-contained true -p:PublishSingleFile=false -p:PublishTrimmed=false -o ./publish/osx-x64
+```
+
+For Apple Silicon:
+
+```bash
+dotnet publish UI/FactorioModManager.csproj -c Release -r osx-arm64 --self-contained true -p:PublishSingleFile=false -p:PublishTrimmed=false -o ./publish/osx-arm64
+```
+
+After publishing locally, create an `.app` bundle (the workflow automates this) and verify native libs were produced and copied.
+
+## Verifying the .app bundle
+
+- Check for libSkiaSharp in the .app bundle:
+
+```bash
+ls -la publish/osx-x64/FactorioModManager.app/Contents/MacOS/libSkiaSharp*.dylib
+```
+
+- Run the executable with dyld diagnostics to see library loads:
+
+```bash
+DYLD_PRINT_LIBRARIES=1 ./publish/osx-x64/FactorioModManager.app/Contents/MacOS/FactorioModManager
+```
+
+If the `.dylib` exists in Contents/MacOS the loader should find it.
+
+## Troubleshooting
+
+- If you still get "Unable to load shared library 'libSkiaSharp'":
+
+  - Confirm the correct SkiaSharp.NativeAssets.macOS package version is referenced in UI project.
+  - Confirm the workflow or local publish produced libSkiaSharp.dylib under the publish tree before packaging.
+  - Confirm the .app bundle contains libSkiaSharp.dylib in `Contents/MacOS/`.
+  - Use DYLD_PRINT_LIBRARIES to see dlopen attempts (example above).
+
+- Notarization / sandboxing: macOS notarization or App Store sandboxing may impose further constraints on binary layout and library signing. For distributing on macOS, ensure you follow Apple’s notarization/signing steps if required.
+
+## Notes and gotchas
+
+- The workflow still produces separate artifacts per-architecture. If you want a universal macOS binary you will need to build and merge binaries (this workflow does not create universal binaries).
+- Single-file publish is convenient but incompatible with many native libraries that rely on dlopen; prefer non-single-file for apps that use native dependencies.
+- If adding other native-dependency NuGet packages, ensure their native runtimes are published and moved into the .app by the packaging logic.
+
+## What to change next (suggested improvements)
+
+- Add explicit dependency checks in the CI to fail the build if expected native libs (e.g. libSkiaSharp.dylib) are not present in the packaged `.app`.
+- Add macOS code signing / notarization steps if distributing outside of GitHub releases to increase compatibility on end-user machines.
+- Consider publishing debug or release notes that explicitly call out macOS architecture built and whether native assets were included.
+
+## Contact / Contributing
+
+If you find the release artifact missing native libraries or the app fails to start on macOS, open an issue with:
+
+- the platform (Intel or Apple Silicon)
+- a link to the release artifact you downloaded
+- output of `DYLD_PRINT_LIBRARIES=1` when running the executable (if available)
+
+We’ll use that to diagnose packaging or publish issues.
+````

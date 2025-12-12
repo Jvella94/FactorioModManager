@@ -1,17 +1,14 @@
 # Single workflow: read version, build for all targets, create release and upload assets
 name: Tag, Build and Release
 
-
 on:
   push:
     branches:
       - master
 
-
 permissions:
   contents: write
   packages: write
-
 
 jobs:
   set-version:
@@ -26,10 +23,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-
       - name: Install xmllint
         run: sudo apt-get update && sudo apt-get install -y libxml2-utils
-
 
       - name: Read version and icon from csproj
         id: read_version
@@ -39,14 +34,14 @@ jobs:
             echo "No <Version> found in csproj" >&2
             exit 1
           fi
-          
+
           # Read ApplicationIcon path
           icon_path=$(xmllint --xpath "string(//Project/PropertyGroup/ApplicationIcon)" UI/FactorioModManager.csproj)
           if [ -z "$icon_path" ]; then
             echo "Warning: No <ApplicationIcon> found in csproj" >&2
             icon_path=""
           fi
-          
+
           # construct tag like v1.2.3 or v1.2.3-beta.1
           tag="v$version"
           echo "version=$version" >> $GITHUB_OUTPUT
@@ -60,7 +55,6 @@ jobs:
           else
             echo "prerelease=false" >> $GITHUB_OUTPUT
           fi
-
 
   build:
     name: Build and package
@@ -82,21 +76,17 @@ jobs:
             platform: osx-arm64
             artifact_name: FactorioModManager-osx-arm64
 
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '9.0.x'
-
+          dotnet-version: "9.0.x"
 
       - name: Restore dependencies
         run: dotnet restore
-
 
       - name: Publish
         run: |
@@ -109,53 +99,49 @@ jobs:
             --output ./publish/${{ matrix.platform }}
         shell: bash
 
-
+      # Create macOS .app bundle (replacement snippet)
       - name: Create macOS .app bundle
         if: startsWith(matrix.platform, 'osx-')
         run: |
           APP_NAME="FactorioModManager"
           PLATFORM="${{ matrix.platform }}"
           VERSION="${{ needs.set-version.outputs.version }}"
-          ICON_PATH="${{ needs.set-version.outputs.icon_path }}"
           PUBLISH_DIR="./publish/${PLATFORM}"
           APP_BUNDLE="${PUBLISH_DIR}/${APP_NAME}.app"
-          
+
           # Create .app structure
           mkdir -p "${APP_BUNDLE}/Contents/MacOS"
           mkdir -p "${APP_BUNDLE}/Contents/Resources"
-          
-          # Move executable into bundle
-          mv "${PUBLISH_DIR}/${APP_NAME}" "${APP_BUNDLE}/Contents/MacOS/"
-          chmod +x "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}"
-          
-          # Convert and copy icon if it exists
-          if [ -n "$ICON_PATH" ] && [ -f "UI/$ICON_PATH" ]; then
-            echo "Converting icon from UI/$ICON_PATH"
-            
-            # Create temporary iconset directory
-            ICONSET_DIR="${APP_BUNDLE}/Contents/Resources/AppIcon.iconset"
-            mkdir -p "$ICONSET_DIR"
-            
-            # Generate multiple sizes from the source icon using sips
-            # macOS sips can read .ico and .png
-            for size in 16 32 128 256 512; do
-              sips -z $size $size "UI/$ICON_PATH" --out "${ICONSET_DIR}/icon_${size}x${size}.png" 2>/dev/null || true
-              # Also create @2x versions
-              size2x=$((size * 2))
-              sips -z $size2x $size2x "UI/$ICON_PATH" --out "${ICONSET_DIR}/icon_${size}x${size}@2x.png" 2>/dev/null || true
-            done
-            
-            # Convert iconset to icns
-            iconutil -c icns "$ICONSET_DIR" -o "${APP_BUNDLE}/Contents/Resources/AppIcon.icns"
-            
-            # Clean up iconset
-            rm -rf "$ICONSET_DIR"
-            
-            echo "Icon converted successfully"
-          else
-            echo "No icon found at UI/$ICON_PATH, skipping icon conversion"
+
+          # Move executable into bundle (if present)
+          if [ -f "${PUBLISH_DIR}/${APP_NAME}" ]; then
+            mv "${PUBLISH_DIR}/${APP_NAME}" "${APP_BUNDLE}/Contents/MacOS/" || true
+            chmod +x "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}" || true
           fi
-          
+
+          # Move managed assemblies and runtime files into bundle
+          for f in "${PUBLISH_DIR}"/*.dll "${PUBLISH_DIR}"/*.deps.json "${PUBLISH_DIR}"/*.runtimeconfig.json "${PUBLISH_DIR}"/*.pdb; do
+            if [ -f "$f" ]; then
+              mv "$f" "${APP_BUNDLE}/Contents/MacOS/" || true
+            fi
+          done
+
+          # Move entire 'runtimes' directory if present (contains architecture-specific native assets)
+          if [ -d "${PUBLISH_DIR}/runtimes" ]; then
+            mv "${PUBLISH_DIR}/runtimes" "${APP_BUNDLE}/Contents/MacOS/" || true
+          fi
+
+          # Move SkiaSharp and other native dylibs from publish tree into the bundle
+          find "${PUBLISH_DIR}" -type f -name '*.dylib' -exec mv {} "${APP_BUNDLE}/Contents/MacOS/" \; || true
+
+          # Copy the downloaded icon to the correct location
+          if [ -f "/tmp/appicon/AppIcon.icns" ]; then
+            cp /tmp/appicon/AppIcon.icns "${APP_BUNDLE}/Contents/Resources/AppIcon.icns"
+            echo "AppIcon.icns copied to ${APP_BUNDLE}/Contents/Resources/"
+          else
+            echo "Warning: AppIcon.icns not found in /tmp/appicon/ - the application will use default icon" >&2
+          fi
+
           # Create Info.plist with version
           cat > "${APP_BUNDLE}/Contents/Info.plist" << EOF
           <?xml version="1.0" encoding="UTF-8"?>
@@ -185,12 +171,11 @@ jobs:
           </dict>
           </plist>
           EOF
-          
-          # Remove loose executable and other files from publish root (keep only .app)
-          find "${PUBLISH_DIR}" -maxdepth 1 -type f -delete
-          find "${PUBLISH_DIR}" -maxdepth 1 -type d ! -name "${APP_NAME}.app" ! -path "${PUBLISH_DIR}" -exec rm -rf {} +
-        shell: bash
 
+          # Now clean up the publish root but keep the .app
+          find "${PUBLISH_DIR}" -maxdepth 1 -type f -not -name "${APP_NAME}.app" -delete || true
+          find "${PUBLISH_DIR}" -maxdepth 1 -type d ! -name "${APP_NAME}.app" ! -path "${PUBLISH_DIR}" -exec rm -rf {} + || true
+        shell: bash
 
       - name: Create archive (Linux/macOS)
         if: runner.os != 'Windows'
@@ -198,14 +183,12 @@ jobs:
           cd publish/${{ matrix.platform }}
           tar -czf ../../${{ matrix.artifact_name }}.tar.gz ./*
 
-
       - name: Create archive (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           cd publish/${{ matrix.platform }}
           Compress-Archive -Path * -DestinationPath ../../${{ matrix.artifact_name }}.zip
-
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -215,7 +198,6 @@ jobs:
             ${{ matrix.artifact_name }}.tar.gz
             ${{ matrix.artifact_name }}.zip
           if-no-files-found: ignore
-
 
   release:
     name: Create GitHub Release
@@ -227,14 +209,12 @@ jobs:
         with:
           path: artifacts
 
-
       - name: Determine release metadata
         id: release_type
         run: |
           TAG="${{ needs.set-version.outputs.tag }}"
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "prerelease=${{ needs.set-version.outputs.prerelease }}" >> $GITHUB_OUTPUT
-
 
       - name: Create Release and upload assets
         uses: softprops/action-gh-release@v2
