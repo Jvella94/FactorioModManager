@@ -1,6 +1,5 @@
-# Full replacement workflow with self-hosted Windows runner preferred and windows-latest as fallback.
-# - Checks for an online self-hosted Windows runner labeled "windows"
-# - If available, runs Windows build on [self-hosted, windows]; otherwise falls back to windows-latest
+# Full replacement workflow with self-hosted Windows runner enforced for Windows build.
+# - Always runs Windows build on [self-hosted, windows]
 # - Keeps Linux/macOS matrix builds separate
 # - NuGet caching, separate restore & publish, MSBuild parallelism, binary logs uploaded
 name: Tag, Build and Release
@@ -103,45 +102,6 @@ jobs:
           name: appicon
           path: ./AppIcon.icns
 
-  # Helper: check for an online self-hosted Windows runner with the 'windows' label
-  check-self-hosted-windows:
-    name: Check self-hosted Windows runner availability
-    runs-on: ubuntu-latest
-    outputs:
-      windows_runner_online: ${{ steps.check.outputs.windows_runner_online }}
-    steps:
-      - name: Install jq (for JSON parsing)
-        run: sudo apt-get update && sudo apt-get install -y jq
-
-      - name: Query repository runners and detect online Windows runners
-        id: check
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-
-          # Query repo runners
-          resp=$(curl -sSL -H "Accept: application/vnd.github+json" -H "Authorization: Bearer $GITHUB_TOKEN" \
-            "https://api.github.com/repos/${{ github.repository }}/actions/runners")
-
-          # If response is empty or not JSON, treat as no runners available
-          if [ -z "$resp" ] || ! echo "$resp" | jq -e . >/dev/null 2>&1; then
-            echo "Warning: unexpected response from GitHub API; assuming no self-hosted Windows runners" >&2
-            echo "windows_runner_online=false" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          # Safely handle missing/null .runners and missing labels
-          count=$(echo "$resp" | jq '[ (.runners // [])[] 
-            | select(.status == "online") 
-            | select((.labels // [])[]? | .name == "windows") ] | length')
-
-          if [ "$count" -gt 0 ]; then
-            echo "windows_runner_online=true" >> $GITHUB_OUTPUT
-          else
-            echo "windows_runner_online=false" >> $GITHUB_OUTPUT
-          fi
-
   # Build job for Linux and macOS (matrix excludes Windows)
   build:
     name: Build and package (Linux & macOS)
@@ -195,7 +155,7 @@ jobs:
         shell: bash
 
       - name: Publish with parallel MSBuild and binary log
-        run: dotnet publish UI/FactorioModManager.csproj --configuration Release --runtime ${{ matrix.platform }} --self-contained true -p:PublishSingleFile=false -p:UseAppHost=true -p:PublishTrimmed=false -p:Version="${{ needs.set-version.outputs.full_version }}" --output ./publish/${{ matrix.platform }} --no-restore -p:MaxCpuCount=0 -clp:PerformanceSummary /bl:publish-${{ matrix.platform }}.binlog
+        run: dotnet publish UI/FactorioModManager.csproj --configuration Release --runtime ${{ matrix.platform }} --self-contained true -p:PublishSingleFile=false -p:UseAppHost=true -p:PublishTrimmed=false -bl:publish-${{ matrix.platform }}.binlog
         shell: bash
 
       - name: Upload msbuild binlog
@@ -296,13 +256,12 @@ jobs:
             ${{ matrix.artifact_name }}.tar.gz
           if-no-files-found: ignore
 
-  # Windows build job: choose self-hosted if available, otherwise windows-latest
+  # Windows build job: always use self-hosted Windows runner
   build-windows:
     name: Build and package (Windows)
-    needs: [set-version, generate-icns, check-self-hosted-windows]
-    # First label is chosen dynamically: 'self-hosted' if a self-hosted Windows runner is online; otherwise 'windows-latest'
+    needs: [set-version, generate-icns]
     runs-on:
-      - ${{ needs.check-self-hosted-windows.outputs.windows_runner_online == 'true' && 'self-hosted' || 'windows-latest' }}
+      - self-hosted
       - windows
     strategy:
       matrix:
@@ -345,7 +304,7 @@ jobs:
         shell: pwsh
 
       - name: Publish (Windows) with parallel MSBuild and binary log
-        run: dotnet publish UI/FactorioModManager.csproj --configuration Release --runtime ${{ matrix.platform }} --self-contained true -p:PublishSingleFile=false -p:UseAppHost=true -p:PublishTrimmed=false -p:Version="${{ needs.set-version.outputs.full_version }}" --output ./publish/${{ matrix.platform }} --no-restore -p:MaxCpuCount=0 -clp:PerformanceSummary /bl:publish-${{ matrix.platform }}.binlog
+        run: dotnet publish UI/FactorioModManager.csproj --configuration Release --runtime ${{ matrix.platform }} --self-contained true -p:PublishSingleFile=false -p:UseAppHost=true -p:PublishTrimmed=false -bl:publish-${{ matrix.platform }}.binlog
         shell: pwsh
 
       - name: Upload msbuild binlog (Windows)
