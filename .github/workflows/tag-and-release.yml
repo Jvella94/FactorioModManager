@@ -35,12 +35,14 @@ jobs:
             exit 1
           fi
 
+
           # Read ApplicationIcon path
           icon_path=$(xmllint --xpath "string(//Project/PropertyGroup/ApplicationIcon)" UI/FactorioModManager.csproj)
           if [ -z "$icon_path" ]; then
             echo "Warning: No <ApplicationIcon> found in csproj" >&2
             icon_path=""
           fi
+
 
           # construct tag like v1.2.3 or v1.2.3-beta.1
           tag="v$version"
@@ -56,9 +58,35 @@ jobs:
             echo "prerelease=false" >> $GITHUB_OUTPUT
           fi
 
+  generate-icns:
+    name: Generate macOS icon
+    needs: set-version
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Make generate-iconset script executable
+        run: chmod +x scripts/generate-iconset.sh
+
+      - name: Generate AppIcon.icns
+        run: |
+          if [ -f scripts/generate-iconset.sh ]; then
+            ./scripts/generate-iconset.sh
+          else
+            echo "Error: scripts/generate-iconset.sh not found" >&2
+            exit 1
+          fi
+
+      - name: Upload AppIcon.icns artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: appicon
+          path: publish/osx-x64/FactorioModManager.app/Contents/Resources/AppIcon.icns
+
   build:
     name: Build and package
-    needs: set-version
+    needs: [set-version, generate-icns]
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -94,10 +122,18 @@ jobs:
             --configuration Release \
             --runtime ${{ matrix.platform }} \
             --self-contained true \
-            -p:PublishSingleFile=true \
+            -p:PublishSingleFile=false \
             -p:UseAppHost=true \
+            -p:PublishTrimmed=false \
             --output ./publish/${{ matrix.platform }}
         shell: bash
+
+      - name: Download AppIcon.icns
+        if: startsWith(matrix.platform, 'osx-')
+        uses: actions/download-artifact@v4
+        with:
+          name: appicon
+          path: /tmp/appicon/
 
       # Create macOS .app bundle (replacement snippet)
       - name: Create macOS .app bundle
@@ -108,6 +144,7 @@ jobs:
           VERSION="${{ needs.set-version.outputs.version }}"
           PUBLISH_DIR="./publish/${PLATFORM}"
           APP_BUNDLE="${PUBLISH_DIR}/${APP_NAME}.app"
+
 
           # Create .app structure
           mkdir -p "${APP_BUNDLE}/Contents/MacOS"
