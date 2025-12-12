@@ -207,7 +207,7 @@ jobs:
         shell: bash
 
       - name: Publish with parallel MSBuild and binary log
-        run: dotnet publish UI/FactorioModManager.csproj --configuration Release --runtime ${{ matrix.platform }} --self-contained true -p:PublishSingleFile=false -p:UseAppHost=true -p:PublishTrimmed=false -bl:publish-${{ matrix.platform }}.binlog
+        run: dotnet publish UI/FactorioModManager.csproj --configuration Release --runtime ${{ matrix.platform }} --self-contained true -p:PublishSingleFile=false -p:UseAppHost=true -p:PublishTrimmed=false -bl:publish-${{ matrix.platform }}.binlog --output ./publish/${{ matrix.platform }}
         shell: bash
 
       - name: Upload msbuild binlog
@@ -356,7 +356,7 @@ jobs:
         shell: pwsh
 
       - name: Publish (Windows) with parallel MSBuild and binary log
-        run: dotnet publish UI/FactorioModManager.csproj --configuration Release --runtime ${{ matrix.platform }} --self-contained true -p:PublishSingleFile=false -p:UseAppHost=true -p:PublishTrimmed=false -bl:publish-${{ matrix.platform }}.binlog
+        run: dotnet publish UI/FactorioModManager.csproj --configuration Release --runtime ${{ matrix.platform }} --self-contained true -p:PublishSingleFile=false -p:UseAppHost=true -p:PublishTrimmed=false -bl:publish-${{ matrix.platform }}.binlog --output ./publish/${{ matrix.platform }}
         shell: pwsh
 
       - name: Upload msbuild binlog (Windows)
