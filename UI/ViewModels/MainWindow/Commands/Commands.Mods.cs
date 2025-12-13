@@ -171,10 +171,7 @@ namespace FactorioModManager.ViewModels.MainWindow
         /// </summary>
         private async Task<Models.Result<bool>> InstallModFromFileAsync(string filePath)
         {
-            return await Task.Run(async () =>
-            {
-                return await _downloadService.InstallFromLocalFileAsync(filePath);
-            });
+            return await _downloadService.InstallFromLocalFileAsync(filePath);
         }
 
         /// <summary>
@@ -182,100 +179,97 @@ namespace FactorioModManager.ViewModels.MainWindow
         /// </summary>
         private async Task<Result> InstallModFromUrlAsync(string url)
         {
-            return await Task.Run(async () =>
+            try
             {
-                try
+                var modName = url.Split('/').LastOrDefault();
+                if (string.IsNullOrEmpty(modName))
                 {
-                    var modName = url.Split('/').LastOrDefault();
-                    if (string.IsNullOrEmpty(modName))
+                    await _uiService.InvokeAsync(() =>
+                    {
+                        SetStatus("Invalid mod portal URL", LogLevel.Error);
+                    });
+                    return Result.Fail("Invalid URL format", ErrorCode.InvalidInput);
+                }
+
+                await _uiService.InvokeAsync(() =>
+                {
+                    SetStatus($"Fetching {modName} from mod portal...");
+                });
+
+                var resolution = await _dependencyFlow.ResolveForInstallAsync(modName, _allMods);
+                if (!resolution.Proceed)
+                    return Result.Fail("Installation cancelled by user due to dependencies.", ErrorCode.OperationCancelled);
+
+                await _uiService.InvokeAsync(() =>
+                {
+                    // apply enable/disable decisions
+                    foreach (var toEnable in resolution.ModsToEnable)
+                    {
+                        var vm = _allMods.FirstOrDefault(m => m.Name == toEnable.Name);
+                        if (vm != null && !vm.IsEnabled)
+                        {
+                            vm.IsEnabled = true;
+                            _modService.ToggleMod(vm.Name, true);
+                        }
+                    }
+
+                    foreach (var toDisable in resolution.ModsToDisable)
+                    {
+                        var vm = _allMods.FirstOrDefault(m => m.Name == toDisable.Name);
+                        if (vm != null && vm.IsEnabled)
+                        {
+                            vm.IsEnabled = false;
+                            _modService.ToggleMod(vm.Name, false);
+                        }
+                    }
+                });
+
+                foreach (var mod in resolution.MissingDependenciesToInstall)
+                {
+                    var result = await InstallMod(mod);
+                    if (!result.Success)
                     {
                         await _uiService.InvokeAsync(() =>
                         {
-                            SetStatus("Invalid mod portal URL", LogLevel.Error);
+                            SetStatus($"Failed to install dependency {modName}: {result.Error}", LogLevel.Warning);
                         });
-                        return Result.Fail("Invalid URL format", ErrorCode.InvalidInput);
+                        return result;
                     }
-
-                    await _uiService.InvokeAsync(() =>
-                    {
-                        SetStatus($"Fetching {modName} from mod portal...");
-                    });
-
-                    var resolution = await _modDependencyResolver.ResolveForInstallAsync(modName, _allMods);
-                    if (!resolution.Proceed)
-                        return Result.Fail("Installation cancelled by user due to dependencies.", ErrorCode.OperationCancelled);
-
-                    await _uiService.InvokeAsync(() =>
-                    {
-                        // apply enable/disable decisions
-                        foreach (var toEnable in resolution.ModsToEnable)
-                        {
-                            var vm = _allMods.FirstOrDefault(m => m.Name == toEnable.Name);
-                            if (vm != null && !vm.IsEnabled)
-                            {
-                                vm.IsEnabled = true;
-                                _modService.ToggleMod(vm.Name, true);
-                            }
-                        }
-
-                        foreach (var toDisable in resolution.ModsToDisable)
-                        {
-                            var vm = _allMods.FirstOrDefault(m => m.Name == toDisable.Name);
-                            if (vm != null && vm.IsEnabled)
-                            {
-                                vm.IsEnabled = false;
-                                _modService.ToggleMod(vm.Name, false);
-                            }
-                        }
-                    });
-
-                    foreach (var mod in resolution.MissingDependenciesToInstall)
-                    {
-                        var result = await InstallMod(mod);
-                        if (!result.Success)
-                        {
-                            await _uiService.InvokeAsync(() =>
-                            {
-                                SetStatus($"Failed to install dependency {modName}: {result.Error}", LogLevel.Warning);
-                            });
-                            return result;
-                        }
-                    }
-
-                    await InstallMod(modName);
-                    await RefreshModsAsync();
-                    var installedMain = _allMods.FirstOrDefault(m => m.Name == modName);
-                    await _uiService.InvokeAsync(() =>
-                    {
-                        if (installedMain != null)
-                        {
-                            installedMain.IsEnabled = resolution.InstallEnabled;
-
-                            _modService.ToggleMod(installedMain.Name, resolution.InstallEnabled);
-
-                            SelectedMod = installedMain;
-                            SetStatus(
-                                resolution.InstallEnabled
-                                    ? $"Successfully installed and enabled {installedMain.Title}."
-                                    : $"Successfully installed {installedMain.Title} (disabled).");
-                        }
-                        else
-                        {
-                            SetStatus($"Successfully downloaded {modName}, but it was not found after refresh.", LogLevel.Warning);
-                        }
-                    });
-
-                    return Result.Ok();
                 }
-                catch (Exception ex)
+
+                await InstallMod(modName);
+                await RefreshModsAsync();
+                var installedMain = _allMods.FirstOrDefault(m => m.Name == modName);
+                await _uiService.InvokeAsync(() =>
                 {
-                    await _uiService.InvokeAsync(() =>
+                    if (installedMain != null)
                     {
-                        HandleError(ex, $"Error installing mod from url {url}");
-                    });
-                    return Result.Fail(ex.Message, ErrorCode.UnexpectedError);
-                }
-            });
+                        installedMain.IsEnabled = resolution.InstallEnabled;
+
+                        _modService.ToggleMod(installedMain.Name, resolution.InstallEnabled);
+
+                        SelectedMod = installedMain;
+                        SetStatus(
+                            resolution.InstallEnabled
+                                ? $"Successfully installed and enabled {installedMain.Title}."
+                                : $"Successfully installed {installedMain.Title} (disabled).");
+                    }
+                    else
+                    {
+                        SetStatus($"Successfully downloaded {modName}, but it was not found after refresh.", LogLevel.Warning);
+                    }
+                });
+
+                return Result.Ok();
+            }
+            catch (Exception ex)
+            {
+                await _uiService.InvokeAsync(() =>
+                {
+                    HandleError(ex, $"Error installing mod from url {url}");
+                });
+                return Result.Fail(ex.Message, ErrorCode.UnexpectedError);
+            }
         }
 
         private async Task<Result> InstallMod(string modName)

@@ -29,7 +29,7 @@ namespace FactorioModManager.Models
 
         // ✨ NEW: Helper methods for common patterns
         public bool IsFailure => !Success;
-        
+
         public Result OnSuccess(Action action)
         {
             if (Success) action();

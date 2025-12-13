@@ -1,6 +1,6 @@
-﻿using System;
+﻿using Avalonia.Media;
+using System;
 using System.Globalization;
-using Avalonia.Media;
 
 namespace FactorioModManager.Models
 {

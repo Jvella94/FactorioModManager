@@ -10,8 +10,15 @@ namespace FactorioModManager.Views.Converters
         {
             if (value is string dep)
             {
+                var parsed = Constants.DependencyHelper.ParseDependency(dep);
+                if (parsed != null && !string.IsNullOrEmpty(parsed.Value.Version))
+                {
+                    return $"v{parsed.Value.Version.Trim()}";
+                }
+
+                // Fallback: try previous split approach but trim tokens
                 var parts = dep.Split(Constants.Separators.Dependency, StringSplitOptions.RemoveEmptyEntries);
-                return parts.Length > 1 ? $"v{parts[1]}" : "";
+                return parts.Length > 1 ? $"v{parts[1].Trim()}" : "";
             }
             return "";
         }

@@ -1,8 +1,8 @@
-﻿using System;
+﻿using FactorioModManager.Services.Infrastructure;
+using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
-using System.Collections.Generic;
-using FactorioModManager.Services.Infrastructure;
 
 namespace FactorioModManager.Services
 {

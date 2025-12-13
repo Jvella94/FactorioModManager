@@ -131,8 +131,20 @@
         <StackPanel Grid.Column="3"
                     VerticalAlignment="Center"
                     Margin="20,0,10,0">
-          <TextBlock Text="{Binding ModCountSummary}"
-                     FontWeight="Bold" />
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBlock Text="{Binding EnabledCountText}"
+                       FontWeight="Bold" />
+            <!-- Divider shown only when there are updates -->
+            <TextBlock Text="|"
+                       Foreground="#888"
+                       VerticalAlignment="Center"
+                       IsVisible="{Binding HasUpdates}" />
+            <TextBlock Text="{Binding UpdatesCountText}"
+                       Foreground="LightGreen"
+                       FontWeight="Bold"
+                       IsVisible="{Binding HasUpdates}" />
+          </StackPanel>
+
           <TextBlock Text="{Binding UnusedInternalWarning}"
                      Foreground="Orange"
                      FontSize="11"
@@ -521,11 +533,11 @@
                       <DataTemplate>
                         <!-- Pill-style control. Border and Button kept identical size by Stretch + MinWidth -->
                         <Border CornerRadius="6"
-                                Background="{Binding Status, Converter={StaticResource DependencyColorConverter}}"
+                                Background="{Binding ., Converter={StaticResource DependencyColorConverter}}"
                                 IsVisible="{Binding Name, Converter={StaticResource IsNotGameDependencyConverter}}"
                                 Padding="0"
                                 MinWidth="200">
-                          <Button Content="{Binding Name}"
+                          <Button Content="{Binding DisplayText}"
                                   Background="Transparent"
                                   Foreground="White"
                                   BorderThickness="0"
@@ -533,7 +545,7 @@
                                   HorizontalAlignment="Stretch"
                                   MinWidth="200"
                                   Command="{Binding ElementName=RootWindow, Path=DataContext.NavigateToDependencyCommand}"
-                                  CommandParameter="{Binding Name}" />
+                                  CommandParameter="{Binding DisplayText}" />
                         </Border>
                       </DataTemplate>
                     </ItemsControl.ItemTemplate>

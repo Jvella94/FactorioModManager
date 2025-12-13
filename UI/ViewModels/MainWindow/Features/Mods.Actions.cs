@@ -143,7 +143,7 @@ namespace FactorioModManager.ViewModels.MainWindow
             foreach (var group in Groups.Where(g => g.ModNames.Contains(mod.Title)))
                 UpdateGroupStatus(group);
 
-            this.RaisePropertyChanged(nameof(ModCountSummary));
+            this.RaisePropertyChanged(nameof(EnabledCountText));
             ApplyModFilter();
             _togglingMod = false;
         }
@@ -207,7 +207,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                 _modService.RemoveMod(mod.Name, mod.FilePath);
             }
             ApplyModFilter();
-            this.RaisePropertyChanged(nameof(ModCountSummary));
+            this.RaisePropertyChanged(nameof(EnabledCountText));
             SetStatus($"Removed {mod.Title}");
         }
     }

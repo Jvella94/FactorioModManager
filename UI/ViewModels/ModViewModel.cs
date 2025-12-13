@@ -1,6 +1,7 @@
 ﻿using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using FactorioModManager.Views.Converters;
+using FactorioModManager.Services.Mods;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
@@ -266,11 +267,11 @@ namespace FactorioModManager.ViewModels
             set => this.RaiseAndSetIfChanged(ref _isDependencyListExpanded, value);
         }
 
-        // Add a backing field for installed dependencies
-        private List<string> _installedDependencies = [];
+        // Installed dependencies with resolved installed version (Name, InstalledVersion)
+        private List<(string Name, string? InstalledVersion)> _installedDependencies = [];
 
-        // Property to expose installed dependencies
-        public List<string> InstalledDependencies
+        // Property to expose installed dependencies as tuples for efficient lookups
+        public List<(string Name, string? InstalledVersion)> InstalledDependencies
         {
             get => _installedDependencies;
             set => this.RaiseAndSetIfChanged(ref _installedDependencies, value);
@@ -287,13 +288,64 @@ namespace FactorioModManager.ViewModels
             DependencyHelper.GetIncompatibleDependencies(Dependencies);
 
         // Add new computed property for sorted dependencies
-        public IReadOnlyList<DependencyViewModel> SortedDependencies =>
-        [
-            .. MandatoryDependencies.Select(d => new DependencyViewModel(d, DependencyStatus.Mandatory)),
-            .. OptionalDependencies.Where(IsInstalled).Select(d => new DependencyViewModel(d, DependencyStatus.OptionalInstalled)),
-            .. OptionalDependencies.Where(d => !IsInstalled(d)).Select(d => new DependencyViewModel(d, DependencyStatus.OptionalNotInstalled)),
-            .. IncompatibleDependencies.Select(d => new DependencyViewModel(d, DependencyStatus.Incompatible)),
-        ];
+        public IReadOnlyList<DependencyViewModel> SortedDependencies
+        {
+            get
+            {
+                var list = new List<DependencyViewModel>();
+
+                // Mandatory with constraints (preserves version info)
+                var mandatoryParsed = DependencyHelper.GetMandatoryDependenciesWithConstraints(Dependencies);
+                foreach (var p in mandatoryParsed)
+                {
+                    var tuple = InstalledDependencies.FirstOrDefault(t => t.Name.Equals(p.Name, StringComparison.OrdinalIgnoreCase));
+                    var installed = !string.IsNullOrEmpty(tuple.Name);
+                    var installedVersion = installed ? tuple.InstalledVersion : null;
+                    var versionSatisfied = DependencyHelper.SatisfiesVersionConstraint(installedVersion, p.VersionOperator, p.Version);
+                    list.Add(new DependencyViewModel(p.Name, DependencyStatus.Mandatory, p.VersionOperator, p.Version, installed, versionSatisfied));
+                }
+
+                // Optional dependencies (preserve version info from raw strings)
+                var optionalRaw = OptionalDependencies;
+                foreach (var raw in optionalRaw.Where(IsInstalled))
+                {
+                    var parsed = DependencyHelper.ParseDependency(raw);
+                    var depName = parsed?.Name ?? raw;
+                    var tuple = InstalledDependencies.FirstOrDefault(t => t.Name.Equals(depName, StringComparison.OrdinalIgnoreCase));
+                    var inst = !string.IsNullOrEmpty(tuple.Name);
+                    var installedVersion = inst ? tuple.InstalledVersion : null;
+                    var satisfied = DependencyHelper.SatisfiesVersionConstraint(installedVersion, parsed?.VersionOperator, parsed?.Version);
+                    list.Add(new DependencyViewModel(depName, DependencyStatus.OptionalInstalled, parsed?.VersionOperator, parsed?.Version, inst, satisfied));
+                }
+
+                foreach (var raw in optionalRaw.Where(d => !IsInstalled(DependencyHelper.ExtractDependencyName(d))))
+                {
+                    var parsed = DependencyHelper.ParseDependency(raw);
+                    var depName = parsed?.Name ?? raw;
+                    var tuple = InstalledDependencies.FirstOrDefault(t => t.Name.Equals(depName, StringComparison.OrdinalIgnoreCase));
+                    var inst = !string.IsNullOrEmpty(tuple.Name);
+                    var installedVersion = inst ? tuple.InstalledVersion : null;
+                    var satisfied = DependencyHelper.SatisfiesVersionConstraint(installedVersion, parsed?.VersionOperator, parsed?.Version);
+                    list.Add(new DependencyViewModel(depName, DependencyStatus.OptionalNotInstalled, parsed?.VersionOperator, parsed?.Version, inst, satisfied));
+                }
+
+                // Incompatible dependencies: parse raw dependencies to preserve version info
+                foreach (var raw in Dependencies)
+                {
+                    var parsed = DependencyHelper.ParseDependency(raw);
+                    if (parsed != null && (parsed.Value.Prefix == "!" || parsed.Value.Prefix == "(!)"))
+                    {
+                        var tuple = InstalledDependencies.FirstOrDefault(t => t.Name.Equals(parsed.Value.Name, StringComparison.OrdinalIgnoreCase));
+                        var inst = !string.IsNullOrEmpty(tuple.Name);
+                        var installedVersion = inst ? tuple.InstalledVersion : null;
+                        var satisfied = DependencyHelper.SatisfiesVersionConstraint(installedVersion, parsed.Value.VersionOperator, parsed.Value.Version);
+                        list.Add(new DependencyViewModel(parsed.Value.Name, DependencyStatus.Incompatible, parsed.Value.VersionOperator, parsed.Value.Version, inst, satisfied));
+                    }
+                }
+
+                return list;
+            }
+        }
 
         public IReadOnlyList<DependencyViewModel> OnlyModSortedDepedencies =>
             [.. SortedDependencies.Where(sd => DependencyHelper.IsGameDependency(sd.Name) == false)];
@@ -301,9 +353,19 @@ namespace FactorioModManager.ViewModels
         public IReadOnlyList<DependencyViewModel> VisibleDependencies =>
             IsDependencyListExpanded ? OnlyModSortedDepedencies : [.. OnlyModSortedDepedencies.Take(5)];
 
-        // Helper method to check if a dependency is installed
-        private bool IsInstalled(string dependency) =>
-            InstalledDependencies.Contains(dependency, StringComparer.OrdinalIgnoreCase);
+        // Helper method to check if a dependency is installed. Accepts raw dependency strings (may include prefix/operator/version)
+        // and normalizes them before lookup.
+        private bool IsInstalled(string dependency)
+        {
+            if (string.IsNullOrWhiteSpace(dependency))
+                return false;
+
+            var name = DependencyHelper.ExtractDependencyName(dependency);
+            if (string.IsNullOrEmpty(name))
+                return false;
+
+            return InstalledDependencies.Any(t => t.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        }
 
         public ReactiveCommand<Unit, Unit> ToggleDependencyListCommand { get; }
 

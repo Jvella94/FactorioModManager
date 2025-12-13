@@ -1,11 +1,11 @@
 ﻿using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using FactorioModManager.Services.Infrastructure;
 using FactorioModManager.ViewModels.Dialogs;
 using System;
 using System.Collections.Specialized;
 using System.ComponentModel;
-using Avalonia.Threading;
 
 namespace FactorioModManager.Views
 {

@@ -1,10 +1,10 @@
+using Avalonia.Controls;
 using Avalonia.Platform.Storage;
-using System.Linq;
-using System.Threading.Tasks;
+using FactorioModManager.Services.Infrastructure;
 using System;
 using System.IO;
-using Avalonia.Controls;
-using FactorioModManager.Services.Infrastructure;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace FactorioModManager.Services.Platform
 {

@@ -1,7 +1,7 @@
 using FactorioModManager.ViewModels;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using System;
 
 namespace FactorioModManager.Services.Mods
 {

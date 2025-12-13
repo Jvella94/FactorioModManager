@@ -44,7 +44,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                 {
                     await _uiService.InvokeAsync(() =>
                     {
-                        HandleError(ex,$"Error fetching changelog: {ex.Message}");
+                        HandleError(ex, $"Error fetching changelog: {ex.Message}");
                     });
                 }
             });

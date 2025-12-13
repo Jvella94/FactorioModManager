@@ -18,7 +18,7 @@ namespace FactorioModManager.Views.Dialogs
             MinWidth = 400;
             MinHeight = 120;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
-            SizeToContent = SizeToContent.WidthAndHeight;
+            SizeToContent = SizeToContent.Height;
             CanResize = false;
             CanMinimize = false;
             CanMaximize = false;

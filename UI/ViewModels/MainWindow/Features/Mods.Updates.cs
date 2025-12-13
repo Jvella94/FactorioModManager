@@ -87,6 +87,11 @@ namespace FactorioModManager.ViewModels.MainWindow
                 return;
             }
 
+            // Build a map of planned updates so dependency resolution can consider other updates as already applied
+            var plannedUpdates = modsToUpdate
+                .Where(m => !string.IsNullOrEmpty(m.LatestVersion))
+                .ToDictionary(m => m.Name, m => m.LatestVersion!, StringComparer.OrdinalIgnoreCase);
+
             // Confirm with user
             var confirmAll = await _uiService.ShowConfirmationAsync(
                 "Update All Mods",
@@ -105,60 +110,79 @@ namespace FactorioModManager.ViewModels.MainWindow
             // ------------------
             // Step 1: aggregate missing dependencies across all mods
             // ------------------
-            var aggregatedMissing = new Dictionary<string, (string? Op, string? Version)>(StringComparer.OrdinalIgnoreCase);
+            var aggregatedMissing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var combinedEnable = new Dictionary<string, ModViewModel>(StringComparer.OrdinalIgnoreCase);
+            var combinedDisable = new Dictionary<string, ModViewModel>(StringComparer.OrdinalIgnoreCase);
 
+            var updateResolutions = new List<(ModViewModel Target, Services.Mods.DependencyResolution Resolution)>();
+
+            // First pass: gather missing deps and enable/disable decisions (do not apply yet)
             foreach (var mod in modsToUpdate)
             {
-                var mandatory = DependencyHelper.GetMandatoryDependencies(mod.Dependencies);
-                foreach (var depRaw in mandatory)
+                var resolution = await _dependencyFlow.ResolveForUpdateAsync(mod.Name, mod.LatestVersion!, _allMods, plannedUpdates);
+                if (!resolution.Proceed)
                 {
-                    if (DependencyHelper.IsGameDependency(depRaw))
-                        continue;
+                    _logService.LogDebug($"UpdateAll cancelled by user while resolving dependencies for {mod.Name}");
+                    await _uiService.InvokeAsync(() => SetStatus("Update cancelled."));
+                    return;
+                }
 
-                    // Parse potential constraint
-                    var parsed = DependencyHelper.ParseDependency(depRaw);
-                    if (parsed == null) continue;
+                updateResolutions.Add((mod, resolution));
 
-                    var depName = parsed.Value.Name;
-                    var op = parsed.Value.VersionOperator;
-                    var ver = parsed.Value.Version;
-
-                    // Check if already installed and satisfies constraint
-                    var installed = FindModByName(depName);
-                    if (installed != null)
+                // Only auto-enable dependencies for mods that are currently enabled. If the target mod is disabled,
+                // we should not enable its dependencies automatically — only install missing dependencies.
+                if (mod.IsEnabled)
+                {
+                    foreach (var toEnable in resolution.ModsToEnable)
                     {
-                        // If there's a constraint, validate installed version
-                        if (!string.IsNullOrEmpty(op) && !string.IsNullOrEmpty(ver))
-                        {
-                            if (!DependencyHelper.SatisfiesVersionConstraint(installed.Version, op, ver))
-                            {
-                                // Installed version doesn't satisfy; mark as missing with constraint
-                                aggregatedMissing[depName] = (op, ver);
-                            }
-                        }
-                        // else installed and no constraint -> OK
+                        if (!combinedEnable.ContainsKey(toEnable.Name))
+                            combinedEnable[toEnable.Name] = toEnable;
                     }
-                    else
-                    {
-                        // Not installed; add required constraint if any
-                        if (!aggregatedMissing.TryGetValue(depName, out (string? Op, string? Version) existing))
-                            aggregatedMissing[depName] = (op, ver);
-                        else
-                        {
-                            if (existing.Op == null && op != null)
-                                aggregatedMissing[depName] = (op, ver);
-                        }
-                    }
+                }
+
+                foreach (var toDisable in resolution.ModsToDisable)
+                {
+                    if (!combinedDisable.ContainsKey(toDisable.Name))
+                        combinedDisable[toDisable.Name] = toDisable;
+                }
+
+                foreach (var missing in resolution.MissingDependenciesToInstall)
+                {
+                    aggregatedMissing.Add(missing);
                 }
             }
 
-            // If there are aggregated missing dependencies, prompt once
+            // If there are aggregated missing dependencies, build a combined preview message using DependencyFlow
             if (aggregatedMissing.Count > 0)
             {
-                var listText = string.Join(", ", aggregatedMissing.Select(kv => kv.Key + (kv.Value.Op != null && kv.Value.Version != null ? $" {kv.Value.Op} {kv.Value.Version}" : string.Empty)));
+                var previewBuilder = new System.Text.StringBuilder();
+                // Build a preview per target mod update (version-aware) so constraints are visible
+                foreach (var (targetMod, resolution) in updateResolutions)
+                {
+                    var (updateRes, message) = await _dependencyFlow.BuildUpdatePreviewAsync(targetMod.Name, targetMod.LatestVersion!, _allMods, plannedUpdates);
+                    // BuildUpdatePreviewAsync already includes a header with current -> target versions; append its full message
+                    previewBuilder.AppendLine(message);
+                    previewBuilder.AppendLine();
+
+                    // Merge enable/disable suggestions from the per-update resolution as well
+                    // Only merge enable suggestions if the target mod is currently enabled
+                    if (targetMod.IsEnabled)
+                    {
+                        foreach (var e in updateRes.ModsToEnable)
+                            if (!combinedEnable.ContainsKey(e.Name)) combinedEnable[e.Name] = e;
+                    }
+                    foreach (var d in updateRes.ModsToDisable)
+                        if (!combinedDisable.ContainsKey(d.Name)) combinedDisable[d.Name] = d;
+
+                    // Merge missing deps discovered by the update preview
+                    foreach (var missing in updateRes.MissingDependenciesToInstall)
+                        aggregatedMissing.Add(missing);
+                }
+
+                var combinedMessage = previewBuilder.ToString();
                 var confirmDeps = await _uiService.ShowConfirmationAsync(
                     "Install Missing Dependencies",
-                    $"The following mandatory dependencies are missing or have unsatisfied version constraints: {listText}.\n\nAttempt to download and install these dependencies now?",
+                    combinedMessage,
                     null,
                     "Install",
                     "Skip");
@@ -169,25 +193,44 @@ namespace FactorioModManager.ViewModels.MainWindow
                     return;
                 }
 
-                // Install aggregated dependencies sequentially
-                foreach (var kv in aggregatedMissing)
+                // Apply enable/disable decisions now
+                await _uiService.InvokeAsync(() =>
                 {
-                    var depName = kv.Key;
-                    // double-check not installed (it might have been installed earlier in this loop)
+                    foreach (var kv in combinedEnable.Values)
+                    {
+                        var vm = _allMods.FirstOrDefault(m => m.Name == kv.Name);
+                        if (vm != null && !vm.IsEnabled)
+                        {
+                            vm.IsEnabled = true;
+                            _modService.ToggleMod(vm.Name, true);
+                        }
+                    }
+
+                    foreach (var kv in combinedDisable.Values)
+                    {
+                        var vm = _allMods.FirstOrDefault(m => m.Name == kv.Name);
+                        if (vm != null && vm.IsEnabled)
+                        {
+                            vm.IsEnabled = false;
+                            _modService.ToggleMod(vm.Name, false);
+                        }
+                    }
+                });
+
+                // Install aggregated dependencies sequentially
+                foreach (var depName in aggregatedMissing)
+                {
                     if (FindModByName(depName) != null)
                         continue;
 
-                    // Call existing InstallMod
                     var installResult = await InstallMod(depName);
                     if (!installResult.Success)
                     {
                         _logService.LogWarning($"Failed to install aggregated dependency {depName}: {installResult.Error}");
                         await _uiService.InvokeAsync(() => SetStatus($"Failed to install dependency {depName}: {installResult.Error}", LogLevel.Warning));
-                        // Abort the whole Update All - user opted to install but a dependency failed
-                        return;
+                        return; // Abort the whole Update All
                     }
 
-                    // small delay
                     await Task.Delay(200);
                 }
 
@@ -220,36 +263,17 @@ namespace FactorioModManager.ViewModels.MainWindow
                     {
                         await _uiService.InvokeAsync(() => SetStatus($"Updating {mod.Title}..."));
 
-                        // Ensure dependencies still satisfied (version-aware)
-                        var mandatory = DependencyHelper.GetMandatoryDependencies(mod.Dependencies);
-                        var missingNow = new List<string>();
-                        foreach (var depRaw in mandatory)
+                        // Ensure dependencies still satisfied (version-aware) before updating
+                        var resolutionNow = await _dependencyFlow.ResolveForUpdateAsync(mod.Name, mod.LatestVersion ?? string.Empty, _allMods, plannedUpdates);
+                        if (!resolutionNow.Proceed)
                         {
-                            if (DependencyHelper.IsGameDependency(depRaw))
-                                continue;
-
-                            var parsed = DependencyHelper.ParseDependency(depRaw);
-                            if (parsed == null) continue;
-
-                            var depName = parsed.Value.Name;
-                            var op = parsed.Value.VersionOperator;
-                            var ver = parsed.Value.Version;
-
-                            var installed = FindModByName(depName);
-                            if (installed == null)
-                            {
-                                missingNow.Add(depName);
-                                break;
-                            }
-
-                            if (!DependencyHelper.SatisfiesVersionConstraint(installed.Version, op, ver))
-                            {
-                                missingNow.Add(depName);
-                                break;
-                            }
+                            results.Add((mod.Title, false, "Skipped - user declined dependency changes"));
+                            await _uiService.InvokeAsync(() => SetStatus($"Skipping {mod.Title}: dependency resolution declined", LogLevel.Warning));
+                            return;
                         }
 
-                        if (missingNow.Count > 0)
+                        // If resolver still reports missing dependencies, skip
+                        if (resolutionNow.MissingDependenciesToInstall.Count > 0)
                         {
                             results.Add((mod.Title, false, "Skipped - missing/unsatisfied dependencies after install stage"));
                             await _uiService.InvokeAsync(() => SetStatus($"Skipping {mod.Title}: missing/unsatisfied dependencies", LogLevel.Warning));
@@ -286,7 +310,7 @@ namespace FactorioModManager.ViewModels.MainWindow
             await _uiService.InvokeAsync(() =>
             {
                 SetStatus("Update all complete. Preparing summary...");
-                this.RaisePropertyChanged(nameof(ModCountSummary));
+                this.RaisePropertyChanged(nameof(EnabledCountText));
             });
 
             // Build summary message
@@ -355,7 +379,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                         _logService.Log($"Cleared update flags for {clearedCount} already-downloaded mod(s)");
                         _uiService.Post(() =>
                         {
-                            this.RaisePropertyChanged(nameof(ModCountSummary));
+                            this.RaisePropertyChanged(nameof(EnabledCountText));
                             SetStatus($"Found {clearedCount} already-downloaded update(s)");
                         });
                     }
@@ -368,23 +392,6 @@ namespace FactorioModManager.ViewModels.MainWindow
         }
 
         /// <summary>
-        /// Checks if all mandatory dependencies are installed
-        /// </summary>
-        private bool CheckMandatoryDependencies(ModViewModel mod)
-        {
-            var mandatoryDeps = DependencyHelper.GetMandatoryDependencies(mod.Dependencies);
-            var missingDeps = ClassifyDependencies(mandatoryDeps).missing.Count > 0;
-            if (missingDeps)
-            {
-                var message = $"Missing dependencies for {mod.Title}: {string.Join(", ", missingDeps)}";
-                SetStatus(message, LogLevel.Warning);
-                _logService.LogWarning($"Cannot update {mod.Title}: Missing mandatory dependencies: {string.Join(", ", missingDeps)}");
-                return false;
-            }
-            return true;
-        }
-
-        /// <summary>
         /// Downloads an update for a mod
         /// </summary>
         private async Task DownloadUpdateAsync(ModViewModel? mod)
@@ -392,8 +399,122 @@ namespace FactorioModManager.ViewModels.MainWindow
             if (mod == null || !mod.HasUpdate || string.IsNullOrEmpty(mod.LatestVersion))
                 return;
 
-            if (!CheckMandatoryDependencies(mod))
+            // Use DependencyFlow to resolve update-time dependencies and prompt the user if needed
+            try
+            {
+                // Treat this single update as a planned update so version checks consider the target version
+                var planned = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    { mod.Name, mod.LatestVersion! }
+                };
+
+                var updateResolution = await _dependencyFlow.ResolveForUpdateAsync(mod.Name, mod.LatestVersion!, _allMods, planned);
+                if (!updateResolution.Proceed)
+                {
+                    _logService.LogDebug($"Update cancelled by user during dependency resolution for {mod.Name}");
+                    await _uiService.InvokeAsync(() => SetStatus("Update cancelled."));
+                    return;
+                }
+
+                // Apply enable/disable decisions returned by resolver before installing deps
+                // Only auto-enable dependencies if the target mod itself is enabled. If the user has the mod disabled,
+                // do not enable its dependencies automatically — still allow disabling incompatible mods.
+                await _uiService.InvokeAsync(() =>
+                {
+                    if (mod.IsEnabled)
+                    {
+                        foreach (var toEnable in updateResolution.ModsToEnable)
+                        {
+                            var vm = _allMods.FirstOrDefault(m => m.Name == toEnable.Name);
+                            if (vm != null && !vm.IsEnabled)
+                            {
+                                vm.IsEnabled = true;
+                                _modService.ToggleMod(vm.Name, true);
+                            }
+                        }
+                    }
+
+                    // Always apply disable suggestions to avoid incompatible enabled mods
+                    foreach (var toDisable in updateResolution.ModsToDisable)
+                    {
+                        var vm = _allMods.FirstOrDefault(m => m.Name == toDisable.Name);
+                        if (vm != null && vm.IsEnabled)
+                        {
+                            vm.IsEnabled = false;
+                            _modService.ToggleMod(vm.Name, false);
+                        }
+                    }
+                });
+
+                // If there are missing dependencies, build a version-aware preview for the update (single dialog)
+                if (updateResolution.MissingDependenciesToInstall.Count > 0)
+                {
+                    var (previewResolution, previewMessage) = await _dependencyFlow.BuildUpdatePreviewAsync(mod.Name, mod.LatestVersion!, _allMods, planned);
+
+                    var confirmDeps = await _uiService.ShowConfirmationAsync(
+                        "Install Missing Dependencies",
+                        previewMessage,
+                        null,
+                        "Install",
+                        "Skip");
+
+                    if (!confirmDeps)
+                    {
+                        _logService.LogDebug($"User declined to install missing dependencies for update of {mod.Name}");
+                        await _uiService.InvokeAsync(() => SetStatus("Update cancelled: missing dependencies not installed", LogLevel.Warning));
+                        return;
+                    }
+
+                    // Apply enable/disable decisions from the preview resolution
+                    await _uiService.InvokeAsync(() =>
+                    {
+                        foreach (var toEnable in previewResolution.ModsToEnable)
+                        {
+                            var vm = _allMods.FirstOrDefault(m => m.Name == toEnable.Name);
+                            if (vm != null && !vm.IsEnabled)
+                            {
+                                vm.IsEnabled = true;
+                                _modService.ToggleMod(vm.Name, true);
+                            }
+                        }
+
+                        foreach (var toDisable in previewResolution.ModsToDisable)
+                        {
+                            var vm = _allMods.FirstOrDefault(m => m.Name == toDisable.Name);
+                            if (vm != null && vm.IsEnabled)
+                            {
+                                vm.IsEnabled = false;
+                                _modService.ToggleMod(vm.Name, false);
+                            }
+                        }
+                    });
+
+                    // Install aggregated dependencies sequentially
+                    foreach (var depName in previewResolution.MissingDependenciesToInstall.Distinct(StringComparer.OrdinalIgnoreCase))
+                    {
+                        if (FindModByName(depName) != null)
+                            continue;
+
+                        var installResult = await InstallMod(depName);
+                        if (!installResult.Success)
+                        {
+                            _logService.LogWarning($"Failed to install dependency {depName}: {installResult.Error}");
+                            await _uiService.InvokeAsync(() => SetStatus($"Failed to install dependency {depName}: {installResult.Error}", LogLevel.Warning));
+                            return;
+                        }
+
+                        await Task.Delay(200);
+                    }
+
+                    await RefreshModsAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logService.LogError($"Error resolving dependencies for update of {mod.Name}: {ex.Message}", ex);
+                await _uiService.InvokeAsync(() => SetStatus($"Error resolving dependencies: {ex.Message}", LogLevel.Error));
                 return;
+            }
 
             var modName = mod.Name;
             await Task.Run(async () =>
@@ -588,7 +709,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                     if (updateCount > 0)
                     {
                         SetStatus($"Found {updateCount} mod update(s) available.");
-                        this.RaisePropertyChanged(nameof(ModCountSummary));
+                        this.RaisePropertyChanged(nameof(EnabledCountText));
                     }
                     else
                     {
@@ -640,7 +761,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                                 {
                                     SelectedMod.HasUpdate = true;
                                     SelectedMod.LatestVersion = latestVersion;
-                                    this.RaisePropertyChanged(nameof(ModCountSummary));
+                                    this.RaisePropertyChanged(nameof(EnabledCountText));
                                     SetStatus($"Update available for {SelectedMod.Title}: {SelectedMod.Version} → {latestVersion}");
                                 });
                             }
@@ -651,7 +772,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                                 {
                                     SelectedMod.HasUpdate = false;
                                     SelectedMod.LatestVersion = null;
-                                    this.RaisePropertyChanged(nameof(ModCountSummary));
+                                    this.RaisePropertyChanged(nameof(EnabledCountText));
                                     SetStatus($"{SelectedMod.Title} is up to date (version {SelectedMod.Version})");
                                 });
                             }
@@ -679,13 +800,6 @@ namespace FactorioModManager.ViewModels.MainWindow
         private ModViewModel? FindModByName(string name) =>
            _allMods.FirstOrDefault(m => m.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
 
-        private sealed class InstallDependencyResolution
-        {
-            public bool Proceed { get; set; }
-            public bool InstallEnabled { get; set; }
-            public List<ModViewModel> ModsToEnable { get; } = [];
-            public List<ModViewModel> ModsToDisable { get; } = [];
-            public List<string> MissingDependenciesToInstall { get; } = [];
-        }
+        // Note: dependency resolution and install decisions are handled by IDependencyFlow (DependencyFlow)
     }
 }

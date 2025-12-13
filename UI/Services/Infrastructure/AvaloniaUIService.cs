@@ -1,15 +1,15 @@
-﻿using Avalonia.Controls;
+﻿using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
 using FactorioModManager.Services.Settings;
 using FactorioModManager.Views.Dialogs;
 using System;
 using System.Diagnostics;
-using System.Threading.Tasks;
-using System.Linq;
-using Avalonia.Controls.ApplicationLifetimes;
-using Avalonia;
-using System.Runtime.InteropServices;
 using System.IO;
+using System.Linq;
+using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 
 namespace FactorioModManager.Services.Infrastructure
 {

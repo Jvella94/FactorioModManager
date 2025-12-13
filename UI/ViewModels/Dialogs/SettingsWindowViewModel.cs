@@ -1,7 +1,7 @@
-﻿using FactorioModManager.Services.Settings;
-using FactorioModManager.Services.Platform;
+﻿using FactorioModManager.Services;
 using FactorioModManager.Services.Infrastructure;
-using FactorioModManager.Services;
+using FactorioModManager.Services.Platform;
+using FactorioModManager.Services.Settings;
 using ReactiveUI;
 using System;
 using System.Reactive;

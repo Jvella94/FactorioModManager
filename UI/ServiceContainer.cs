@@ -52,17 +52,6 @@ namespace FactorioModManager
                 Resolve<ISettingsService>(),
                 Resolve<ILogService>()));
 
-            // Domain Services
-            RegisterSingleton<IModDependencyValidator>(new ModDependencyValidator(
-                Resolve<ISettingsService>()));
-
-            // Repository Layer
-            RegisterSingleton<IModRepository>(new ModRepository(
-                Resolve<ILogService>(),
-                Resolve<IModPathSettings>()));
-
-            // Business Logic Services
-            RegisterSingleton<IModFilterService>(new ModFilterService());
             RegisterSingleton<IModGroupService>(new ModGroupService(Resolve<ILogService>()));
             RegisterSingleton<IModMetadataService>(new ModMetadataService(Resolve<ILogService>()));
             RegisterSingleton<IThumbnailCache>(new ThumbnailCache(Resolve<ILogService>()));
@@ -94,11 +83,14 @@ namespace FactorioModManager
                 Resolve<IModPathSettings>(),
                 Resolve<IDownloadService>()));
 
-            RegisterSingleton<IModDependencyResolver>(new ModDependencyResolver(
-                Resolve<IUIService>(),
+            RegisterSingleton<IDependencyFlow>(new DependencyFlow(
                 Resolve<ILogService>(),
                 Resolve<IFactorioApiService>(),
                 Resolve<ISettingsService>()));
+
+            RegisterSingleton<IModRepository>(new ModRepository(
+                Resolve<ILogService>(),
+                Resolve<IModPathSettings>()));
 
             RegisterSingleton<IModService>(new ModService(
                 Resolve<IModRepository>(),
@@ -116,6 +108,8 @@ namespace FactorioModManager
                 Resolve<IModGroupService>(),
                 Resolve<IModMetadataService>(),
                 Resolve<ILogService>()));
+
+            RegisterSingleton<IModFilterService>(new ModFilterService());
 
             // Launcher
             RegisterSingleton<IFactorioLauncher>(new FactorioLauncher(
@@ -136,7 +130,7 @@ namespace FactorioModManager
                 Resolve<IDownloadService>(),
                 Resolve<IErrorMessageService>(),
                 Resolve<IAppUpdateChecker>(),
-                Resolve<IModDependencyResolver>(),
+                Resolve<IDependencyFlow>(),
                 Resolve<IModVersionManager>(),
                 Resolve<IFactorioLauncher>(),
                 Resolve<IThumbnailCache>(),

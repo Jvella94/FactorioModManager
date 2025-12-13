@@ -167,14 +167,69 @@ namespace FactorioModManager.Services
                     return;
 
                 var modsDirectory = FolderPathHelper.GetModsDirectory();
-                var oldFiles = Directory.GetFiles(modsDirectory, $"{modName}_*.zip")
-                    .Where(f => !f.Equals(currentVersionFile, StringComparison.OrdinalIgnoreCase))
-                    .ToList();
+                var allZipFiles = Directory.GetFiles(modsDirectory, "*.zip");
 
-                foreach (var oldFile in oldFiles)
+                foreach (var file in allZipFiles)
                 {
-                    File.Delete(oldFile);
-                    _logService.Log($"Deleted old version: {Path.GetFileName(oldFile)}");
+                    try
+                    {
+                        // Skip the current version file
+                        if (file.Equals(currentVersionFile, StringComparison.OrdinalIgnoreCase))
+                            continue;
+
+                        var fileName = Path.GetFileNameWithoutExtension(file);
+                        // Expect file format: <modName>_<version>
+                        var lastUnderscore = fileName.LastIndexOf('_');
+                        if (lastUnderscore <= 0)
+                            continue;
+
+                        var namePart = fileName[..lastUnderscore];
+                        if (!namePart.Equals(modName, StringComparison.OrdinalIgnoreCase))
+                            continue;
+
+                        // Extra safety: verify the ZIP's internal info.json declares the same mod name
+                        bool safeToDelete = false;
+                        try
+                        {
+                            using var archive = ZipFile.OpenRead(file);
+                            var infoEntry = archive.Entries.FirstOrDefault(e =>
+                                e.FullName.EndsWith(Constants.FileSystem.InfoJsonFileName, StringComparison.OrdinalIgnoreCase));
+                            if (infoEntry != null)
+                            {
+                                using var stream = infoEntry.Open();
+                                using var sr = new StreamReader(stream);
+                                var json = sr.ReadToEnd();
+                                try
+                                {
+                                    var info = System.Text.Json.JsonSerializer.Deserialize<Models.ModInfo>(json, Constants.JsonHelper.CaseInsensitive);
+                                    if (info != null && info.Name.Equals(modName, StringComparison.OrdinalIgnoreCase))
+                                        safeToDelete = true;
+                                }
+                                catch
+                                {
+                                    safeToDelete = false;
+                                }
+                            }
+                        }
+                        catch (Exception exZip)
+                        {
+                            _logService.LogWarning($"Skipping deletion of {file}: could not read ZIP ({exZip.Message})");
+                            safeToDelete = false;
+                        }
+
+                        if (!safeToDelete)
+                        {
+                            _logService.LogDebug($"Skipping deletion of {Path.GetFileName(file)} because it does not match mod '{modName}' or could not be verified");
+                            continue;
+                        }
+
+                        File.Delete(file);
+                        _logService.Log($"Deleted old version: {Path.GetFileName(file)}");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logService.LogWarning($"Error deleting old version file: {ex.Message}");
+                    }
                 }
             }
             catch (Exception ex)

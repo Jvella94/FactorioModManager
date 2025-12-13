@@ -6,12 +6,14 @@ using FactorioModManager.Services.Mods;
 using FactorioModManager.Services.Settings;
 using ReactiveUI;
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Reactive.Disposables;
 using System.Reactive.Disposables.Fluent;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
+using static FactorioModManager.Constants;
 
 namespace FactorioModManager.ViewModels.MainWindow
 {
@@ -52,7 +54,7 @@ namespace FactorioModManager.ViewModels.MainWindow
         private readonly IDownloadService _downloadService;
         private readonly IErrorMessageService _errorMessageService;
         private readonly IAppUpdateChecker _appUpdateChecker;
-        private readonly IModDependencyResolver _modDependencyResolver;
+        private readonly IDependencyFlow _dependencyFlow;
         private readonly IModVersionManager _modVersionManager;
         private readonly IFactorioLauncher _factorioLauncher;
         private readonly IThumbnailCache _thumbnailCache;
@@ -69,7 +71,7 @@ namespace FactorioModManager.ViewModels.MainWindow
             IDownloadService downloadService,
             IErrorMessageService errorMessageService,
             IAppUpdateChecker appUpdateChecker,
-            IModDependencyResolver modDependencyResolver,
+            IDependencyFlow dependencyFlow,
             IModVersionManager modVersionManager,
             IFactorioLauncher factorioLauncher,
             IThumbnailCache thumbnailCache,
@@ -85,7 +87,7 @@ namespace FactorioModManager.ViewModels.MainWindow
             _downloadService = downloadService;
             _errorMessageService = errorMessageService;
             _appUpdateChecker = appUpdateChecker;
-            _modDependencyResolver = modDependencyResolver;
+            _dependencyFlow = dependencyFlow;
             _modVersionManager = modVersionManager;
             _factorioLauncher = factorioLauncher;
             _thumbnailCache = thumbnailCache;
@@ -164,7 +166,10 @@ namespace FactorioModManager.ViewModels.MainWindow
                             .ObserveOn(RxApp.MainThreadScheduler)
                             .Subscribe(_ =>
                             {
-                                this.RaisePropertyChanged(nameof(ModCountSummary));
+                                this.RaisePropertyChanged(nameof(EnabledCountText));
+                                this.RaisePropertyChanged(nameof(UpdatesAvailableCount));
+                                this.RaisePropertyChanged(nameof(HasUpdates));
+                                this.RaisePropertyChanged(nameof(UpdatesCountText));
                                 this.RaisePropertyChanged(nameof(UnusedInternalCount));
                                 this.RaisePropertyChanged(nameof(HasUnusedInternals));
                                 this.RaisePropertyChanged(nameof(UnusedInternalWarning));
@@ -215,7 +220,10 @@ namespace FactorioModManager.ViewModels.MainWindow
             }
 
             this.RaisePropertyChanged(nameof(ModCountText));
-            this.RaisePropertyChanged(nameof(ModCountSummary));
+            this.RaisePropertyChanged(nameof(EnabledCountText));
+            this.RaisePropertyChanged(nameof(UpdatesAvailableCount));
+            this.RaisePropertyChanged(nameof(HasUpdates));
+            this.RaisePropertyChanged(nameof(UpdatesCountText));
         }
 
         /// <summary>
@@ -348,7 +356,21 @@ namespace FactorioModManager.ViewModels.MainWindow
 
                     // Update SourceUrl using metadata service
                     value.SourceUrl = _metadataService.GetSourceUrl(value.Name);
-                    value.InstalledDependencies = [.. value.Dependencies.Where(dependency => _modVersionManager.GetInstalledVersions(dependency).Count != 0)];
+                    // Populate InstalledDependencies as (Name, InstalledVersion) tuples
+                    try
+                    {
+                        var installedDeps = new List<(string Name, string? InstalledVersion)>();
+                        foreach (var raw in value.Dependencies)
+                        {
+                            var name = DependencyHelper.ExtractDependencyName(raw);
+                            if (string.IsNullOrEmpty(name)) continue;
+                            var ver = _modVersionManager?.GetInstalledVersions(name).FirstOrDefault();
+                            if (!string.IsNullOrEmpty(ver))
+                                installedDeps.Add((name, ver));
+                        }
+                        value.InstalledDependencies = installedDeps;
+                    }
+                    catch { }
                 }
             }
         }
@@ -412,16 +434,21 @@ namespace FactorioModManager.ViewModels.MainWindow
 
         public string ModCountText => $"Mods: {FilteredMods.Count} / {AllModsCount}";
 
-        public string ModCountSummary
+        public string EnabledCountText
         {
             get
             {
                 var enabled = _allMods.Count(m => m.IsEnabled);
                 var total = _allMods.Count;
-                var updates = _allMods.Count(m => m.HasUpdate);
-                return $"Enabled: {enabled}/{total} | Updates: {updates}";
+                return $"Enabled: {enabled}/{total}";
             }
         }
+
+        public int UpdatesAvailableCount => _allMods.Count(m => m.HasUpdate);
+
+        public bool HasUpdates => UpdatesAvailableCount > 0;
+
+        public string UpdatesCountText => HasUpdates ? $"Updates: {UpdatesAvailableCount}" : string.Empty;
 
         public string UnusedInternalWarning => $"⚠ {UnusedInternalCount} unused internal dependencies";
         public int UnusedInternalCount => _allMods.Count(m => m.IsUnusedInternal);

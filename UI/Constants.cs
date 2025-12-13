@@ -6,8 +6,9 @@ using NuGet.Versioning;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.Json;
 using System.Reflection;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace FactorioModManager
 {
@@ -108,8 +109,9 @@ namespace FactorioModManager
             /// <summary>
             /// Characters used to separate dependency names from version constraints
             /// Example: "base >= 2.0" splits into ["base", "2.0"]
+            /// Note: space removed so mod names containing spaces are preserved; parsing relies on operators instead
             /// </summary>
-            public static readonly char[] Dependency = [' ', '>', '<', '=', '!', '?', '(', ')'];
+            public static readonly char[] Dependency = ['>', '<', '=', '!', '?', '(', ')'];
         }
 
         /// <summary>
@@ -328,9 +330,33 @@ namespace FactorioModManager
                     .Distinct(StringComparer.OrdinalIgnoreCase)];
             }
 
+            // NEW: get mandatory dependencies preserving parsed constraint information
+            public static IReadOnlyList<(string Raw, string? Prefix, string Name, string? VersionOperator, string? Version)> GetMandatoryDependenciesWithConstraints(IReadOnlyList<string>? dependencies)
+            {
+                if (dependencies == null || dependencies.Count == 0)
+                    return [];
+
+                var list = new List<(string Raw, string? Prefix, string Name, string? VersionOperator, string? Version)>();
+                foreach (var raw in dependencies)
+                {
+                    var parsed = ParseDependency(raw);
+                    if (parsed == null)
+                        continue;
+
+                    // Mandatory: no prefix OR `~` (load-order only) but not `?`, "(?)", or `!` [web:38]
+                    if (parsed.Value.Prefix is null or "" or "~")
+                    {
+                        list.Add((raw, parsed.Value.Prefix, parsed.Value.Name, parsed.Value.VersionOperator, parsed.Value.Version));
+                    }
+                }
+
+                return list;
+            }
+
             /// <summary>
             /// Parses a raw dependency string and returns prefix, name, version operator and version.
             /// Example: "? modname >= 1.2.3" -> ("?","modname", ">=", "1.2.3")
+            /// This implementation supports names containing spaces by using a regex to locate operators.
             /// </summary>
             public static (string? Prefix, string Name, string? VersionOperator, string? Version)? ParseDependency(string raw)
             {
@@ -355,53 +381,14 @@ namespace FactorioModManager
                 if (string.IsNullOrEmpty(trimmed))
                     return null;
 
-                // Split name and possible constraint
-                var parts = trimmed.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
-                var name = parts[0];
-                string? op = null;
-                string? ver = null;
+                // Use regex to capture name (allowing spaces) and optional operator+version
+                var m = GenRegex.NameOperatorAndVersionRegex().Match(trimmed);
+                if (!m.Success)
+                    return (prefix, trimmed, null, null);
 
-                if (parts.Length > 1)
-                {
-                    var constraint = parts[1].Trim();
-                    // Look for operators >=, <=, >, <, =
-                    if (constraint.StartsWith(">=", StringComparison.Ordinal))
-                    {
-                        op = ">=";
-                        ver = constraint[2..].Trim();
-                    }
-                    else if (constraint.StartsWith("<=", StringComparison.Ordinal))
-                    {
-                        op = "<=";
-                        ver = constraint[2..].Trim();
-                    }
-                    else if (constraint.StartsWith('>'))
-                    {
-                        op = ">";
-                        ver = constraint[1..].Trim();
-                    }
-                    else if (constraint.StartsWith('<'))
-                    {
-                        op = "<";
-                        ver = constraint[1..].Trim();
-                    }
-                    else if (constraint.StartsWith('='))
-                    {
-                        op = "=";
-                        ver = constraint[1..].Trim();
-                    }
-                    else
-                    {
-                        // If constraint doesn't start with an operator, try to extract numeric token
-                        var firstToken = constraint.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
-                        if (!string.IsNullOrEmpty(firstToken))
-                        {
-                            // assume '='
-                            op = "=";
-                            ver = firstToken;
-                        }
-                    }
-                }
+                var name = m.Groups["name"].Value.Trim();
+                var op = m.Groups["op"].Success ? m.Groups["op"].Value : null;
+                var ver = m.Groups["ver"].Success ? m.Groups["ver"].Value.Trim() : null;
 
                 return (prefix, name, op, ver);
             }
@@ -436,30 +423,12 @@ namespace FactorioModManager
                 if (string.IsNullOrWhiteSpace(raw))
                     return null;
 
-                var trimmed = raw.Trim();
-                string? prefix = null;
-
-                // Factorio prefixes: "!", "?", "(?)", "~" [web:38]
-                if (trimmed.StartsWith("(!)", StringComparison.Ordinal) ||
-                    trimmed.StartsWith("(?)", StringComparison.Ordinal))
-                {
-                    prefix = trimmed[..3];
-                    trimmed = trimmed[3..].TrimStart();
-                }
-                else if (trimmed.Length > 0 && (trimmed[0] == '!' || trimmed[0] == '?' || trimmed[0] == '~'))
-                {
-                    prefix = trimmed[0].ToString();
-                    trimmed = trimmed[1..].TrimStart();
-                }
-
-                // Strip any version constraint part: "name >= 1.0.0" → "name" [web:38]
-                var spaceIndex = trimmed.IndexOf(' ');
-                var name = (spaceIndex > 0 ? trimmed[..spaceIndex] : trimmed).Trim();
-
-                if (string.IsNullOrEmpty(name))
+                // Reuse ParseDependency to correctly handle names with spaces
+                var parsed = ParseDependency(raw);
+                if (parsed == null)
                     return null;
 
-                return (prefix, name);
+                return (parsed.Value.Prefix, parsed.Value.Name);
             }
         }
 
@@ -494,5 +463,11 @@ namespace FactorioModManager
                 PropertyNameCaseInsensitive = true,
             };
         }
+    }
+
+    internal static partial class GenRegex
+    {
+        [GeneratedRegex(@"^(?<name>.+?)\s*(?<op>>=|<=|=|>|<)?\s*(?<ver>.+)?$")]
+        internal static partial Regex NameOperatorAndVersionRegex();
     }
 }

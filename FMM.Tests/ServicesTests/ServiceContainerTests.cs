@@ -1,5 +1,5 @@
-using System;
 using FactorioModManager;
+using System;
 using Xunit;
 
 namespace Tests.ServicesTests

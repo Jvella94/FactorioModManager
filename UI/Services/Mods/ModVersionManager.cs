@@ -1,6 +1,7 @@
 ﻿using FactorioModManager.Models;
 using FactorioModManager.Services.Infrastructure;
 using FactorioModManager.Services.Settings;
+using static FactorioModManager.Constants;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -36,7 +37,15 @@ namespace FactorioModManager.Services.Mods
 
         public List<string> GetInstalledVersions(string modName)
         {
-            if (_versionCache.TryGetValue(modName, out var cachedVersions))
+            if (string.IsNullOrWhiteSpace(modName))
+                return [];
+
+            // Support callers passing raw dependency strings (e.g. "modname >= 1.2") by extracting the name
+            var name = DependencyHelper.ExtractDependencyName(modName);
+            if (string.IsNullOrEmpty(name))
+                name = modName;
+
+            if (_versionCache.TryGetValue(name, out var cachedVersions))
             {
                 return cachedVersions;
             }
@@ -46,7 +55,7 @@ namespace FactorioModManager.Services.Mods
 
             try
             {
-                var modFiles = Directory.GetFiles(modsDirectory, $"{modName}_*.zip");
+                var modFiles = Directory.GetFiles(modsDirectory, $"{name}_*.zip");
 
                 foreach (var file in modFiles)
                 {
@@ -56,16 +65,18 @@ namespace FactorioModManager.Services.Mods
                     if (parts.Length >= 2)
                     {
                         var version = parts[^1];
-                        versions.Add(version);
+                        if (!string.IsNullOrEmpty(version))
+                            versions.Add(version);
                     }
                 }
 
-                versions = [.. versions.OrderByDescending(v => v)];
-                _versionCache[modName] = versions;
+                // Sort using semantic-aware comparer when possible
+                versions = [.. versions.OrderByDescending(v => v, Comparer<string>.Create((a, b) => VersionHelper.CompareVersions(a, b)))];
+                _versionCache[name] = versions;
             }
             catch (Exception ex)
             {
-                _logService.LogError($"Error getting installed versions for {modName}: {ex.Message}", ex);
+                _logService.LogError($"Error getting installed versions for {name}: {ex.Message}", ex);
             }
 
             return versions;

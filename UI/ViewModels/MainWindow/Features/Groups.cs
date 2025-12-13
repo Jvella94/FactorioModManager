@@ -55,7 +55,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                 }
             }
 
-            this.RaisePropertyChanged(nameof(ModCountSummary));
+            this.RaisePropertyChanged(nameof(EnabledCountText));
             UpdateGroupStatus(group);
             SetStatus($"Group '{group.Name}' {(enableGroup ? "enabled" : "disabled")}");
         }

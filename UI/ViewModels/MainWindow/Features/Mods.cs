@@ -1,10 +1,10 @@
 ﻿using FactorioModManager.Models;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using static FactorioModManager.Constants;
-using System.IO;
 
 namespace FactorioModManager.ViewModels.MainWindow
 {
@@ -192,6 +192,23 @@ namespace FactorioModManager.ViewModels.MainWindow
                 SizeOnDiskBytes = _metadataService.GetSizeOnDisk(info.Name),
             };
 
+            // Populate InstalledDependencies for dependency version checks
+            try
+            {
+                // Normalize dependency strings and check installed versions by extracted name
+                var installedDeps = new List<(string Name, string? InstalledVersion)>();
+                foreach (var raw in info.Dependencies)
+                {
+                    var name = DependencyHelper.ExtractDependencyName(raw);
+                    if (string.IsNullOrEmpty(name)) continue;
+                    var ver = _modVersionManager?.GetInstalledVersions(name).FirstOrDefault();
+                    if (!string.IsNullOrEmpty(ver))
+                        installedDeps.Add((name, ver));
+                }
+                modVm.InstalledDependencies = installedDeps;
+            }
+            catch { }
+
             var group = loadedGroups.FirstOrDefault(g => g.ModNames.Contains(modVm.Title));
             if (group != null)
             {
@@ -321,24 +338,26 @@ namespace FactorioModManager.ViewModels.MainWindow
 
             foreach (var depName in dependencyNames)
             {
-                // ✅ FIX: Skip game dependencies (base, space-age, quality, elevated-rails)
-                if (DependencyHelper.IsGameDependency(depName))
-                {
+                // Normalize and skip invalid/game dependencies
+                var dep = DependencyHelper.ExtractDependencyName(depName);
+                if (string.IsNullOrEmpty(dep))
                     continue;
-                }
 
-                var dep = FindModByName(depName);
-                if (dep == null)
+                if (DependencyHelper.IsGameDependency(dep))
+                    continue;
+
+                var found = FindModByName(dep);
+                if (found == null)
                 {
-                    missing.Add(depName);
+                    missing.Add(dep);
                 }
-                else if (dep.IsEnabled)
+                else if (found.IsEnabled)
                 {
-                    installedEnabled.Add(dep);
+                    installedEnabled.Add(found);
                 }
                 else
                 {
-                    installedDisabled.Add(dep);
+                    installedDisabled.Add(found);
                 }
             }
 

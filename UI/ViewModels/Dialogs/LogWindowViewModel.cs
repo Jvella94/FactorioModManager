@@ -2,15 +2,15 @@
 using FactorioModManager.Models;
 using FactorioModManager.Services.Infrastructure;
 using ReactiveUI;
+using System;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Disposables;
-using System.IO;
-using System;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
-using System.Diagnostics;
 
 namespace FactorioModManager.ViewModels.Dialogs
 {
@@ -165,11 +165,6 @@ namespace FactorioModManager.ViewModels.Dialogs
 
             _disposables.Add(_logsUpdatedSubscription);
 
-            // Add test long message when debugging to verify wrapping
-            if (Debugger.IsAttached)
-            {
-                _logService.LogDebug(string.Join(' ', Enumerable.Repeat("This is a very long test message used to verify wrapping behavior in the log viewer. It should wrap correctly when the window is resized to smaller widths.", 6)));
-            }
         }
 
         private void LoadLogs()

@@ -1,20 +1,20 @@
 ﻿using Avalonia.Controls;
 using FactorioModManager.Models.DTO;
+using FactorioModManager.Services;
 using FactorioModManager.Services.Infrastructure;
 using FactorioModManager.Services.Mods;
 using FactorioModManager.Services.Settings;
+using FactorioModManager.ViewModels.MainWindow;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Disposables;
 using System.Threading;
 using System.Threading.Tasks;
-using FactorioModManager.ViewModels.MainWindow;
-using System.IO;
-using FactorioModManager.Services;
 
 namespace FactorioModManager.ViewModels.Dialogs
 {
