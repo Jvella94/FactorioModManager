@@ -44,6 +44,8 @@ namespace FactorioModManager.Services
                 var fileName = $"{modName}_{version}.zip";
                 var filePath = Path.Combine(modsDirectory, fileName);
 
+                _logService.LogDebug($"Downloading mod '{modName}' to '{filePath}' from '{authenticatedUrl}' (using separate downloads/incomplete folder)");
+
                 var downloadResult = await DownloadFileAsync(authenticatedUrl, filePath, progress, cancellationToken);
 
                 if (!downloadResult.Success)
@@ -201,7 +203,7 @@ namespace FactorioModManager.Services
                                 var json = sr.ReadToEnd();
                                 try
                                 {
-                                    var info = System.Text.Json.JsonSerializer.Deserialize<Models.ModInfo>(json, Constants.JsonHelper.CaseInsensitive);
+                                    var info = System.Text.Json.JsonSerializer.Deserialize<Models.ModInfo>(json, Constants.JsonOptions.CaseInsensitive);
                                     if (info != null && info.Name.Equals(modName, StringComparison.OrdinalIgnoreCase))
                                         safeToDelete = true;
                                 }
@@ -244,42 +246,147 @@ namespace FactorioModManager.Services
       IProgress<(long, long?)>? progress = null,
       CancellationToken cancellationToken = default)
         {
+            // Use a separate downloads/incomplete folder outside of the mods directory
+            var systemTemp = Path.GetTempPath();
+            var downloadsDir = Path.Combine(systemTemp, "FactorioModManager", "downloads");
+            Directory.CreateDirectory(downloadsDir);
+
+            var destFileName = Path.GetFileName(destinationPath) ?? ("downloaded_mod.zip");
+            var uniqueId = Guid.NewGuid().ToString("N");
+            var tempPath = Path.Combine(downloadsDir, destFileName + "." + uniqueId + ".zip.part");
+
             try
             {
+                _logService.LogDebug($"Starting file download: url='{url}' -> temp='{tempPath}'");
+
                 using var response = await _httpClient.GetAsync(url,
                     HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
                 if (!response.IsSuccessStatusCode)
+                {
+                    _logService.LogWarning($"Download failed HTTP {response.StatusCode}: {url}");
                     return Result<bool>.Fail($"HTTP {response.StatusCode}", ErrorCode.DownloadFailed);
+                }
 
                 var totalBytes = response.Content.Headers.ContentLength;
-                using var contentStream = await response.Content.ReadAsStreamAsync(cancellationToken);
-                using var fileStream = new FileStream(destinationPath, FileMode.Create,
-                    FileAccess.Write, FileShare.None, 8192, useAsync: true);
+                var totalRead = await DownloadTempFile(progress, tempPath, response, totalBytes, cancellationToken);
 
-                var buffer = new byte[8192];
-                long totalRead = 0;
-                int bytesRead;
-
-                while ((bytesRead = await contentStream.ReadAsync(buffer, cancellationToken)) > 0)
+                // Move temp file into final mods directory atomically (with retries)
+                try
                 {
-                    await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken);
-                    totalRead += bytesRead;
-                    progress?.Report((totalRead, totalBytes));
+                    const int moveMaxAttempts = 8;
+                    var moved = false;
+                    for (int moveAttempt = 1; moveAttempt <= moveMaxAttempts; moveAttempt++)
+                    {
+                        try
+                        {
+                            // Ensure destination directory exists
+                            var destDir = Path.GetDirectoryName(destinationPath);
+                            if (!string.IsNullOrEmpty(destDir))
+                                Directory.CreateDirectory(destDir);
+
+                            // If destination exists, try delete (best effort)
+                            try
+                            {
+                                if (File.Exists(destinationPath))
+                                    File.Delete(destinationPath);
+                            }
+                            catch (Exception exDel)
+                            {
+                                _logService.LogDebug($"Attempt {moveAttempt}: unable to delete existing destination '{destinationPath}': {exDel.Message}");
+                            }
+
+                            _logService.LogDebug($"Attempt {moveAttempt}: moving temp file '{tempPath}' to final '{destinationPath}'");
+                            File.Move(tempPath, destinationPath);
+                            _logService.Log($"Download completed: {Path.GetFileName(destinationPath)} ({totalBytes ?? totalRead:N0} bytes)");
+                            moved = true;
+                            break;
+                        }
+                        catch (IOException ioEx)
+                        {
+                            _logService.LogWarning($"Attempt {moveAttempt} failed moving '{tempPath}' to '{destinationPath}': {ioEx.Message}");
+                            if (moveAttempt == moveMaxAttempts)
+                            {
+                                _logService.LogError($"IO error moving temp file after {moveMaxAttempts} attempts: {ioEx.Message}", ioEx);
+                                throw;
+                            }
+
+                            // Backoff before retrying
+                            try { Thread.Sleep(300 * moveAttempt); } catch { }
+                            continue;
+                        }
+                        catch (Exception exMove)
+                        {
+                            _logService.LogError($"Failed to move temp file '{tempPath}' to '{destinationPath}': {exMove.Message}", exMove);
+                            throw;
+                        }
+                    }
+
+                    if (!moved)
+                    {
+                        // Ensure temp file removed and return failure
+                        if (File.Exists(tempPath))
+                        {
+                            try { File.Delete(tempPath); } catch { }
+                        }
+                        return Result<bool>.Fail("Failed to finalize download: destination file locked", ErrorCode.FileAccessDenied);
+                    }
+                }
+                catch (Exception exMove)
+                {
+                    // cleanup temp and propagate failure
+                    if (File.Exists(tempPath))
+                        File.Delete(tempPath);
+                    return Result<bool>.Fail($"Failed to finalize download: {exMove.Message}", ErrorCode.FileAccessDenied);
                 }
 
                 return Result<bool>.Ok(true);
             }
             catch (OperationCanceledException)
             {
-                if (File.Exists(destinationPath))
-                    File.Delete(destinationPath);
+                _logService.LogWarning($"Download cancelled: {Path.GetFileName(destinationPath)}");
+
+                // Clean up temp file
+                if (File.Exists(tempPath))
+                {
+                    try { File.Delete(tempPath); } catch { }
+                }
+
                 throw;
             }
             catch (Exception ex)
             {
+                _logService.LogError($"Download failed for '{destinationPath}': {ex.Message}", ex);
+
+                // Clean up temp file
+                if (File.Exists(tempPath))
+                {
+                    try { File.Delete(tempPath); } catch { }
+                }
                 return Result<bool>.Fail(ex.Message, ErrorCode.NetworkError);
             }
+        }
+
+        private static async Task<long> DownloadTempFile(IProgress<(long, long?)>? progress, string tempPath, HttpResponseMessage response, long? totalBytes, CancellationToken cancellationToken)
+        {
+            await using var contentStream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            await using var fileStream = new FileStream(tempPath, FileMode.Create,
+                FileAccess.Write, FileShare.None, 8192, useAsync: true);
+
+            var buffer = new byte[8192];
+            long totalRead = 0;
+            int bytesRead;
+
+            while ((bytesRead = await contentStream.ReadAsync(buffer, cancellationToken)) > 0)
+            {
+                await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken);
+                totalRead += bytesRead;
+                progress?.Report((totalRead, totalBytes));
+            }
+
+            // ensure data flushed
+            await fileStream.FlushAsync(cancellationToken);
+            return totalRead;
         }
     }
 }

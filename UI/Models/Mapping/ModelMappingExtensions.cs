@@ -8,9 +8,6 @@ using System.Linq;
 
 namespace FactorioModManager.Models.Mapping
 {
-    /// <summary>
-    /// Extension methods for mapping between different model types
-    /// </summary>
     public static class ModelMappingExtensions
     {
         // ============================================

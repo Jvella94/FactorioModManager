@@ -41,7 +41,7 @@ namespace FactorioModManager.Services
                 _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("FactorioModManager/1.0");
 
                 var response = await _httpClient.GetStringAsync(url);
-                var release = JsonSerializer.Deserialize<GitHubRelease>(response, Constants.JsonHelper.CaseInsensitive);
+                var release = JsonSerializer.Deserialize<GitHubRelease>(response, Constants.JsonOptions.CaseInsensitive);
 
                 if (release?.TagName == null || release.HtmlUrl == null)
                 {

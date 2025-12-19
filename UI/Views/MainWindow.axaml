@@ -16,12 +16,15 @@
 
   <Window.Resources>
     <converter:IsNotGameDependencyConverter x:Key="IsNotGameDependencyConverter" />
+    <converter:HasGameDependenciesConverter x:Key="HasGameDependenciesConverter" />
     <converter:BaseGameVersionConverter x:Key="BaseGameVersionConverter" />
     <converter:IsBaseDependencyConverter x:Key="IsBaseDependencyConverter" />
     <converter:GameDependencyIconPathConverter x:Key="GameDependencyIconPathConverter" />
     <converter:DependencyColorConverter x:Key="DependencyColorConverter" />
     <converter:ExpandCollapseConverter x:Key="ExpandCollapseConverter" />
     <converter:GreaterThanFiveConverter x:Key="GreaterThanFiveConverter" />
+    <converter:IsOptionalDependencyConverter x:Key="IsOptionalDependencyConverter" />
+    <converter:BoolToOpacityConverter x:Key="BoolToOpacityConverter" />
   </Window.Resources>
 
   <Design.DataContext>
@@ -324,6 +327,18 @@
 
                 <Separator />
 
+                <!-- Moved buttons: Mod Portal and Changelog (mirror navigation button sizing) -->
+                <Grid ColumnDefinitions="*,105">
+                  <Button Grid.Column="0"
+                          Content="Mod Portal"
+                          Command="{Binding ElementName=RootWindow, Path=DataContext.OpenModPortalCommand}" />
+
+                  <Button Grid.Column="1"
+                          Content="Changelog"
+                          Command="{Binding ElementName=RootWindow, Path=DataContext.OpenChangelogCommand}"
+                          Margin="6,0,0,0" />
+                </Grid>
+
                 <!-- Thumbnail -->
                 <Image Source="{Binding Thumbnail}"
                        Width="200" Height="200"
@@ -453,13 +468,15 @@
                                VerticalAlignment="Center" />
 
                   <!-- Dependencies header with compact rounded expand button -->
-                  <Grid Margin="0,10,10,4">
+                  <!-- Reduced top margin so when game-dependency icons are hidden the gap is smaller -->
+                  <Grid Margin="0,4,10,4">
                     <Grid.ColumnDefinitions>
                       <ColumnDefinition Width="*" />
                       <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <!-- Game dependency icons in a horizontal row -->
-                    <ItemsControl ItemsSource="{Binding Dependencies}" Margin="0,10">
+                    <!-- Game dependency icons in a horizontal row (only visible when game dependencies found) -->
+                    <ItemsControl ItemsSource="{Binding Dependencies}" Margin="0,6"
+                                  IsVisible="{Binding Dependencies, Converter={StaticResource HasGameDependenciesConverter}}">
                       <!-- Make all items share one horizontal strip -->
                       <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
@@ -484,10 +501,19 @@
                                        IsVisible="{Binding Converter={StaticResource IsBaseDependencyConverter}}" />
 
                             <!-- Icon for base / space-age / quality / elevated-rails -->
-                            <Image Width="24"
-                                   Height="24"
-                                   VerticalAlignment="Center"
-                                   Source="{Binding Converter={StaticResource GameDependencyIconPathConverter}}" />
+                            <Grid Width="24" Height="24" VerticalAlignment="Center">
+                              <Image Width="24"
+                                     Height="24"
+                                     VerticalAlignment="Center"
+                                     Source="{Binding Converter={StaticResource GameDependencyIconPathConverter}}"
+                                     Stretch="Uniform" />
+
+                              <!-- Yellow translucent mask for optional dependencies -->
+                              <Rectangle Fill="#FFFF00"
+                                         Opacity="0.35"
+                                         IsHitTestVisible="False"
+                                         IsVisible="{Binding Converter={StaticResource IsOptionalDependencyConverter}}" />
+                            </Grid>
                           </StackPanel>
                         </DataTemplate>
                       </ItemsControl.ItemTemplate>
@@ -522,7 +548,7 @@
                   </Grid>
 
                   <!-- Dependency list: vertical stack of pill buttons -->
-                  <ItemsControl ItemsSource="{Binding VisibleDependencies}" Margin="0,6,10,0">
+                  <ItemsControl ItemsSource="{Binding VisibleDependencies}" Margin="0,6,15,0">
                     <ItemsControl.ItemsPanel>
                       <ItemsPanelTemplate>
                         <StackPanel Orientation="Vertical" Spacing="6" />
@@ -556,12 +582,9 @@
                   <Button Content="View Mod File"
                           Click="OpenModFile"
                           HorizontalAlignment="Stretch" />
-                  <Button Content="View Mods That Depend On This"
+                  <Button Content="View Parent Mods"
                           Command="{Binding ElementName=RootWindow, Path=DataContext.ViewDependentsCommand}"
                           CommandParameter="{Binding}"
-                          HorizontalAlignment="Stretch" />
-                  <Button Content="View on Mod Portal"
-                          Command="{Binding ElementName=RootWindow, Path=DataContext.OpenModPortalCommand}"
                           HorizontalAlignment="Stretch" />
                   <Button Content="View Source Code"
                           Command="{Binding ElementName=RootWindow, Path=DataContext.OpenSourceUrlCommand}"
@@ -569,9 +592,6 @@
                           IsEnabled="{Binding SourceUrl, Converter={x:Static ObjectConverters.IsNotNull}}" />
                   <Button Content="Refresh Mod Info &amp; Check Update"
                           Command="{Binding ElementName=RootWindow, Path=DataContext.RefreshSelectedModCommand}"
-                          HorizontalAlignment="Stretch" />
-                  <Button Content="View Changelog"
-                          Command="{Binding ElementName=RootWindow, Path=DataContext.OpenChangelogCommand}"
                           HorizontalAlignment="Stretch" />
                   <Button Content="View Version History"
                           Command="{Binding ElementName=RootWindow, Path=DataContext.OpenVersionHistoryCommand}"
@@ -618,13 +638,36 @@
                     Spacing="10"
                     VerticalAlignment="Center">
 
-          <!-- Update All progress (shown when running) -->
-          <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"
-                      IsVisible="{Binding IsUpdatingAll}">
-            <ProgressBar Width="120" Height="6" IsIndeterminate="False" Minimum="0" Maximum="100"
-                         Value="{Binding UpdateAllProgressPercent, Mode=OneWay}" />
-            <TextBlock Text="{Binding UpdateAllProgressText}" Foreground="#DDD" VerticalAlignment="Center" />
-          </StackPanel>
+          <!-- Download Progress (shown when running) -->
+          <!-- DownloadProgressPanel kept in layout but fades out when IsDownloadProgressVisible is false. Opacity is bound to IsDownloadProgressVisible and animated via Transitions. Hit testing disabled when hidden. -->
+          <StackPanel Name="DownloadProgressPanel" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"
+                      Opacity="{Binding IsDownloadProgressVisible, Converter={StaticResource BoolToOpacityConverter}}"
+                      IsHitTestVisible="{Binding IsDownloadProgressVisible}">
+            <StackPanel.Transitions>
+              <Transitions>
+                <DoubleTransition Property="Opacity" Duration="0:0:0.32" />
+              </Transitions>
+            </StackPanel.Transitions>
+             <!-- Use a two-column grid: left = progress bar, right = stacked count + speed to avoid overlap -->
+             <Grid Height="20">
+               <Grid.ColumnDefinitions>
+                 <ColumnDefinition Width="*" />
+                 <ColumnDefinition Width="Auto" />
+               </Grid.ColumnDefinitions>
+
+               <ProgressBar Grid.Column="0" Height="6" IsIndeterminate="False" Minimum="0" Maximum="100"
+                            Value="{Binding DownloadProgress.ProgressPercent, Mode=OneWay}"
+                            VerticalAlignment="Center"
+                            Margin="0,0,8,0" />
+
+               <!-- Right: stacked count and speed -->
+               <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Spacing="0">
+                 <TextBlock Text="{Binding DownloadProgress.ProgressText}" Foreground="#DDD" FontSize="15" HorizontalAlignment="Right"  VerticalAlignment="Center" />
+                 <TextBlock Text=" | " Foreground="#DDD" FontSize="15" HorizontalAlignment="Right"  VerticalAlignment="Center" />
+                 <TextBlock Text="{Binding DownloadProgress.SpeedText}" Foreground="#DDD" FontSize="14" HorizontalAlignment="Right" VerticalAlignment="Center" Opacity="0.9" />
+               </StackPanel>
+             </Grid>
+           </StackPanel>
 
           <!-- Factorio Version -->
           <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" IsVisible="{Binding HasFactorioVersion}">

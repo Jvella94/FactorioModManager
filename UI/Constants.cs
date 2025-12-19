@@ -277,7 +277,14 @@ namespace FactorioModManager
             {
                 if (string.IsNullOrWhiteSpace(dependency))
                     return string.Empty;
+                // Prefer the robust parser that handles prefixes like '?', '!' and '(?)' as well as
+                // names that include spaces. This prevents incorrect values such as single-character
+                // results when naive splitting goes wrong.
+                var parsed = ParseDependency(dependency);
+                if (parsed != null)
+                    return parsed.Value.Name ?? string.Empty;
 
+                // Fallback: old behaviour (split on operator characters)
                 return dependency
                     .Split(Separators.Dependency, StringSplitOptions.RemoveEmptyEntries)
                     .FirstOrDefault()?.Trim() ?? string.Empty;
@@ -432,7 +439,7 @@ namespace FactorioModManager
             }
         }
 
-        public static class JsonHelper
+        public static class JsonOptions
         {
             public static readonly JsonSerializerOptions CamelCase = new()
             {
@@ -467,7 +474,8 @@ namespace FactorioModManager
 
     internal static partial class GenRegex
     {
-        [GeneratedRegex(@"^(?<name>.+?)\s*(?<op>>=|<=|=|>|<)?\s*(?<ver>.+)?$")]
+        // Match a name that excludes operator characters, then optional operator+version
+        [GeneratedRegex(@"^(?<name>[^<>=]+)\s*(?<op>>=|<=|=|>|<)?\s*(?<ver>.+)?$")]
         internal static partial Regex NameOperatorAndVersionRegex();
     }
 }

@@ -103,8 +103,8 @@
                              VerticalAlignment="Center" />
 
                   <TextBlock Grid.Column="1"
-                             Text="{Binding LevelText}"
-                             Foreground="{Binding LevelBrush}"
+                             Text="{Binding Level}"
+                             Foreground="{Binding Level, Converter={StaticResource LevelBrushConv}}"
                              FontFamily="Consolas"
                              FontSize="12"
                              Margin="6,0,6,0"

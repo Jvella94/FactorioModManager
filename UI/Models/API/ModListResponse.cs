@@ -3,6 +3,9 @@ using System.Text.Json.Serialization;
 
 namespace FactorioModManager.Models.API
 {
+    /// <summary>
+    /// Response from /api/mods
+    /// </summary>
     public class ModListResponse
     {
         [JsonPropertyName("results")]

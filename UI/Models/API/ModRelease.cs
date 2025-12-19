@@ -4,6 +4,10 @@ using System.Text.Json.Serialization;
 
 namespace FactorioModManager.Models.API
 {
+    /// <summary>
+    /// Base class for release info from Factorio Mod Portal API
+    /// https://wiki.factorio.com/Mod_portal_API#Releases
+    /// </summary>
     public class ModReleaseBase
     {
         [JsonPropertyName("version")]
@@ -23,8 +27,7 @@ namespace FactorioModManager.Models.API
     }
 
     /// <summary>
-    /// Release info from Factorio Mod Portal API
-    /// https://wiki.factorio.com/Mod_portal_API#Releases
+    /// Release info from Factorio Mod Portal API using the short endpoint
     /// </summary>
     public class ModReleaseShort : ModReleaseBase
     {
@@ -32,6 +35,10 @@ namespace FactorioModManager.Models.API
         public ModReleaseInfoShort? InfoJson { get; set; }
     }
 
+    /// <summary>
+    /// Represents a mod release that includes detailed information about the release, extending the short mod release
+    /// functionality.
+    /// </summary>
     public class ModReleaseFull : ModReleaseBase
     {
         [JsonPropertyName("info_json")]
@@ -39,7 +46,7 @@ namespace FactorioModManager.Models.API
     }
 
     /// <summary>
-    /// Mod info embedded in a release
+    /// Represents summary information about a mod release, including the supported Factorio version.
     /// </summary>
     public class ModReleaseInfoShort
     {
@@ -47,6 +54,9 @@ namespace FactorioModManager.Models.API
         public string FactorioVersion { get; set; } = string.Empty;
     }
 
+    /// <summary>
+    /// Represents detailed information about a mod release, including its dependencies.
+    /// </summary>
     public class ModReleaseInfoFull : ModReleaseInfoShort
     {
         [JsonPropertyName("dependencies")]

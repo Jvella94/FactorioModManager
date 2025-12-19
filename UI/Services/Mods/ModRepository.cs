@@ -6,6 +6,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 
 namespace FactorioModManager.Services.Mods
 {
@@ -197,7 +198,7 @@ namespace FactorioModManager.Services.Mods
                     })]
                 };
 
-                var json = JsonSerializer.Serialize(dto, Constants.JsonHelper.ModList);
+                var json = JsonSerializer.Serialize(dto, Constants.JsonOptions.ModList);
                 File.WriteAllText(modListPath, json);
 
                 _logService.Log($"Wrote {Constants.FileSystem.ModListFileName} at {DateTime.UtcNow:O}");
@@ -211,23 +212,50 @@ namespace FactorioModManager.Services.Mods
 
         private ModInfo? ExtractModInfoFromZip(string zipPath)
         {
-            try
-            {
-                using var archive = ZipFile.OpenRead(zipPath);
-                var infoEntry = archive.Entries.FirstOrDefault(e =>
-                    e.FullName.EndsWith(Constants.FileSystem.InfoJsonFileName, StringComparison.OrdinalIgnoreCase));
+            const int maxAttempts = 5;
 
-                if (infoEntry != null)
-                {
-                    using var stream = infoEntry.Open();
-                    using var reader = new StreamReader(stream);
-                    var json = reader.ReadToEnd();
-                    return JsonSerializer.Deserialize<ModInfo>(json);
-                }
-            }
-            catch (Exception ex)
+            for (int attempt = 1; attempt <= maxAttempts; attempt++)
             {
-                _logService.LogError($"Error extracting info from {zipPath}: {ex.Message}", ex);
+                try
+                {
+                    using var fs = new FileStream(zipPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                    using var archive = new ZipArchive(fs, ZipArchiveMode.Read, leaveOpen: false);
+
+                    var infoEntry = archive.Entries.FirstOrDefault(e =>
+                        e.FullName.EndsWith(Constants.FileSystem.InfoJsonFileName, StringComparison.OrdinalIgnoreCase));
+
+                    if (infoEntry != null)
+                    {
+                        using var stream = infoEntry.Open();
+                        using var reader = new StreamReader(stream);
+                        var json = reader.ReadToEnd();
+                        return JsonSerializer.Deserialize<ModInfo>(json);
+                    }
+
+                    return null;
+                }
+                catch (IOException ex)
+                {
+                    if (attempt == maxAttempts)
+                    {
+                        _logService.LogError($"IO error extracting info from {zipPath} after {maxAttempts} attempts: {ex.Message}", ex);
+                        break;
+                    }
+
+                    // short backoff and retry
+                    Thread.Sleep(150 * attempt);
+                    continue;
+                }
+                catch (InvalidDataException ex)
+                {
+                    _logService.LogError($"Invalid zip data in {zipPath}: {ex.Message}", ex);
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    _logService.LogError($"Error extracting info from {zipPath}: {ex.Message}", ex);
+                    break;
+                }
             }
 
             return null;
@@ -249,20 +277,46 @@ namespace FactorioModManager.Services.Mods
 
         private string? FindThumbnailInZip(string zipPath)
         {
-            try
-            {
-                using var archive = ZipFile.OpenRead(zipPath);
-                var thumbnailEntry = archive.Entries.FirstOrDefault(e =>
-                    e.FullName.EndsWith("thumbnail.png", StringComparison.OrdinalIgnoreCase));
+            const int maxAttempts = 5;
 
-                if (thumbnailEntry != null)
-                {
-                    return $"{zipPath}|{thumbnailEntry.FullName}";
-                }
-            }
-            catch (Exception ex)
+            for (int attempt = 1; attempt <= maxAttempts; attempt++)
             {
-                _logService.LogError($"Error finding thumbnail in {zipPath}: {ex.Message}", ex);
+                try
+                {
+                    using var fs = new FileStream(zipPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                    using var archive = new ZipArchive(fs, ZipArchiveMode.Read, leaveOpen: false);
+
+                    var thumbnailEntry = archive.Entries.FirstOrDefault(e =>
+                        e.FullName.EndsWith("thumbnail.png", StringComparison.OrdinalIgnoreCase));
+
+                    if (thumbnailEntry != null)
+                    {
+                        return $"{zipPath}|{thumbnailEntry.FullName}";
+                    }
+
+                    return null;
+                }
+                catch (IOException ex)
+                {
+                    if (attempt == maxAttempts)
+                    {
+                        _logService.LogError($"IO error finding thumbnail in {zipPath} after {maxAttempts} attempts: {ex.Message}", ex);
+                        break;
+                    }
+
+                    Thread.Sleep(150 * attempt);
+                    continue;
+                }
+                catch (InvalidDataException ex)
+                {
+                    _logService.LogError($"Invalid zip data in {zipPath}: {ex.Message}", ex);
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    _logService.LogError($"Error finding thumbnail in {zipPath}: {ex.Message}", ex);
+                    break;
+                }
             }
 
             return null;

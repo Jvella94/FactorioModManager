@@ -2,6 +2,7 @@ using Avalonia.Data.Converters;
 using Avalonia.Media;
 using System;
 using System.Globalization;
+using FactorioModManager.Models;
 
 namespace FactorioModManager.Views.Converters
 {
@@ -9,8 +10,15 @@ namespace FactorioModManager.Views.Converters
     {
         public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
         {
-            var s = value?.ToString() ?? string.Empty;
-            return s switch
+            // Normalize input to a single string key so we only need one switch
+            var key = value switch
+            {
+                LogLevel lvl => lvl.ToString(),
+                string s => s,
+                _ => value?.ToString() ?? string.Empty
+            };
+
+            return key switch
             {
                 "Error" => Brushes.Red,
                 "Warning" => Brushes.Orange,

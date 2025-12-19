@@ -117,7 +117,7 @@ namespace FactorioModManager.Services.Settings
         {
             try
             {
-                var json = JsonSerializer.Serialize(_settings, Constants.JsonHelper.IndentedOnly);
+                var json = JsonSerializer.Serialize(_settings, Constants.JsonOptions.IndentedOnly);
                 File.WriteAllText(_settingsPath, json);
             }
             catch (Exception ex)

@@ -1,5 +1,4 @@
-﻿using Avalonia.Media;
-using System;
+﻿using System;
 using System.Globalization;
 
 namespace FactorioModManager.Models
@@ -12,8 +11,6 @@ namespace FactorioModManager.Models
         Error
     }
 
-    public record MessageSegment(string Text, IBrush? Foreground, FontWeight Weight = FontWeight.Normal);
-
     public partial class LogEntry()
     {
         public DateTime Timestamp { get; init; }
@@ -22,15 +19,5 @@ namespace FactorioModManager.Models
 
         // Computed UI properties
         public string TimestampFormatted => Timestamp.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
-
-        public string LevelText => Level.ToString();
-
-        public IBrush LevelBrush => Level switch
-        {
-            LogLevel.Error => Brushes.Red!,
-            LogLevel.Warning => Brushes.Orange!,
-            LogLevel.Debug => Brushes.Cyan!,
-            _ => Brushes.White!
-        };
     }
 }

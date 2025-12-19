@@ -18,7 +18,7 @@ namespace FactorioModManager.Models
     }
 
     // Container for serialising/deserialising mod-list.json
-    public class ModListDto
+    public record ModListDto
     {
         [JsonPropertyName("mods")]
         public List<ModListEntry> Mods { get; set; } = [];

@@ -5,11 +5,36 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using static FactorioModManager.Constants;
+using ReactiveUI;
 
 namespace FactorioModManager.ViewModels.MainWindow
 {
     public partial class MainWindowViewModel
     {
+        // Used to collect candidate dependency names across batch operations
+        private HashSet<string>? _batchCandidateDeps;
+
+        private void StartCandidateAggregation()
+        {
+            if (_batchCandidateDeps == null)
+                _batchCandidateDeps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            else
+                _batchCandidateDeps.Clear();
+        }
+
+        private void EndCandidateAggregationAndRecompute()
+        {
+            if (_batchCandidateDeps == null || _batchCandidateDeps.Count == 0)
+            {
+                _batchCandidateDeps = null;
+                return;
+            }
+
+            // Perform targeted recompute once for all collected candidates
+            RecomputeUnusedInternalFlagsForCandidates(_batchCandidateDeps);
+            _batchCandidateDeps = null;
+        }
+
         private bool _isRefreshing = false;
 
         public async Task RefreshModsAsync()
@@ -233,6 +258,47 @@ namespace FactorioModManager.ViewModels.MainWindow
                 UpdateGroupStatus(groupVm);
                 Groups.Add(groupVm);
             }
+        }
+
+        /// <summary>
+        /// Recompute IsUnusedInternal for a small set of candidate internal mod names only.
+        /// More efficient when only a few mods were removed.
+        /// </summary>
+        private void RecomputeUnusedInternalFlagsForCandidates(IEnumerable<string> candidateDependencyNames)
+        {
+            var candidates = new HashSet<string>(candidateDependencyNames.Where(n => !string.IsNullOrEmpty(n)), StringComparer.OrdinalIgnoreCase);
+            if (candidates.Count == 0)
+                return;
+
+            // For each candidate internal mod, check if any remaining mod still depends on it
+            foreach (var candidate in candidates)
+            {
+                // Find the internal mod instance (if present)
+                var internalMod = _allMods.FirstOrDefault(m => m.Name.Equals(candidate, StringComparison.OrdinalIgnoreCase) &&
+                    m.Category?.Equals("internal", StringComparison.OrdinalIgnoreCase) == true);
+
+                if (internalMod == null)
+                    continue; // nothing to update
+
+                // Determine if any remaining mod references this internal mod (exclude the internal mod itself)
+                bool isReferenced = _allMods.Any(m =>
+                    !m.Name.Equals(internalMod.Name, StringComparison.OrdinalIgnoreCase) &&
+                    m.Dependencies != null &&
+                    m.Dependencies.Any(d =>
+                    {
+                        var depName = DependencyHelper.ExtractDependencyName(d);
+                        return !string.IsNullOrEmpty(depName) && depName.Equals(internalMod.Name, StringComparison.OrdinalIgnoreCase);
+                    }));
+
+                var shouldBeUnused = !isReferenced;
+                if (internalMod.IsUnusedInternal != shouldBeUnused)
+                    internalMod.IsUnusedInternal = shouldBeUnused;
+            }
+
+            // Notify UI about counts and filters
+            this.RaisePropertyChanged(nameof(UnusedInternalCount));
+            this.RaisePropertyChanged(nameof(HasUnusedInternals));
+            ApplyModFilter();
         }
 
         private async Task LoadThumbnailAsync(ModViewModel mod)

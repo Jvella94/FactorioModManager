@@ -26,8 +26,22 @@ namespace FactorioModManager.ViewModels.Dialogs
         private readonly IUIService _uiService;
         private readonly IModService _modService;
         private readonly Window? _parentWindow;
-        private readonly CompositeDisposable _disposables = [];
+        private readonly CompositeDisposable _disposables = new CompositeDisposable();
         private CancellationTokenSource? _currentOperationCts;
+
+        // Indicates whether any release is currently performing an operation
+        private bool _isOperationInProgress;
+        public bool IsOperationInProgress
+        {
+            get => _isOperationInProgress;
+            private set => this.RaiseAndSetIfChanged(ref _isOperationInProgress, value);
+        }
+
+        // Called by the view when a close attempt is blocked; shows user message
+        public Task NotifyCloseBlockedAsync()
+        {
+            return _uiService.ShowMessageAsync("Operation in progress", "A download or deletion is in progress. Please cancel it before closing this window.", _parentWindow);
+        }
 
         public string ModTitle { get; }
         public string ModName { get; }
@@ -46,11 +60,11 @@ namespace FactorioModManager.ViewModels.Dialogs
             List<ShortReleaseDTO> releases,
             Window? parentWindow = null)
         {
-            _versionManager = versionManager;
-            _settingsService = settingsService;
-            _logService = logService;
-            _uiService = uiService;
-            _modService = modService;
+            _versionManager = versionManager ?? throw new ArgumentNullException(nameof(versionManager));
+            _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+            _logService = logService ?? throw new ArgumentNullException(nameof(logService));
+            _uiService = uiService ?? throw new ArgumentNullException(nameof(uiService));
+            _modService = modService ?? throw new ArgumentNullException(nameof(modService));
             _parentWindow = parentWindow;
             ModTitle = modTitle;
             ModName = modName;
@@ -60,14 +74,20 @@ namespace FactorioModManager.ViewModels.Dialogs
                     .Select(r => new VersionHistoryReleaseViewModel(r, versionManager, modName))
             );
 
-            // Subscribe to changes in installed status to update CanDelete
+            // Subscribe to changes in installed status to update CanDelete and track IsInstalling
             foreach (var release in Releases)
             {
-                release.WhenAnyValue(x => x.IsInstalled)
+                var d1 = release.WhenAnyValue(x => x.IsInstalled)
                     .Subscribe(_ => UpdateCanDeleteFlags());
+                _disposables.Add(d1);
+
+                var d2 = release.WhenAnyValue(x => x.IsInstalling)
+                    .Subscribe(_ => UpdateOperationFlag());
+                _disposables.Add(d2);
             }
 
             UpdateCanDeleteFlags();
+            UpdateOperationFlag();
 
             // ActionCommand with cancellation support
             ActionCommand = ReactiveCommand.CreateFromTask<VersionHistoryReleaseViewModel>(
@@ -77,6 +97,11 @@ namespace FactorioModManager.ViewModels.Dialogs
             {
                 _currentOperationCts?.Cancel();
             });
+        }
+
+        private void UpdateOperationFlag()
+        {
+            IsOperationInProgress = Releases.Any(r => r.IsInstalling);
         }
 
         private async Task HandleActionAsync(VersionHistoryReleaseViewModel releaseVM)
@@ -310,7 +335,8 @@ namespace FactorioModManager.ViewModels.Dialogs
                 var fullDownloadUrl = Constants.Urls.GetModDownloadUrl(
                     downloadUrl, username, token);
 
-                var progress = new Progress<(long bytesDownloaded, long? totalBytes)>(p =>
+                // Local progress for the dialog
+                var localProgress = new Progress<(long bytesDownloaded, long? totalBytes)>(p =>
                 {
                     if (p.totalBytes.HasValue && p.totalBytes.Value > 0)
                     {
@@ -319,11 +345,38 @@ namespace FactorioModManager.ViewModels.Dialogs
                     }
                 });
 
+                // Try to obtain the main window VM to also report global speed
+                IProgress<(long bytesDownloaded, long? totalBytes)>? globalProgress = null;
+                try
+                {
+                    var mainWindow = _uiService.GetMainWindow();
+                    if (mainWindow?.DataContext is MainWindowViewModel mainVm)
+                    {
+                        globalProgress = mainVm.CreateGlobalDownloadProgressReporter();
+                    }
+                }
+                catch { }
+
+                // Combined progress forwards to both local and global reporters
+                IProgress<(long bytesDownloaded, long? totalBytes)>? combined = null;
+                if (globalProgress != null)
+                {
+                    combined = new Progress<(long bytesDownloaded, long? totalBytes)>(p =>
+                    {
+                        (localProgress as IProgress<(long, long?)>)?.Report(p);
+                        globalProgress.Report(p);
+                    });
+                }
+                else
+                {
+                    combined = localProgress;
+                }
+
                 await _versionManager.DownloadVersionAsync(
                     ModName,
                     release.Version,
                     fullDownloadUrl,
-                    progress,
+                    combined,
                     cancellationToken);
 
                 release.IsInstalled = true;
@@ -443,7 +496,7 @@ namespace FactorioModManager.ViewModels.Dialogs
             {
                 _currentOperationCts?.Cancel();
                 _currentOperationCts?.Dispose();
-                _disposables?.Dispose();
+                _disposables.Dispose();
             }
             base.Dispose(disposing);
         }

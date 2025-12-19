@@ -60,6 +60,9 @@ namespace FactorioModManager.ViewModels.MainWindow
         private readonly IThumbnailCache _thumbnailCache;
         private readonly IModFilterService _modFilterService;
 
+        // Expose the concrete DownloadProgressViewModel for XAML binding to presentation properties
+        public DownloadProgressViewModel DownloadProgress { get; }
+
         public MainWindowViewModel(
             IModService modService,
             IModGroupService groupService,
@@ -75,7 +78,8 @@ namespace FactorioModManager.ViewModels.MainWindow
             IModVersionManager modVersionManager,
             IFactorioLauncher factorioLauncher,
             IThumbnailCache thumbnailCache,
-            IModFilterService modFilterService)
+            IModFilterService modFilterService,
+            IDownloadProgress downloadProgress)
         {
             _modService = modService;
             _groupService = groupService;
@@ -92,6 +96,7 @@ namespace FactorioModManager.ViewModels.MainWindow
             _factorioLauncher = factorioLauncher;
             _thumbnailCache = thumbnailCache;
             _modFilterService = modFilterService;
+            DownloadProgress = downloadProgress as DownloadProgressViewModel ?? throw new InvalidOperationException("DownloadProgress must be a DownloadProgressViewModel");
             ModManagement = new ModManagementViewModel();
 
             SetupReactiveFiltering();

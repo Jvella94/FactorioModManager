@@ -33,6 +33,10 @@ namespace FactorioModManager
             RegisterSingleton<ILogService>(new LogService(Resolve<IErrorMessageService>()));
             RegisterSingleton<IUIService>(new AvaloniaUIService(Resolve<ILogService>()));
 
+            // Register a singleton DownloadProgressViewModel so it is shared application-wide
+            var downloadProgressSingleton = new DownloadProgressViewModel(Resolve<IUIService>());
+            RegisterSingleton<IDownloadProgress>(downloadProgressSingleton);
+
             var httpClient = new HttpClient
             {
                 Timeout = TimeSpan.FromSeconds(30)
@@ -134,7 +138,8 @@ namespace FactorioModManager
                 Resolve<IModVersionManager>(),
                 Resolve<IFactorioLauncher>(),
                 Resolve<IThumbnailCache>(),
-                Resolve<IModFilterService>()
+                Resolve<IModFilterService>(),
+                Resolve<IDownloadProgress>()
             ));
         }
 

@@ -18,7 +18,18 @@ namespace FactorioModManager.ViewModels.MainWindow
             try
             {
                 var modsDirectory = FolderPathHelper.GetModsDirectory();
-                var modFiles = Directory.GetFiles(modsDirectory, $"{mod.Name}_*.zip")
+                // Enumerate all zip files and parse them using the last underscore as separator
+                // to avoid matching mods whose names merely start with the current mod name
+                var allZipFiles = Directory.GetFiles(modsDirectory, "*.zip");
+                var modFiles = allZipFiles
+                    .Where(f =>
+                    {
+                        var fileName = Path.GetFileNameWithoutExtension(f);
+                        var lastUnderscore = fileName.LastIndexOf('_');
+                        if (lastUnderscore <= 0) return false;
+                        var namePart = fileName[..lastUnderscore];
+                        return string.Equals(namePart, mod.Name, StringComparison.OrdinalIgnoreCase);
+                    })
                     .OrderByDescending(f => f)
                     .ToList();
 
@@ -28,11 +39,17 @@ namespace FactorioModManager.ViewModels.MainWindow
                 foreach (var file in modFiles)
                 {
                     var fileName = Path.GetFileNameWithoutExtension(file);
-                    var parts = fileName.Split('_');
+                    var lastUnderscore = fileName.LastIndexOf('_');
+                    if (lastUnderscore <= 0)
+                        continue;
 
-                    if (parts.Length >= 2)
+                    var namePart = fileName[..lastUnderscore];
+                    if (!string.Equals(namePart, mod.Name, StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    var version = fileName[(lastUnderscore + 1)..];
+                    if (!string.IsNullOrEmpty(version))
                     {
-                        var version = parts[^1]; // Last part is version
                         mod.AvailableVersions.Add(version);
                         mod.VersionFilePaths.Add(file);
                     }

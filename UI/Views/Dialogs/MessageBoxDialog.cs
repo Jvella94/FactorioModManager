@@ -32,6 +32,7 @@ namespace FactorioModManager.Views.Dialogs
                 FontSize = 13,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 HorizontalContentAlignment = HorizontalAlignment.Center,
+                VerticalContentAlignment = VerticalAlignment.Center,
                 IsDefault = true,
                 Background = new SolidColorBrush(Color.Parse("#4CAF50")),
                 Foreground = Brushes.White

@@ -45,7 +45,7 @@ namespace FactorioModManager.Services
             try
             {
                 var collection = new ModGroupCollection { Groups = groups };
-                var json = JsonSerializer.Serialize(collection, Constants.JsonHelper.IndentedOnly);
+                var json = JsonSerializer.Serialize(collection, Constants.JsonOptions.IndentedOnly);
                 File.WriteAllText(_groupsFilePath, json);
             }
             catch (Exception ex)

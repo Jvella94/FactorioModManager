@@ -1,5 +1,7 @@
 ﻿using FactorioModManager.Models;
 using ReactiveUI;
+using System;
+using System.Collections.Generic;
 using System.Linq;
 using static FactorioModManager.Constants;
 
@@ -144,7 +146,6 @@ namespace FactorioModManager.ViewModels.MainWindow
                 UpdateGroupStatus(group);
 
             this.RaisePropertyChanged(nameof(EnabledCountText));
-            ApplyModFilter();
             _togglingMod = false;
         }
 
@@ -152,6 +153,23 @@ namespace FactorioModManager.ViewModels.MainWindow
         {
             if (mod == null)
                 return;
+
+            // Confirmation for uninstalling the selected mod
+            var confirmUninstall = await _uiService.ShowConfirmationAsync(
+                "Uninstall Mod",
+                $"Are you sure you want to uninstall {mod.Title}?",
+                null,
+                "Uninstall",
+                "Cancel");
+
+            if (!confirmUninstall)
+            {
+                SetStatus($"Uninstall cancelled for {mod.Title}", LogLevel.Warning);
+                return;
+            }
+
+            // Collect candidate dependency names that may become unused when these mods are removed
+            var candidateDeps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             // Who depends on this mod?
             var dependents = GetDependents(mod.Name).ToList();
@@ -181,6 +199,16 @@ namespace FactorioModManager.ViewModels.MainWindow
                     // Remove dependents first
                     foreach (var dep in dependents)
                     {
+                        // Add this dependent's declared dependencies as candidates to re-evaluate
+                        if (dep.Dependencies != null)
+                        {
+                            foreach (var raw in dep.Dependencies)
+                            {
+                                var dn = DependencyHelper.ExtractDependencyName(raw);
+                                if (!string.IsNullOrEmpty(dn)) candidateDeps.Add(dn);
+                            }
+                        }
+
                         if (dep.FilePath == null)
                         {
                             _logService.LogWarning("Filepath not found for mod {modName}, cannot remove mod.");
@@ -191,6 +219,16 @@ namespace FactorioModManager.ViewModels.MainWindow
                         _allMods.Remove(dep);
                         _modService.RemoveMod(dep.Name, dep.FilePath);
                     }
+                }
+            }
+
+            // Add main mod's declared dependencies as candidates as well
+            if (mod.Dependencies != null)
+            {
+                foreach (var raw in mod.Dependencies)
+                {
+                    var dn = DependencyHelper.ExtractDependencyName(raw);
+                    if (!string.IsNullOrEmpty(dn)) candidateDeps.Add(dn);
                 }
             }
 
@@ -205,6 +243,18 @@ namespace FactorioModManager.ViewModels.MainWindow
                 // Remove selected mod
                 _allMods.Remove(mod);
                 _modService.RemoveMod(mod.Name, mod.FilePath);
+            }
+
+            // If a batch aggregation is running, merge candidates for a single recompute later.
+            if (_batchCandidateDeps != null)
+            {
+                foreach (var dn in candidateDeps)
+                    _batchCandidateDeps.Add(dn);
+            }
+            else
+            {
+                // Recompute only candidate internal mods that may have become unused
+                RecomputeUnusedInternalFlagsForCandidates(candidateDeps);
             }
             ApplyModFilter();
             this.RaisePropertyChanged(nameof(EnabledCountText));

@@ -21,7 +21,7 @@
 
     <!-- Scrollable Content -->
     <ScrollViewer Grid.Row="0">
-      <StackPanel Spacing="20">
+      <StackPanel Spacing="5" Margin="0,0,20,0">
 
         <!-- Factorio Executable Path Section -->
         <StackPanel Spacing="8">
@@ -67,8 +67,6 @@
                      Foreground="#888" />
         </StackPanel>
 
-        <Separator Background="#333" />
-
         <!-- Factorio Data Directory Section -->
         <StackPanel Spacing="8">
           <TextBlock Text="Factorio Data Directory"
@@ -108,8 +106,6 @@
                      TextWrapping="Wrap"
                      Foreground="#888" />
         </StackPanel>
-
-        <Separator Background="#333" />
 
         <!-- Mods Directory Section -->
         <StackPanel Spacing="8">
@@ -165,12 +161,12 @@
                    PasswordChar="•"
                    Margin="0,0,0,10" />
 
-          <!-- API Key -->
+          <!-- API Key --><!--
           <TextBlock Text="Mod Portal API Key (optional - for browsing):"
                      Foreground="White"
                      Margin="0,0,0,5" />
           <TextBox Text="{Binding ApiKey}"
-                   Watermark="Enter your API key" />
+                   Watermark="Enter your API key" />-->
         </StackPanel>
 
         <Separator Background="#333" />
@@ -187,24 +183,15 @@
                     IsChecked="{Binding AutoCheckModUpdates}"
                     Foreground="White" />
 
-          <CheckBox Content="Check for Mod Manager updates on startup"
-                    IsChecked="{Binding CheckForAppUpdates}"
-                    Foreground="White" />
-
           <TextBlock x:Name="LastUpdateCheckText"
-                     Foreground="#888"
-                     FontSize="11"
-                     Margin="20,5,0,0"
-                     Text="Last mod update check: Never" />
-
-          <TextBlock Foreground="#888"
-                     FontSize="11"
-                     Margin="20,5,0,0"
-                    Text="{Binding LastAppUpdateCheck, StringFormat='Last app update check: {0:g}', FallbackValue='Last app update check: Never'}" />
+              Foreground="#888"
+              FontSize="11"
+              Margin="20,5,0,0"
+              Text="Last mod update check: Never" />
 
           <!-- Concurrency for Update All -->
           <StackPanel Orientation="Horizontal" Spacing="8" Margin="20,8,0,0" VerticalAlignment="Center">
-            <TextBlock Text="Update concurrency:" Foreground="#DDD" VerticalAlignment="Center" />
+            <TextBlock Text="Update concurrency:" Foreground="#DDD" VerticalAlignment="Top" />
             <NumericUpDown Minimum="1" Maximum="20" Width="110"
                            Value="{Binding UpdateConcurrency, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, FallbackValue=3}"
                            Foreground="#DDD"
@@ -220,6 +207,17 @@
             <TextBlock Text="(parallel downloads)" Foreground="#888" FontSize="11" VerticalAlignment="Center" Margin="8,0,0,0" />
           </StackPanel>
         </StackPanel>
+
+          <CheckBox Content="Check for Mod Manager updates on startup"
+                    IsChecked="{Binding CheckForAppUpdates}"
+                    Foreground="White" />  
+
+          <TextBlock Foreground="#888"
+                     FontSize="11"
+                     Margin="20,5,0,0"
+                    Text="{Binding LastAppUpdateCheck, StringFormat='Last app update check: {0:g}', FallbackValue='Last app update check: Never'}" />
+
+        
 
         <Separator Background="#333" />
 

@@ -1,10 +1,10 @@
 ﻿// ViewModels/LogWindowViewModel.cs
+using DynamicData;
 using FactorioModManager.Models;
 using FactorioModManager.Services.Infrastructure;
 using ReactiveUI;
 using System;
 using System.Collections.ObjectModel;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reactive;
@@ -20,8 +20,8 @@ namespace FactorioModManager.ViewModels.Dialogs
         private readonly IUIService _uiService;
         private readonly CompositeDisposable _disposables = [];
 
-        private ObservableCollection<LogEntry> _logs;
-        private ObservableCollection<LogEntry> _filteredLogs;
+        private ObservableCollection<LogEntry> _logs = [];
+        private ObservableCollection<LogEntry> _filteredLogs = [];
         private bool _isLoading = true;
         private bool _isFollowing = true;
         private string _selectedLevelFilter = "All";
@@ -50,7 +50,9 @@ namespace FactorioModManager.ViewModels.Dialogs
             set => this.RaiseAndSetIfChanged(ref _isFollowing, value);
         }
 
-        public ObservableCollection<string> LevelFilters { get; } = new ObservableCollection<string>(new[] { "All", "Info", "Debug", "Warning", "Error" });
+        public ObservableCollection<string> LevelFilters { get; } = new ObservableCollection<string>(
+           new[] { "All" }.Concat(Enum.GetNames<LogLevel>())
+       );
 
         public string SelectedLevelFilter
         {
@@ -75,17 +77,15 @@ namespace FactorioModManager.ViewModels.Dialogs
 
         public LogWindowViewModel(ILogService logService, IUIService uiService)
         {
-            _logService = logService;
-            _uiService = uiService;
-            _logs = [];
-            _filteredLogs = [];
+            _logService = logService ?? throw new ArgumentNullException(nameof(logService));
+            _uiService = uiService ?? throw new ArgumentNullException(nameof(uiService));
 
+            // Initialize commands
             RefreshCommand = ReactiveCommand.CreateFromTask(async () =>
             {
                 IsLoading = true;
                 try
                 {
-                    // Load your logs here
                     await Task.Run(() => LoadLogs());
                 }
                 finally
@@ -93,11 +93,13 @@ namespace FactorioModManager.ViewModels.Dialogs
                     IsLoading = false;
                 }
             });
+
             ClearLogsCommand = ReactiveCommand.CreateFromTask(async () =>
             {
                 _logService.ClearLogs();
                 LoadLogs();
             });
+
             ArchiveLogsCommand = ReactiveCommand.CreateFromTask(async () =>
             {
                 _logService.ArchiveLogs();
@@ -156,15 +158,11 @@ namespace FactorioModManager.ViewModels.Dialogs
                     if (IsFollowing)
                     {
                         // request UI thread to scroll to end via UI service
-                        _uiService.Post(() =>
-                        {
-                            // The view will call ScrollToEnd when it sees DataContext refreshed - this is a best effort hook
-                        });
+                        _uiService.Post(() => { /* best-effort hook */ });
                     }
                 });
 
             _disposables.Add(_logsUpdatedSubscription);
-
         }
 
         private void LoadLogs()
@@ -172,20 +170,16 @@ namespace FactorioModManager.ViewModels.Dialogs
             var rawLogs = _logService.GetLogs().ToList();
 
             Logs.Clear();
-            foreach (var log in rawLogs)
-            {
-                Logs.Add(log);
-            }
+            Logs.AddRange(rawLogs);
 
             ApplyFilter();
         }
 
         private void ApplyFilter()
         {
-            var filter = SelectedLevelFilter ?? "All";
-            var items = filter == "All"
-                ? Logs.ToList()
-                : [.. Logs.Where(l => l.Level.ToString() == filter)];
+            var items = SelectedLevelFilter == "All" || string.IsNullOrEmpty(SelectedLevelFilter)
+                ? [.. Logs]
+                : Logs.Where(l => l.Level.ToString() == SelectedLevelFilter).ToList();
 
             FilteredLogs.Clear();
             foreach (var it in items)

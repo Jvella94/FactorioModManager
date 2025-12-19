@@ -10,7 +10,11 @@
   <Grid RowDefinitions="Auto,*">
     <Border Grid.Row="0" BorderBrush="#333" BorderThickness="0,0,0,1"
             Background="#2B2B2B" Padding="15">
-      <TextBlock FontSize="18" FontWeight="Bold" Name="ModTitle" />
+
+      <Grid ColumnDefinitions="*">
+        <TextBlock FontSize="18" FontWeight="Bold" Name="ModTitle" VerticalAlignment="Center" />
+      </Grid>
+
     </Border>
 
     <DataGrid Grid.Row="1"

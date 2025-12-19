@@ -40,45 +40,5 @@ namespace FactorioModManager.Models
 
         [JsonPropertyName("dependencies")]
         public List<string> Dependencies { get; set; } = [];
-
-        // ✨ NEW: Computed properties for better domain modeling
-        [JsonIgnore]
-        public bool HasDependencies => Dependencies.Count > 0;
-
-        [JsonIgnore]
-        public IReadOnlyList<string> MandatoryDependencies =>
-            Constants.DependencyHelper.GetMandatoryDependencies(Dependencies);
-
-        [JsonIgnore]
-        public IReadOnlyList<string> OptionalDependencies =>
-            [.. Dependencies
-                .Where(Constants.DependencyHelper.IsOptionalDependency)
-                .Select(Constants.DependencyHelper.ExtractDependencyName)];
-
-        [JsonIgnore]
-        public IReadOnlyList<string> IncompatibleDependencies =>
-            Constants.DependencyHelper.GetIncompatibleDependencies(Dependencies);
-
-        // ✨ NEW: Validation
-        public bool IsValid()
-        {
-            return !string.IsNullOrWhiteSpace(Name) &&
-                   !string.IsNullOrWhiteSpace(Version) &&
-                   !string.IsNullOrWhiteSpace(Title);
-        }
-
-        public Result Validate()
-        {
-            if (string.IsNullOrWhiteSpace(Name))
-                return Result.Fail("Mod name is required", ErrorCode.InvalidModFormat);
-
-            if (string.IsNullOrWhiteSpace(Version))
-                return Result.Fail("Mod version is required", ErrorCode.InvalidModFormat);
-
-            if (string.IsNullOrWhiteSpace(Title))
-                return Result.Fail("Mod title is required", ErrorCode.InvalidModFormat);
-
-            return Result.Ok();
-        }
     }
 }

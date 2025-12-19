@@ -11,47 +11,38 @@ namespace FactorioModManager.Models
         // Authentication
         [Description("Missing authentication credentials")]
         MissingCredentials = 100,
-
         [Description("Provided credentials are invalid")]
         InvalidCredentials = 101,
 
         // Network
         [Description("Network connectivity issue")]
         NetworkError = 200,
-
         [Description("Download operation failed")]
         DownloadFailed = 201,
-
         [Description("API request failed")]
         ApiRequestFailed = 202,
 
         // File Operations
         [Description("File not found")]
         FileNotFound = 300,
-
         [Description("Invalid file format")]
         InvalidFile = 301,
-
         [Description("File is corrupted")]
         CorruptedFile = 302,
-
         [Description("File access denied")]
         FileAccessDenied = 303,
 
         // Validation
         [Description("Invalid input provided")]
         InvalidInput = 400,
-
         [Description("Missing required dependencies")]
         MissingDependencies = 401,
-
         [Description("Invalid mod format")]
         InvalidModFormat = 402,
 
         // General
         [Description("Unexpected error occurred")]
         UnexpectedError = 500,
-
         [Description("Operation was cancelled")]
         OperationCancelled = 501
     }
