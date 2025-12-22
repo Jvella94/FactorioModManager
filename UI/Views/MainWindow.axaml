@@ -143,7 +143,8 @@
           <Button Command="{Binding UpdateAllCommand}"
                   VerticalAlignment="Center"
                   Padding="10,7"
-                  ToolTip.Tip="Update all mods with pending updates">
+                  ToolTip.Tip="Update all mods with pending updates"
+                  IsVisible="{Binding HasUpdates}">
             <StackPanel Orientation="Horizontal" Spacing="5">
               <TextBlock Text="⬆" FontSize="14" />
               <TextBlock Text="Update All" />
