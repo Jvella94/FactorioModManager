@@ -411,11 +411,25 @@ namespace FactorioModManager.ViewModels.Dialogs
 
                 // Try to obtain the main window VM to also report global speed
                 IProgress<(long bytesDownloaded, long? totalBytes)>? globalProgress = null;
+                MainWindowViewModel? mainVm = null;
                 try
                 {
                     var mainWindow = _uiService.GetMainWindow();
-                    if (mainWindow?.DataContext is MainWindowViewModel mainVm)
+                    if (mainWindow?.DataContext is MainWindowViewModel mm)
                     {
+                        mainVm = mm;
+                        // Ensure the main window shows the global download UI and is initialized for a single download
+                        await _uiService.InvokeAsync(() =>
+                        {
+                            try
+                            {
+                                mainVm.DownloadProgressTotal = 1;
+                                mainVm.DownloadProgressCompleted = 0;
+                                mainVm.IsDownloadProgressVisible = true;
+                            }
+                            catch { }
+                        });
+
                         globalProgress = mainVm.CreateGlobalDownloadProgressReporter();
                     }
                 }
@@ -446,12 +460,39 @@ namespace FactorioModManager.ViewModels.Dialogs
                 release.IsInstalled = true;
                 _logService.Log($"✅ Installed {ModName} v{release.Version}");
 
+                // If main VM progress UI was enabled, mark completion and hide UI after a short delay
+                if (mainVm != null)
+                {
+                    try
+                    {
+                        await _uiService.InvokeAsync(() =>
+                        {
+                            // increment completed
+                            mainVm.DownloadProgressCompleted = mainVm.DownloadProgressCompleted + 1;
+                        });
+
+                        // Allow UI animation to reach 100%
+                        await Task.Delay(300, cancellationToken);
+
+                        await _uiService.InvokeAsync(() =>
+                        {
+                            try { mainVm.DownloadProgress.UpdateSpeedText(null); } catch { }
+                            try { mainVm.DownloadProgress.UpdateProgressText(string.Empty); } catch { }
+                            mainVm.IsDownloadProgressVisible = false;
+                            mainVm.DownloadProgressTotal = 0;
+                            mainVm.DownloadProgressCompleted = 0;
+                            try { mainVm.DownloadProgress.UpdateProgressPercent(0.0); } catch { }
+                        });
+                    }
+                    catch { }
+                }
+
                 // Update main status on success
                 await _uiService.InvokeAsync(() =>
                 {
                     var mainWin = _uiService.GetMainWindow();
-                    if (mainWin?.DataContext is MainWindowViewModel mainVm)
-                        mainVm.StatusText = $"Installed {ModTitle} v{release.Version}";
+                    if (mainWin?.DataContext is MainWindowViewModel m)
+                        m.StatusText = $"Installed {ModTitle} v{release.Version}";
                 });
             }
             catch (OperationCanceledException)

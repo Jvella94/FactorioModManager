@@ -319,6 +319,24 @@ namespace FactorioModManager.ViewModels.MainWindow
                     }
                 }
             };
+
+            // If the global HasUpdates becomes false while the Pending Updates filter is active, clear it
+            this.WhenAnyValue(x => x.HasUpdates)
+                .Throttle(TimeSpan.FromMilliseconds(50))
+                .ObserveOn(RxApp.MainThreadScheduler)
+                .Subscribe(hasUpdates =>
+                {
+                    try
+                    {
+                        if (!hasUpdates && ShowOnlyPendingUpdates)
+                        {
+                            ShowOnlyPendingUpdates = false;
+                            SetStatus("No pending updates remain. Pending updates filter cleared.");
+                        }
+                    }
+                    catch { }
+                })
+                .DisposeWith(_disposables);
         }
 
         /// <summary>

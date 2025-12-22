@@ -294,74 +294,84 @@
 
       <!-- Mod List -->
       <Border Grid.Column="2" BorderBrush="#333" BorderThickness="0,0,1,0">
-        <DataGrid ItemsSource="{Binding FilteredMods}"
-                  Name="ModGrid"
-                SelectedItem="{Binding SelectedMod}"
-                SelectionChanged="DataGrid_OnSelectionChanged"
-                AutoGenerateColumns="False"
-                CanUserReorderColumns="True"
-                CanUserResizeColumns="True"
-                GridLinesVisibility="Horizontal"
-                IsReadOnly="True"
-                SelectionMode="Extended"
-                RowHeight="32">
-          <DataGrid.Columns>
-            <DataGridTemplateColumn Header="Enabled" Width="100" SortMemberPath="IsEnabled">
-              <DataGridTemplateColumn.CellTemplate>
-                <DataTemplate>
-                  <CheckBox
-                     HorizontalAlignment="Center"
-                     VerticalAlignment="Center"
-                     Command="{Binding $parent[Window].((vmmw:MainWindowViewModel)DataContext).ToggleModCommand}"
-                     CommandParameter="{Binding}"
-                     IsChecked="{Binding IsEnabled}" />
-                </DataTemplate>
-              </DataGridTemplateColumn.CellTemplate>
-            </DataGridTemplateColumn>
+        <Grid>
+          <!-- Data grid shown when not refreshing -->
+          <DataGrid ItemsSource="{Binding FilteredMods}"
+                    Name="ModGrid"
+                    SelectedItem="{Binding SelectedMod}"
+                    SelectionChanged="DataGrid_OnSelectionChanged"
+                    AutoGenerateColumns="False"
+                    CanUserReorderColumns="True"
+                    CanUserResizeColumns="True"
+                    GridLinesVisibility="Horizontal"
+                    IsReadOnly="True"
+                    SelectionMode="Extended"
+                    RowHeight="32"
+                    IsVisible="{Binding !IsRefreshing}">
+            <DataGrid.Columns>
+              <DataGridTemplateColumn Header="Enabled" Width="100" SortMemberPath="IsEnabled">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate>
+                    <CheckBox
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       Command="{Binding $parent[Window].((vmmw:MainWindowViewModel)DataContext).ToggleModCommand}"
+                       CommandParameter="{Binding}"
+                       IsChecked="{Binding IsEnabled}" />
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
 
-            <DataGridTextColumn Header="Name"
-                                Binding="{Binding Title}"
-                                Width="0.4*" />
+              <DataGridTextColumn Header="Name"
+                                  Binding="{Binding Title}"
+                                  Width="0.4*" />
 
-            <DataGridTextColumn Header="Version"
-                                Binding="{Binding Version}"
-                                Width="100" />
+              <DataGridTextColumn Header="Version"
+                                  Binding="{Binding Version}"
+                                  Width="100" />
 
-            <DataGridTextColumn Header="Author"
-                                Binding="{Binding Author}"
-                                Width="120" />
+              <DataGridTextColumn Header="Author"
+                                  Binding="{Binding Author}"
+                                  Width="120" />
 
-            <DataGridTextColumn Header="Category"
-                                Binding="{Binding Category}"
-                                Width="100"
-                                Tag="CategoryColumn" />
+              <DataGridTextColumn Header="Category"
+                                  Binding="{Binding Category}"
+                                  Width="100"
+                                  Tag="CategoryColumn" />
 
-            <DataGridTextColumn Header="Group"
-                                Binding="{Binding GroupName}"
-                                Width="100" />
+              <DataGridTextColumn Header="Group"
+                                  Binding="{Binding GroupName}"
+                                  Width="100" />
 
-            <!-- New: Size column, sortable by the numeric SizeOnDiskBytes but displays SizeOnDiskText -->
-            <DataGridTextColumn Header="Size"
-                                Binding="{Binding SizeOnDiskText}"
-                                SortMemberPath="SizeOnDiskBytes"
-                                Width="110"
-                                Tag="SizeColumn" />
+              <!-- New: Size column, sortable by the numeric SizeOnDiskBytes but displays SizeOnDiskText -->
+              <DataGridTextColumn Header="Size"
+                                  Binding="{Binding SizeOnDiskText}"
+                                  SortMemberPath="SizeOnDiskBytes"
+                                  Width="110"
+                                  Tag="SizeColumn" />
 
-            <DataGridTemplateColumn Header="Last Updated" Width="120" Tag="LastUpdatedColumn">
-              <DataGridTemplateColumn.CellTemplate>
-                <DataTemplate>
-                  <TextBlock Text="{Binding LastUpdatedText}" VerticalAlignment="Center" Margin="8,0,8,0" />
-                </DataTemplate>
-              </DataGridTemplateColumn.CellTemplate>
-            </DataGridTemplateColumn>
-          </DataGrid.Columns>
+              <DataGridTemplateColumn Header="Last Updated" Width="120" Tag="LastUpdatedColumn">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate>
+                    <TextBlock Text="{Binding LastUpdatedText}" VerticalAlignment="Center" Margin="8,0,8,0" />
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
+            </DataGrid.Columns>
 
-          <DataGrid.Styles>
-            <Style Selector="DataGridRow" x:DataType="vm:ModViewModel">
-              <Setter Property="Background" Value="{Binding RowBrush}" />
-            </Style>
-          </DataGrid.Styles>
-        </DataGrid>
+            <DataGrid.Styles>
+              <Style Selector="DataGridRow" x:DataType="vm:ModViewModel">
+                <Setter Property="Background" Value="{Binding RowBrush}" />
+              </Style>
+            </DataGrid.Styles>
+          </DataGrid>
+
+          <!-- Loading panel shown while refreshing mods -->
+          <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10" IsVisible="{Binding IsRefreshing}">
+            <ProgressBar Width="300" Height="6" IsIndeterminate="True" />
+            <TextBlock Text="Refreshing mods..." Foreground="#DDD" FontSize="14" HorizontalAlignment="Center" />
+          </StackPanel>
+        </Grid>
       </Border>
 
       <!-- Mod Details Panel -->
@@ -525,7 +535,7 @@
                 <TextBlock Text="{Binding Description, TargetNullValue={x:Null}}"
                            TextWrapping="Wrap" />
 
-                <StackPanel>
+                <StackPanel IsVisible="{Binding HasDependencies}">
 
                   <TextBlock Text="Dependencies"
                                FontWeight="Bold"

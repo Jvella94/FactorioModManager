@@ -2,6 +2,7 @@ using FactorioModManager.Services;
 using FactorioModManager.Services.Infrastructure;
 using System;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Threading;
 
 namespace FactorioModManager.ViewModels.MainWindow
@@ -28,7 +29,7 @@ namespace FactorioModManager.ViewModels.MainWindow
         private static readonly TimeSpan _speedUiThrottleInterval = TimeSpan.FromMilliseconds(300);
 
         // Lock for Initialize to make it thread-safe
-        private readonly object _initializeLock = new object();
+        private readonly Lock _initializeLock = new();
 
         private bool _initialized = false;
 
@@ -177,8 +178,12 @@ namespace FactorioModManager.ViewModels.MainWindow
         /// </summary>
         public IProgress<(long bytesDownloaded, long? totalBytes)> CreateGlobalDownloadProgressReporter()
         {
-            DateTime lastTime = DateTime.UtcNow;
-            long lastBytes = 0;
+            var lastTime = DateTime.UtcNow;
+            long lastBytes = -1; // -1 indicates uninitialized
+            int sampleCount = 0; // require at least 2 samples before showing speed
+            // Minimum interval between processed samples to reduce churn (in milliseconds)
+            const int minSampleIntervalMs = 200;
+
             double smoothedBytesPerSec = 0;
             DateTime lastUiUpdate = DateTime.MinValue;
             double lastReportedSpeed = 0;
@@ -190,19 +195,43 @@ namespace FactorioModManager.ViewModels.MainWindow
                      return;
 
                  var now = DateTime.UtcNow;
-                 var deltaBytes = p.bytesDownloaded - lastBytes;
-                 var deltaSeconds = (now - lastTime).TotalSeconds;
-                 // Avoid huge spikes from extremely small intervals by clamping the deltaSeconds
-                 var deltaSecondsSafe = Math.Max(deltaSeconds, 0.25);
-
-                 double instBytesPerSec = 0;
-                 if (deltaBytes >= 0)
+                 // If this is the first sample for this reporter, initialize baseline and skip speed calculation to avoid a huge initial spike
+                 if (lastBytes < 0)
                  {
-                     instBytesPerSec = deltaBytes / deltaSecondsSafe;
-                     if (smoothedBytesPerSec <= 0)
-                         smoothedBytesPerSec = instBytesPerSec;
+                     lastBytes = p.bytesDownloaded;
+                     lastTime = now;
+                     sampleCount = 1;
+                 }
+                 else
+                 {
+                     var elapsedMs = (now - lastTime).TotalMilliseconds;
+
+                     // If reports arrive too frequently, skip speed processing to reduce noise; percent still updates below
+                     if (elapsedMs < minSampleIntervalMs)
+                     {
+                         // don't update lastBytes/lastTime so the next processed sample accumulates bytes over the skipped interval
+                     }
                      else
-                         smoothedBytesPerSec = alpha * instBytesPerSec + (1 - alpha) * smoothedBytesPerSec;
+                     {
+                         var deltaBytes = p.bytesDownloaded - lastBytes;
+                         var deltaSeconds = (now - lastTime).TotalSeconds;
+                         // Use chosen clamp (0.15s) to avoid spikes from tiny intervals
+                         var deltaSecondsSafe = Math.Max(deltaSeconds, 0.15);
+
+                         double instBytesPerSec = 0;
+                         if (deltaBytes >= 0)
+                         {
+                             instBytesPerSec = deltaBytes / deltaSecondsSafe;
+                             if (smoothedBytesPerSec <= 0)
+                                 smoothedBytesPerSec = instBytesPerSec;
+                             else
+                                 smoothedBytesPerSec = alpha * instBytesPerSec + (1 - alpha) * smoothedBytesPerSec;
+                         }
+
+                         lastBytes = p.bytesDownloaded;
+                         lastTime = now;
+                         sampleCount++;
+                     }
                  }
 
                  var speedText = smoothedBytesPerSec > 0 ? FormatSpeedText(smoothedBytesPerSec) : null;
@@ -210,10 +239,14 @@ namespace FactorioModManager.ViewModels.MainWindow
                  if ((now - lastUiUpdate) >= _speedUiThrottleInterval)
                  {
                      var speedDelta = Math.Abs(smoothedBytesPerSec - lastReportedSpeed);
-                     var minSignificantChange = Math.Max(1024.0, lastReportedSpeed * 0.10);
+                     // Increase significance threshold to reduce oscillation
+                     var minSignificantChange = Math.Max(2048.0, lastReportedSpeed * 0.10);
+
+                     // Only display speed once we have at least 2 samples
+                     var canShowSpeed = sampleCount >= 2;
 
                      // Update if speed changed significantly or toggled between empty/non-empty
-                     if (lastReportedSpeed == 0 || speedDelta >= minSignificantChange || string.IsNullOrEmpty(speedText) != string.IsNullOrEmpty((string?)null))
+                     if (canShowSpeed && (lastReportedSpeed == 0 || speedDelta >= minSignificantChange || string.IsNullOrEmpty(speedText) != string.IsNullOrEmpty((string?)null)))
                      {
                          // Use UI thread posting for safety
                          _uiService.Post(() =>
@@ -228,9 +261,9 @@ namespace FactorioModManager.ViewModels.MainWindow
                          });
 
                          lastReportedSpeed = smoothedBytesPerSec;
+                         // Only record UI update time when we actually updated the UI
+                         lastUiUpdate = DateTime.UtcNow;
                      }
-
-                     lastUiUpdate = DateTime.UtcNow;
                  }
 
                  // Also update visible percent when possible
@@ -251,8 +284,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                  }
                  catch { }
 
-                 lastBytes = p.bytesDownloaded;
-                 lastTime = now;
+                 // lastBytes/lastTime already updated above when not first-sample
              });
         }
 

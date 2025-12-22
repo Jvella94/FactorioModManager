@@ -17,6 +17,7 @@ using System.Linq;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
 using Avalonia.Layout;
+using FactorioModManager.Services;
 using FactorioModManager.Services.Settings;
 
 namespace FactorioModManager.Views
@@ -206,10 +207,56 @@ namespace FactorioModManager.Views
 
         private async void OpenModFile(object? sender, RoutedEventArgs e)
         {
-            if (DataContext is MainWindowViewModel vm && vm.SelectedMod?.FilePath is string filePath)
+            if (DataContext is MainWindowViewModel vm && vm.SelectedMod is { } selectedMod)
             {
                 try
                 {
+                    // Prefer the file/directory for the selected version in the details panel when available
+                    string? filePath = null;
+                    var selVersion = selectedMod.SelectedVersion;
+
+                    if (!string.IsNullOrEmpty(selVersion))
+                    {
+                        try
+                        {
+                            var idx = selectedMod.AvailableVersions.IndexOf(selVersion);
+                            if (idx >= 0 && idx < selectedMod.VersionFilePaths.Count && !string.IsNullOrEmpty(selectedMod.VersionFilePaths[idx]))
+                            {
+                                filePath = selectedMod.VersionFilePaths[idx];
+                            }
+                            else
+                            {
+                                var modsDirectory = FolderPathHelper.GetModsDirectory();
+                                var zipPath = Path.Combine(modsDirectory, $"{selectedMod.Name}_{selVersion}.zip");
+                                var dirPath = Path.Combine(modsDirectory, $"{selectedMod.Name}_{selVersion}");
+                                if (File.Exists(zipPath)) filePath = zipPath;
+                                else if (Directory.Exists(dirPath)) filePath = dirPath;
+                                else
+                                {
+                                    // Fallback: try to find any matching zip by name
+                                    try
+                                    {
+                                        var files = Directory.GetFiles(modsDirectory, $"{selectedMod.Name}_*.zip");
+                                        var match = files.FirstOrDefault(f => Path.GetFileNameWithoutExtension(f).EndsWith($"_{selVersion}", StringComparison.OrdinalIgnoreCase));
+                                        if (match != null) filePath = match;
+                                    }
+                                    catch { }
+                                }
+                            }
+                        }
+                        catch { }
+                    }
+
+                    // Fall back to the selected mod's FilePath (active version)
+                    if (string.IsNullOrEmpty(filePath))
+                        filePath = selectedMod.FilePath;
+
+                    if (string.IsNullOrEmpty(filePath))
+                    {
+                        await _uiService.ShowMessageAsync("Error", "File or directory not found.", this);
+                        return;
+                    }
+
                     // Support both zip file paths and mod directory paths.
                     if (File.Exists(filePath))
                     {

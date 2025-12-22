@@ -37,6 +37,12 @@ namespace FactorioModManager.ViewModels.MainWindow
 
         private bool _isRefreshing = false;
 
+        public bool IsRefreshing
+        {
+            get => _isRefreshing;
+            set => this.RaiseAndSetIfChanged(ref _isRefreshing, value);
+        }
+
         public async Task RefreshModsAsync()
         {
             if (_isRefreshing)
@@ -45,7 +51,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                 return;
             }
 
-            _isRefreshing = true;
+            IsRefreshing = true;
             await Task.Run(async () =>
             {
                 await _uiService.InvokeAsync(() =>
@@ -79,7 +85,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                 }
                 finally
                 {
-                    _isRefreshing = false;
+                    IsRefreshing = false;
                     _logService.LogDebug("=== RefreshModsAsync completed ===");
                 }
             });
@@ -117,6 +123,8 @@ namespace FactorioModManager.ViewModels.MainWindow
                     }
                 }
 
+                // Ensure version cache is fresh for this mod before computing available versions.
+                try { _modVersionManager.RefreshVersionCache(modVm.Name); } catch { }
                 LoadModVersions(modVm);
                 modViewModels.Add(modVm);
             }

@@ -76,6 +76,10 @@ namespace FactorioModManager.Services.Mods
                         var fileName = Path.GetFileNameWithoutExtension(zip);
                         var lastUnderscore = fileName.LastIndexOf('_');
                         if (lastUnderscore <= 0) continue;
+                        var basePart = fileName[..lastUnderscore];
+                        // Ensure the base part exactly matches the expected mod name to avoid false matches like "A_B_version" for mod "A"
+                        if (!basePart.Equals(name, StringComparison.OrdinalIgnoreCase))
+                            continue;
                         var version = fileName[(lastUnderscore + 1)..];
                         if (!string.IsNullOrEmpty(version))
                             versions.Add(version);

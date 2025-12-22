@@ -214,7 +214,24 @@ namespace FactorioModManager.ViewModels
         }
 
         // Collections
-        public List<string> Dependencies { get; set; } = [];
+        private List<string> _dependencies = [];
+
+        public List<string> Dependencies
+        {
+            get => _dependencies;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _dependencies, value);
+                // Notify dependent computed properties
+                this.RaisePropertyChanged(nameof(SortedDependencies));
+                this.RaisePropertyChanged(nameof(OnlyModSortedDepedencies));
+                this.RaisePropertyChanged(nameof(VisibleDependencies));
+                this.RaisePropertyChanged(nameof(MandatoryDependencies));
+                this.RaisePropertyChanged(nameof(OptionalDependencies));
+                this.RaisePropertyChanged(nameof(IncompatibleDependencies));
+                this.RaisePropertyChanged(nameof(HasDependencies));
+            }
+        }
 
         public ObservableCollection<string> AvailableVersions { get; set; } = [];
         public List<string> VersionFilePaths { get; set; } = [];
@@ -354,6 +371,9 @@ namespace FactorioModManager.ViewModels
 
         public IReadOnlyList<DependencyViewModel> VisibleDependencies =>
             IsDependencyListExpanded ? OnlyModSortedDepedencies : [.. OnlyModSortedDepedencies.Take(5)];
+
+        // Whether this mod declares any dependencies at all (used for UI visibility)
+        public bool HasDependencies => Dependencies != null && Dependencies.Count > 0;
 
         // Helper method to check if a dependency is installed. Accepts raw dependency strings (may include prefix/operator/version)
         // and normalizes them before lookup.

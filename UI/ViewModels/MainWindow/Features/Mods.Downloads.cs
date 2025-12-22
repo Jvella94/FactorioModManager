@@ -49,7 +49,8 @@ namespace FactorioModManager.ViewModels.MainWindow
 
                 if (modForProgress != null)
                 {
-                    // Per-mod progress: update mod UI and forward to global helper
+                    // Per-mod progress: update mod UI and forward to a single global reporter for this download
+                    var globalReporter = helper.CreateGlobalDownloadProgressReporter();
                     progress = new Progress<(long bytesDownloaded, long? totalBytes)>(p =>
                     {
                         _uiService.Post(() =>
@@ -70,8 +71,8 @@ namespace FactorioModManager.ViewModels.MainWindow
                             }
                         });
 
-                        // Always report to global helper
-                        helper.CreateGlobalDownloadProgressReporter().Report(p);
+                        // Report to the single global reporter for this download (prevents spurious spikes)
+                        try { globalReporter.Report(p); } catch { }
                     });
                 }
                 else

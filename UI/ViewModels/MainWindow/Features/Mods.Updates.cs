@@ -401,6 +401,20 @@ namespace FactorioModManager.ViewModels.MainWindow
 
                 // End batch aggregation and recompute unused-internal flags for collected candidates
                 EndCandidateAggregationAndRecompute();
+
+                // If there are no updates remaining, clear the Pending Updates filter so the list doesn't remain empty
+                try
+                {
+                    await _uiService.InvokeAsync(() =>
+                    {
+                        if (!HasUpdates && ShowOnlyPendingUpdates)
+                        {
+                            ShowOnlyPendingUpdates = false;
+                            SetStatus("All updates applied. Pending updates filter cleared.");
+                        }
+                    });
+                }
+                catch { }
             }
             catch (Exception _ex)
             {
