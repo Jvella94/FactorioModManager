@@ -198,16 +198,6 @@ jobs:
           rm -rf UI/bin UI/obj
         shell: bash
 
-      - name: Cache NuGet (Linux/macOS)
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.nuget/packages
-            ~/.local/share/NuGet
-          key: nuget-${{ runner.os }}-${{ hashFiles('**/Directory.Packages.props','**/packages.lock.json', '**/*.csproj', '**/*.sln', 'global.json') }}
-          restore-keys: |
-            nuget-${{ runner.os }}-
-
       - name: Restore dependencies
         run: dotnet restore UI/FactorioModManager.csproj
         shell: bash
@@ -349,15 +339,6 @@ jobs:
         run: |
           Remove-Item -Recurse -Force UI/bin, UI/obj -ErrorAction SilentlyContinue
         shell: pwsh
-
-      - name: Cache NuGet on Windows
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~\.nuget\packages
-          key: nuget-windows-${{ hashFiles('**/Directory.Packages.props','**/packages.lock.json', '**/*.csproj', '**/*.sln', 'global.json') }}
-          restore-keys: |
-            nuget-windows-
 
       - name: Restore dependencies (Windows)
         run: dotnet restore UI/FactorioModManager.csproj
