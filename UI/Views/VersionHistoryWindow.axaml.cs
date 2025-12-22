@@ -6,10 +6,7 @@ using FactorioModManager.ViewModels.Dialogs;
 using FactorioModManager.Views.Base;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Linq;
-using Avalonia.Controls;
 using System;
-using System.Collections.Specialized;
 
 namespace FactorioModManager.Views
 {

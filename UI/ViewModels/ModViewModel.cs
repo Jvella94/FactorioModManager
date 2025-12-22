@@ -1,7 +1,6 @@
 ﻿using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using FactorioModManager.Views.Converters;
-using FactorioModManager.Services.Mods;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;

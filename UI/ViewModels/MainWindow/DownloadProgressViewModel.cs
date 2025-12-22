@@ -2,7 +2,6 @@ using FactorioModManager.Services;
 using FactorioModManager.Services.Infrastructure;
 using System;
 using System.ComponentModel;
-using System.Diagnostics;
 using System.Threading;
 
 namespace FactorioModManager.ViewModels.MainWindow

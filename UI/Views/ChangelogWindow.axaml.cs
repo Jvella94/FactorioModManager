@@ -1,5 +1,4 @@
-﻿using Avalonia.Controls;
-using FactorioModManager.Views.Base;
+﻿using FactorioModManager.Views.Base;
 
 namespace FactorioModManager.Views
 {

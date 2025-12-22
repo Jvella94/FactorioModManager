@@ -3,7 +3,6 @@ using ReactiveUI;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Diagnostics;
 using static FactorioModManager.Constants;
 
 namespace FactorioModManager.ViewModels.MainWindow

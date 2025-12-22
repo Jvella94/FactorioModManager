@@ -2,7 +2,6 @@ using Avalonia.Data.Converters;
 using System;
 using System.Globalization;
 using System.Collections.Generic;
-using System.Linq;
 using static FactorioModManager.Constants;
 
 namespace FactorioModManager.Views.Converters

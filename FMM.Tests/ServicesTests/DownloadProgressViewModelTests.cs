@@ -1,15 +1,11 @@
 using FactorioModManager.Services.Infrastructure;
 using FactorioModManager.ViewModels.MainWindow;
 using FactorioModManager.Models.DTO;
-using System;
-using System.Threading;
-using System.Threading.Tasks;
-using Xunit;
 
 namespace FMM.Tests.ServicesTests
 {
     // Minimal fake UI service that executes posted actions synchronously for tests
-    class TestUIService : IUIService
+    internal class TestUIService : IUIService
     {
         public void Post(Action action)
         {
@@ -28,18 +24,35 @@ namespace FMM.Tests.ServicesTests
         }
 
         public Task ShowMessageAsync(string title, string message, Avalonia.Controls.Window? parentWindow = null) => Task.CompletedTask;
+
         public Task<bool> ShowConfirmationAsync(string title, string message, Avalonia.Controls.Window? parentWindow = null) => Task.FromResult(true);
+
         public Task<bool> ShowConfirmationAsync(string title, string message, Avalonia.Controls.Window? parentWindow = null, string yesButtonText = "Yes", string noButtonText = "No", string? yesButtonColor = null, string? noButtonColor = null) => Task.FromResult(true);
-        public void OpenUrl(string url) { }
-        public void OpenFolder(string path) { }
-        public void OpenFile(string path) { }
-        public void RevealFile(string path) { }
+
+        public void OpenUrl(string url)
+        { }
+
+        public void OpenFolder(string path)
+        { }
+
+        public void OpenFile(string path)
+        { }
+
+        public void RevealFile(string path)
+        { }
+
         public Avalonia.Controls.Window? GetMainWindow() => null;
+
         public Task<bool> ShowSettingsDialogAsync() => Task.FromResult(false);
-        public Task<(bool Success, int Hours)> ShowUpdateCheckDialogAsync() => Task.FromResult((false,0));
-        public Task<(bool Success, string? Data, bool IsUrl)> ShowInstallModDialogAsync() => Task.FromResult<(bool,string?,bool)>((false, null, false));
+
+        public Task<(bool Success, int Hours)> ShowUpdateCheckDialogAsync() => Task.FromResult((false, 0));
+
+        public Task<(bool Success, string? Data, bool IsUrl)> ShowInstallModDialogAsync() => Task.FromResult<(bool, string?, bool)>((false, null, false));
+
         public Task ShowChangelogAsync(string modTitle, string changelog) => Task.CompletedTask;
+
         public Task ShowVersionHistoryAsync(string modTitle, string modName, System.Collections.Generic.List<ShortReleaseDTO> releases) => Task.CompletedTask;
+
         public Task SetClipboardTextAsync(string text) => Task.CompletedTask;
     }
 

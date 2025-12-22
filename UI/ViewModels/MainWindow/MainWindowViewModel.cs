@@ -13,7 +13,6 @@ using System.Reactive.Disposables;
 using System.Reactive.Disposables.Fluent;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
-using Avalonia.Layout;
 using Avalonia.Controls;
 using static FactorioModManager.Constants;
 

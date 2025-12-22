@@ -1,7 +1,5 @@
 ﻿using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
-using FactorioModManager.Models;
-using FactorioModManager.Services;
 using FactorioModManager.Services.Infrastructure;
 using FactorioModManager.Services.Platform;
 using FactorioModManager.Services.Settings;
@@ -9,7 +7,6 @@ using FactorioModManager.ViewModels.Dialogs;
 using FactorioModManager.Views.Base;
 using ReactiveUI;
 using System;
-using System.IO;
 
 namespace FactorioModManager.Views
 {

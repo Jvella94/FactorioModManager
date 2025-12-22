@@ -1,5 +1,4 @@
-﻿using FactorioModManager.Models.Domain;
-using FactorioModManager.Services;
+﻿using FactorioModManager.Services;
 using FactorioModManager.Services.API;
 using FactorioModManager.Services.Infrastructure;
 using FactorioModManager.Services.Mods;

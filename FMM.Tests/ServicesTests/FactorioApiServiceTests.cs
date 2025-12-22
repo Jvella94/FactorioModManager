@@ -1,14 +1,6 @@
-using FactorioModManager.Models.DTO;
 using FactorioModManager.Services.API;
 using FactorioModManager.Services.Infrastructure;
 using Moq;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Net.Http;
-using System.Threading;
-using System.Threading.Tasks;
-using Xunit;
 
 namespace Tests.ServicesTests
 {

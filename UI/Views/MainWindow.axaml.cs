@@ -9,14 +9,11 @@ using Avalonia.VisualTree;
 using FactorioModManager.Services.Infrastructure;
 using FactorioModManager.ViewModels;
 using FactorioModManager.ViewModels.MainWindow;
-using ReactiveUI;
 using System;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
-using System.Reactive.Concurrency;
 using System.Reactive.Linq;
-using Avalonia.Layout;
 using FactorioModManager.Services;
 using FactorioModManager.Services.Settings;
 
