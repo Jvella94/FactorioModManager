@@ -4,6 +4,7 @@ using Avalonia.Platform;
 using FactorioModManager.Services.Infrastructure;
 using NuGet.Versioning;
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -248,6 +249,7 @@ namespace FactorioModManager
         {
             private const string _baseGameName = "base";
             private static readonly string[] _dLCNames = ["space-age", "quality", "elevated-rails"];
+            public static readonly SearchValues<char> Markers = SearchValues.Create("?#");
 
             /// <summary>
             /// Checks if a dependency name is an official game dependency

@@ -5,6 +5,9 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
+using System.Text.Json;
+using static FactorioModManager.Constants;
 
 namespace FactorioModManager.ViewModels.MainWindow
 {
@@ -18,45 +21,66 @@ namespace FactorioModManager.ViewModels.MainWindow
             try
             {
                 var modsDirectory = FolderPathHelper.GetModsDirectory();
-                // Enumerate all zip files and parse them using the last underscore as separator
-                // to avoid matching mods whose names merely start with the current mod name
-                var allZipFiles = Directory.GetFiles(modsDirectory, "*.zip");
-                var modFiles = allZipFiles
-                    .Where(f =>
-                    {
-                        var fileName = Path.GetFileNameWithoutExtension(f);
-                        var lastUnderscore = fileName.LastIndexOf('_');
-                        if (lastUnderscore <= 0) return false;
-                        var namePart = fileName[..lastUnderscore];
-                        return string.Equals(namePart, mod.Name, StringComparison.OrdinalIgnoreCase);
-                    })
-                    .OrderByDescending(f => f)
-                    .ToList();
 
                 mod.AvailableVersions.Clear();
                 mod.VersionFilePaths.Clear();
 
-                foreach (var file in modFiles)
+                // Use ModVersionManager which now includes both zip files and version directories
+                var installed = _modVersionManager.GetInstalledVersions(mod.Name);
+
+                foreach (var version in installed)
                 {
-                    var fileName = Path.GetFileNameWithoutExtension(file);
-                    var lastUnderscore = fileName.LastIndexOf('_');
-                    if (lastUnderscore <= 0)
+                    if (string.IsNullOrEmpty(version))
                         continue;
 
-                    var namePart = fileName[..lastUnderscore];
-                    if (!string.Equals(namePart, mod.Name, StringComparison.OrdinalIgnoreCase))
-                        continue;
+                    mod.AvailableVersions.Add(version);
 
-                    var version = fileName[(lastUnderscore + 1)..];
-                    if (!string.IsNullOrEmpty(version))
+                    // Prefer zip file if present, otherwise use directory path
+                    var zipPath = Path.Combine(modsDirectory, $"{mod.Name}_{version}.zip");
+                    if (File.Exists(zipPath))
                     {
-                        mod.AvailableVersions.Add(version);
-                        mod.VersionFilePaths.Add(file);
+                        mod.VersionFilePaths.Add(zipPath);
+                        continue;
                     }
+
+                    var dirPath = Path.Combine(modsDirectory, $"{mod.Name}_{version}");
+                    if (Directory.Exists(dirPath))
+                    {
+                        mod.VersionFilePaths.Add(dirPath);
+                        continue;
+                    }
+
+                    // Fallback: try to find any matching zip file (case-insensitive)
+                    try
+                    {
+                        var files = Directory.GetFiles(modsDirectory, $"{mod.Name}_*.zip");
+                        var match = files.FirstOrDefault(f => Path.GetFileNameWithoutExtension(f).EndsWith($"_{version}", StringComparison.OrdinalIgnoreCase));
+                        if (match != null)
+                        {
+                            mod.VersionFilePaths.Add(match);
+                            continue;
+                        }
+                    }
+                    catch { }
+
+                    // If nothing found, leave placeholder empty to keep index alignment
+                    mod.VersionFilePaths.Add(string.Empty);
                 }
 
-                // Set current version as selected
-                mod.SelectedVersion = mod.Version;
+                // Set current version as selected if present, otherwise pick first available
+                if (!string.IsNullOrEmpty(mod.Version) && mod.AvailableVersions.Contains(mod.Version))
+                {
+                    mod.SelectedVersion = mod.Version;
+                }
+                else if (mod.AvailableVersions.Count > 0)
+                {
+                    mod.SelectedVersion = mod.AvailableVersions.First();
+                }
+                else
+                {
+                    mod.SelectedVersion = null;
+                }
+
                 mod.InstalledCount = mod.AvailableVersions.Count;
                 mod.RaisePropertyChanged(nameof(mod.HasMultipleVersions));
             }
@@ -105,7 +129,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                     return;
                 }
 
-                // Build expected file path for helpful logging/messages
+                // Builder expected file path for helpful logging/messages
                 var modsDirectory = FolderPathHelper.GetModsDirectory();
                 var expectedFilePath = Path.Combine(modsDirectory, $"{mod.Name}_{selectedVersion}.zip");
 
@@ -178,7 +202,7 @@ namespace FactorioModManager.ViewModels.MainWindow
         /// This updates the SelectedMod view model to point at the chosen file/info so details reflect immediately.
         /// Note: this is a UI-level activation — a full refresh may restore canonical "latest" on next refresh.
         /// </summary>
-        internal void SetActiveVersion(string? selectedVersion)
+        internal async Task SetActiveVersion(string? selectedVersion)
         {
             var mod = SelectedMod;
             if (mod == null)
@@ -192,6 +216,20 @@ namespace FactorioModManager.ViewModels.MainWindow
                 SetStatus("No version selected", LogLevel.Warning);
                 return;
             }
+
+            // Prevent changing active version while Factorio is running
+            try
+            {
+                if (_factorioLauncher != null && _factorioLauncher.IsFactorioRunning())
+                {
+                    SetStatus("Cannot change active version while Factorio is running.", LogLevel.Warning);
+                    await _uiService.ShowMessageAsync(
+                        "Factorio is running",
+                        "The active mod version cannot be changed while Factorio is running. Please close the game and try again.");
+                    return;
+                }
+            }
+            catch { }
 
             if (selectedVersion == mod.Version)
             {
@@ -212,19 +250,51 @@ namespace FactorioModManager.ViewModels.MainWindow
                 }
 
                 // Resolve file path (prefer VersionFilePaths when available)
-                string filePath;
+                string filePath = string.Empty;
+                var modsDirectory = FolderPathHelper.GetModsDirectory();
                 var idx = mod.AvailableVersions.IndexOf(selectedVersion);
                 if (idx >= 0 && idx < mod.VersionFilePaths.Count)
                 {
-                    filePath = mod.VersionFilePaths[idx];
+                    var candidate = mod.VersionFilePaths[idx];
+                    if (!string.IsNullOrEmpty(candidate))
+                    {
+                        filePath = candidate;
+                    }
                 }
-                else
+
+                if (string.IsNullOrEmpty(filePath))
                 {
-                    var modsDirectory = FolderPathHelper.GetModsDirectory();
                     filePath = Path.Combine(modsDirectory, $"{mod.Name}_{selectedVersion}.zip");
                 }
 
-                if (!File.Exists(filePath))
+                // If constructed path doesn't exist, scan directories for matching info.json
+                if (!File.Exists(filePath) && !Directory.Exists(filePath))
+                {
+                    try
+                    {
+                        var dirs = Directory.GetDirectories(modsDirectory);
+                        foreach (var d in dirs)
+                        {
+                            try
+                            {
+                                var infoPath = Path.Combine(d, Constants.FileSystem.InfoJsonFileName);
+                                if (!File.Exists(infoPath))
+                                    continue;
+                                var json = File.ReadAllText(infoPath);
+                                var dirInfo = JsonSerializer.Deserialize<ModInfo>(json, JsonOptions.CaseInsensitive);
+                                if (dirInfo != null && string.Equals(dirInfo.Name, mod.Name, StringComparison.OrdinalIgnoreCase) && string.Equals(dirInfo.Version, selectedVersion, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    filePath = d;
+                                    break;
+                                }
+                            }
+                            catch { }
+                        }
+                    }
+                    catch { }
+                }
+
+                if (!File.Exists(filePath) && !Directory.Exists(filePath))
                 {
                     SetStatus($"File not found: {filePath}", LogLevel.Warning);
                     LoadModVersions(mod);

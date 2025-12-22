@@ -161,7 +161,8 @@
                    PasswordChar="•"
                    Margin="0,0,0,10" />
 
-          <!-- API Key --><!--
+          <!-- API Key -->
+          <!--
           <TextBlock Text="Mod Portal API Key (optional - for browsing):"
                      Foreground="White"
                      Margin="0,0,0,5" />
@@ -208,16 +209,14 @@
           </StackPanel>
         </StackPanel>
 
-          <CheckBox Content="Check for Mod Manager updates on startup"
-                    IsChecked="{Binding CheckForAppUpdates}"
-                    Foreground="White" />  
+        <CheckBox Content="Check for Mod Manager updates on startup"
+                  IsChecked="{Binding CheckForAppUpdates}"
+                  Foreground="White" />
 
-          <TextBlock Foreground="#888"
-                     FontSize="11"
-                     Margin="20,5,0,0"
-                    Text="{Binding LastAppUpdateCheck, StringFormat='Last app update check: {0:g}', FallbackValue='Last app update check: Never'}" />
-
-        
+        <TextBlock Foreground="#888"
+                   FontSize="11"
+                   Margin="20,5,0,0"
+                  Text="{Binding LastAppUpdateCheck, StringFormat='Last app update check: {0:g}', FallbackValue='Last app update check: Never'}" />
 
         <Separator Background="#333" />
 
@@ -234,6 +233,15 @@
 
           <CheckBox Content="Show Hidden Dependencies"
           IsChecked="{Binding ShowHiddenDependencies}" />
+
+          <!-- New: column visibility toggles -->
+          <CheckBox Content="Show Category column in mods list"
+                    IsChecked="{Binding ShowCategoryColumn}"
+                    Foreground="White" />
+
+          <CheckBox Content="Show Size column in mods list"
+                    IsChecked="{Binding ShowSizeColumn}"
+                    Foreground="White" />
 
           <!-- Verbose detection logging toggle -->
           <CheckBox Content="Enable verbose detection logging (diagnostics)"

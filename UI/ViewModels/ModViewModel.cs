@@ -302,7 +302,7 @@ namespace FactorioModManager.ViewModels
                     var installed = !string.IsNullOrEmpty(tuple.Name);
                     var installedVersion = installed ? tuple.InstalledVersion : null;
                     var versionSatisfied = DependencyHelper.SatisfiesVersionConstraint(installedVersion, p.VersionOperator, p.Version);
-                    list.Add(new DependencyViewModel(p.Name, DependencyStatus.Mandatory, p.VersionOperator, p.Version, installed, versionSatisfied));
+                    list.Add(new DependencyViewModel(p.Name, DependencyStatus.Mandatory, p.VersionOperator, p.Version, installed, versionSatisfied, p.Prefix));
                 }
 
                 // Optional dependencies (preserve version info from raw strings)
@@ -315,7 +315,7 @@ namespace FactorioModManager.ViewModels
                     var inst = !string.IsNullOrEmpty(tuple.Name);
                     var installedVersion = inst ? tuple.InstalledVersion : null;
                     var satisfied = DependencyHelper.SatisfiesVersionConstraint(installedVersion, parsed?.VersionOperator, parsed?.Version);
-                    list.Add(new DependencyViewModel(depName, DependencyStatus.OptionalInstalled, parsed?.VersionOperator, parsed?.Version, inst, satisfied));
+                    list.Add(new DependencyViewModel(depName, DependencyStatus.OptionalInstalled, parsed?.VersionOperator, parsed?.Version, inst, satisfied, parsed?.Prefix));
                 }
 
                 foreach (var raw in optionalRaw.Where(d => !IsInstalled(DependencyHelper.ExtractDependencyName(d))))
@@ -326,7 +326,7 @@ namespace FactorioModManager.ViewModels
                     var inst = !string.IsNullOrEmpty(tuple.Name);
                     var installedVersion = inst ? tuple.InstalledVersion : null;
                     var satisfied = DependencyHelper.SatisfiesVersionConstraint(installedVersion, parsed?.VersionOperator, parsed?.Version);
-                    list.Add(new DependencyViewModel(depName, DependencyStatus.OptionalNotInstalled, parsed?.VersionOperator, parsed?.Version, inst, satisfied));
+                    list.Add(new DependencyViewModel(depName, DependencyStatus.OptionalNotInstalled, parsed?.VersionOperator, parsed?.Version, inst, satisfied, parsed?.Prefix));
                 }
 
                 // Incompatible dependencies: parse raw dependencies to preserve version info
@@ -339,7 +339,7 @@ namespace FactorioModManager.ViewModels
                         var inst = !string.IsNullOrEmpty(tuple.Name);
                         var installedVersion = inst ? tuple.InstalledVersion : null;
                         var satisfied = DependencyHelper.SatisfiesVersionConstraint(installedVersion, parsed.Value.VersionOperator, parsed.Value.Version);
-                        list.Add(new DependencyViewModel(parsed.Value.Name, DependencyStatus.Incompatible, parsed.Value.VersionOperator, parsed.Value.Version, inst, satisfied));
+                        list.Add(new DependencyViewModel(parsed.Value.Name, DependencyStatus.Incompatible, parsed.Value.VersionOperator, parsed.Value.Version, inst, satisfied, parsed.Value.Prefix));
                     }
                 }
 
@@ -348,7 +348,9 @@ namespace FactorioModManager.ViewModels
         }
 
         public IReadOnlyList<DependencyViewModel> OnlyModSortedDepedencies =>
-            [.. SortedDependencies.Where(sd => DependencyHelper.IsGameDependency(sd.Name) == false)];
+            [.. SortedDependencies.Where(sd => DependencyHelper.IsGameDependency(sd.Name) == false)
+                // Respect user's ShowHiddenDependencies setting: when false, hide only the hidden form '(?)' optional dependencies
+                .Where(sd => ShowHiddenDependencies || !( (sd.Status == DependencyStatus.OptionalInstalled || sd.Status == DependencyStatus.OptionalNotInstalled) && sd.IsHiddenOptional))];
 
         public IReadOnlyList<DependencyViewModel> VisibleDependencies =>
             IsDependencyListExpanded ? OnlyModSortedDepedencies : [.. OnlyModSortedDepedencies.Take(5)];
@@ -399,6 +401,15 @@ namespace FactorioModManager.ViewModels
 
             this.WhenAnyValue(x => x.SelectedVersion, x => x.Version)
                 .Subscribe(_ => this.RaisePropertyChanged(nameof(IsOldVersionSelected)))
+                .DisposeWith(_disposables);
+
+            // Notify when ShowHiddenDependencies changes so UI updates
+            this.WhenAnyValue(x => x.ShowHiddenDependencies)
+                .Subscribe(_ =>
+                {
+                    this.RaisePropertyChanged(nameof(OnlyModSortedDepedencies));
+                    this.RaisePropertyChanged(nameof(VisibleDependencies));
+                })
                 .DisposeWith(_disposables);
 
             // ✅ Notify when collection changes

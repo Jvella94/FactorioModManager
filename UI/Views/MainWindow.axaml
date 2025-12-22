@@ -9,7 +9,7 @@
         x:Class="FactorioModManager.Views.MainWindow"
         x:DataType="vmmw:MainWindowViewModel"
         Title="Factorio Mod Manager"
-        Width="1500" Height="850"
+        Width="1600" Height="850"
         MinWidth="1000" MinHeight="700"
         Loaded="Window_Loaded"
         x:Name="RootWindow">
@@ -25,6 +25,9 @@
     <converter:GreaterThanFiveConverter x:Key="GreaterThanFiveConverter" />
     <converter:IsOptionalDependencyConverter x:Key="IsOptionalDependencyConverter" />
     <converter:BoolToOpacityConverter x:Key="BoolToOpacityConverter" />
+    <converter:DoubleStringToGridLengthConverter x:Key="DoubleStringToGridLengthConverter" />
+    <converter:BoolToBrushConverter x:Key="BoolToBrushConverter" />
+    <!-- Toggle command in UI to control visibility -->
   </Window.Resources>
 
   <Design.DataContext>
@@ -63,19 +66,34 @@
     <Border Grid.Row="1" BorderBrush="#333" BorderThickness="0,0,0,1"
             Background="#2B2B2B" Padding="10">
       <Grid ColumnDefinitions="Auto,Auto,*,Auto">
-        <!-- Launch Factorio Button (leftmost) -->
-        <Button Grid.Column="0"
+        <!-- Launch Factorio + Groups Toggle (leftmost) -->
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center" Margin="0,0,16,0">
+          <Button
                 Command="{Binding LaunchFactorioCommand}"
                 Padding="12,6"
-                Margin="0,0,15,0"
+                Margin="0,0,0,0"
                 ToolTip.Tip="Launch Factorio"
                 Background="#1E5A1E"
                 VerticalAlignment="Center">
-          <StackPanel Orientation="Horizontal" Spacing="5">
-            <TextBlock Text="▶" FontSize="14" FontWeight="Bold" />
-            <TextBlock Text="Launch Factorio" FontWeight="SemiBold" />
-          </StackPanel>
-        </Button>
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <TextBlock Text="▶" FontSize="14" FontWeight="Bold" />
+              <TextBlock Text="Launch Factorio" FontWeight="SemiBold" />
+            </StackPanel>
+          </Button>
+
+          <!-- Toggle groups panel (persisted). Use ToggleButton bound to AreGroupsVisible so it reflects state -->
+          <ToggleButton IsChecked="{Binding AreGroupsVisible, Mode=TwoWay}"
+                        Command="{Binding ToggleGroupsCommand}"
+                        VerticalAlignment="Center"
+                        Padding="10,7"
+                        ToolTip.Tip="Show / hide groups panel">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <TextBlock Text="📁" FontSize="14" />
+              <TextBlock Text="Groups" />
+            </StackPanel>
+          </ToggleButton>
+        </StackPanel>
+
         <TextBlock Grid.Column="1" Text="Search:"
                    VerticalAlignment="Center"
                    Margin="0,0,10,0" />
@@ -101,7 +119,8 @@
           <ToggleButton IsChecked="{Binding ShowOnlyUnusedInternals}"
                         VerticalAlignment="Center"
                         Padding="10,7"
-                        ToolTip.Tip="Show only unused internal dependencies">
+                        ToolTip.Tip="Show only unused internal dependencies"
+                        IsVisible="{Binding HasUnusedInternals}">
             <StackPanel Orientation="Horizontal" Spacing="5">
               <TextBlock Text="⚠" FontSize="14" />
               <TextBlock Text="Unused Internal" />
@@ -112,7 +131,8 @@
           <ToggleButton IsChecked="{Binding ShowOnlyPendingUpdates}"
                         VerticalAlignment="Center"
                         Padding="10,7"
-                        ToolTip.Tip="Show only mods with pending updates">
+                        ToolTip.Tip="Show only mods with pending updates"
+                        IsVisible="{Binding HasUpdates}">
             <StackPanel Orientation="Horizontal" Spacing="5">
               <TextBlock Text="⬇" FontSize="14" />
               <TextBlock Text="Pending Updates" />
@@ -157,71 +177,94 @@
     </Border>
 
     <!-- Main Content -->
-    <Grid Grid.Row="2" ColumnDefinitions="200,3*,*">
+    <Grid Grid.Row="2" x:Name="MainContentGrid">
+      <Grid.ColumnDefinitions>
+        <!-- Bind first column width to a string property representing pixels; converter will parse it to GridLength -->
+        <ColumnDefinition Width="{Binding EffectiveGroupsColumnGridLength, Mode=TwoWay}" />
+        <ColumnDefinition Width="{Binding EffectiveSplitterGridLength, Mode=TwoWay}" />
+        <!-- GridSplitter column -->
+        <ColumnDefinition Width="3*" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
 
       <!-- Groups Panel -->
       <Border Grid.Column="0" BorderBrush="#333" BorderThickness="0,0,1,0"
-              Background="#252525" Padding="10">
+               Background="#252525" Padding="10">
+        <Border.Transitions>
+          <Transitions>
+            <DoubleTransition Property="Opacity" Duration="0:0:0.18" />
+          </Transitions>
+        </Border.Transitions>
+        <Border.Opacity>
+          <Binding Path="AreGroupsVisible" Converter="{StaticResource BoolToOpacityConverter}" />
+        </Border.Opacity>
+        <Border.IsVisible>
+          <Binding Path="AreGroupsVisible" />
+        </Border.IsVisible>
+
         <Grid RowDefinitions="Auto,*,Auto">
           <TextBlock Grid.Row="0" Text="Mod Groups"
                      FontWeight="Bold" FontSize="14" Margin="0,0,0,10" />
 
           <ListBox x:Name="GroupsListBox" Grid.Row="1"
                    ItemsSource="{Binding Groups}"
-                   SelectedItem="{Binding SelectedGroup}">
+                   SelectedItem="{Binding SelectedGroup}"
+                   DoubleTapped="GroupsListBox_OnDoubleTapped">
             <ListBox.ItemTemplate>
               <DataTemplate>
-                <StackPanel Spacing="3">
-                  <!-- Display mode -->
-                  <StackPanel IsVisible="{Binding !IsRenaming}">
-                    <ToolTip.Tip>
-                      <StackPanel MaxWidth="300">
-                        <TextBlock Text="{Binding Name}" FontWeight="Bold" Margin="0,0,0,5" />
-                        <TextBlock Text="Mods in this group:" FontSize="11" Margin="0,0,0,3" />
-                        <ItemsControl ItemsSource="{Binding ModNames}">
-                          <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                              <TextBlock Text="{Binding}" Margin="5,2" FontSize="11" />
-                            </DataTemplate>
-                          </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                      </StackPanel>
-                    </ToolTip.Tip>
-                    <TextBlock Text="{Binding Name}" FontWeight="Bold" />
-                    <TextBlock Text="{Binding StatusText}"
-                               FontSize="11" Foreground="#888" />
-                    <StackPanel Orientation="Horizontal" Spacing="5" Margin="0,3,0,0">
-                      <Button Content="Toggle"
-                              Command="{Binding $parent[Window].((vmmw:MainWindowViewModel)DataContext).ToggleGroupCommand}"
-                              CommandParameter="{Binding}"
-                              FontSize="10" Padding="5,2" />
-                      <Button Content="Rename"
-                              Command="{Binding $parent[Window].((vmmw:MainWindowViewModel)DataContext).RenameGroupCommand}"
-                              CommandParameter="{Binding}"
-                              FontSize="10" Padding="5,2" />
-                      <Button Content="Delete"
+                <!-- Highlight entire item when active filter set by binding Border background to IsActiveFilter -->
+                <Border Background="{Binding IsActiveFilter, Converter={StaticResource BoolToBrushConverter}}" CornerRadius="6" Padding="6">
+                  <StackPanel Spacing="3">
+                    <!-- Display mode -->
+                    <StackPanel IsVisible="{Binding !IsRenaming}">
+                      <ToolTip.Tip>
+                        <StackPanel MaxWidth="300">
+                          <TextBlock Text="{Binding Name}" FontWeight="Bold" Margin="0,0,0,5" />
+                          <TextBlock Text="Mods in this group:" FontSize="11" Margin="0,0,0,3" />
+                          <ItemsControl ItemsSource="{Binding ModNames}">
+                            <ItemsControl.ItemTemplate>
+                              <DataTemplate>
+                                <TextBlock Text="{Binding}" Margin="5,2" FontSize="11" />
+                              </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                          </ItemsControl>
+                        </StackPanel>
+                      </ToolTip.Tip>
+                      <TextBlock Text="{Binding Name}" FontWeight="Bold" />
+                      <TextBlock Text="{Binding StatusText}" FontSize="11" Foreground="#888" />
+                      <StackPanel Orientation="Horizontal" Spacing="5" Margin="0,3,0,0">
+                        <Button Content="Toggle"
+                                Command="{Binding $parent[Window].((vmmw:MainWindowViewModel)DataContext).ToggleGroupCommand}"
+                                CommandParameter="{Binding}"
+                                FontSize="10" Padding="5,2" />
+                        <Button Content="Rename"
+                                Command="{Binding $parent[Window].((vmmw:MainWindowViewModel)DataContext).RenameGroupCommand}"
+                                CommandParameter="{Binding}"
+                                FontSize="10" Padding="5,2" />
+                        <Button Content="Delete"
                                Click="DeleteGroup_Click"
                               FontSize="10" Padding="5,2" />
+                      </StackPanel>
                     </StackPanel>
-                  </StackPanel>
 
-                  <!-- Edit mode -->
-                  <StackPanel IsVisible="{Binding IsRenaming}" Spacing="5"
-                              PropertyChanged="GroupEditPanel_OnPropertyChanged">
-                    <TextBox x:Name="GroupNameEditBox" Text="{Binding EditedName}" AttachedToVisualTree="GroupNameEditBox_OnAttachedToVisualTree"
-                             Watermark="Group name"
-                             KeyDown="GroupNameEditBox_OnKeyDown" />
-                    <StackPanel Orientation="Horizontal" Spacing="5">
-                      <Button Content="Save"
-                              Command="{Binding $parent[Window].((vmmw:MainWindowViewModel)DataContext).ConfirmRenameGroupCommand}"
-                              CommandParameter="{Binding}"
-                              FontSize="10" Padding="5,2" />
-                      <Button Content="Cancel"
-                              Click="CancelRename"
-                              FontSize="10" Padding="5,2" />
+                    <!-- Edit mode -->
+                    <StackPanel IsVisible="{Binding IsRenaming}" Spacing="5"
+                                PropertyChanged="GroupEditPanel_OnPropertyChanged">
+                      <TextBox x:Name="GroupNameEditBox" Text="{Binding EditedName}" AttachedToVisualTree="GroupNameEditBox_OnAttachedToVisualTree"
+                               Watermark="Group name"
+                               KeyDown="GroupNameEditBox_OnKeyDown" />
+                      <StackPanel Orientation="Horizontal" Spacing="5">
+                        <Button Content="Save"
+                                Command="{Binding $parent[Window].((vmmw:MainWindowViewModel)DataContext).ConfirmRenameGroupCommand}"
+                                CommandParameter="{Binding}"
+                                FontSize="10" Padding="5,2" />
+                        <Button Content="Cancel"
+                                Click="CancelRename"
+                                FontSize="10" Padding="5,2" />
+                      </StackPanel>
                     </StackPanel>
                   </StackPanel>
-                </StackPanel>
+                </Border>
               </DataTemplate>
             </ListBox.ItemTemplate>
           </ListBox>
@@ -240,8 +283,16 @@
         </Grid>
       </Border>
 
+      <!-- GridSplitter to allow resizing Groups column -->
+      <GridSplitter Grid.Column="1"
+                    Background="#3A3A3A"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Stretch"
+                    ShowsPreview="True"
+                    DragDelta="GridSplitter_DragDelta" />
+
       <!-- Mod List -->
-      <Border Grid.Column="1" BorderBrush="#333" BorderThickness="0,0,1,0">
+      <Border Grid.Column="2" BorderBrush="#333" BorderThickness="0,0,1,0">
         <DataGrid ItemsSource="{Binding FilteredMods}"
                   Name="ModGrid"
                 SelectedItem="{Binding SelectedMod}"
@@ -281,15 +332,27 @@
 
             <DataGridTextColumn Header="Category"
                                 Binding="{Binding Category}"
-                                Width="100" />
+                                Width="100"
+                                Tag="CategoryColumn" />
 
             <DataGridTextColumn Header="Group"
                                 Binding="{Binding GroupName}"
                                 Width="100" />
 
-            <DataGridTextColumn Header="Last Updated"
-                                Binding="{Binding LastUpdatedText}"
-                                Width="110" />
+            <!-- New: Size column, sortable by the numeric SizeOnDiskBytes but displays SizeOnDiskText -->
+            <DataGridTextColumn Header="Size"
+                                Binding="{Binding SizeOnDiskText}"
+                                SortMemberPath="SizeOnDiskBytes"
+                                Width="110"
+                                Tag="SizeColumn" />
+
+            <DataGridTemplateColumn Header="Last Updated" Width="120" Tag="LastUpdatedColumn">
+              <DataGridTemplateColumn.CellTemplate>
+                <DataTemplate>
+                  <TextBlock Text="{Binding LastUpdatedText}" VerticalAlignment="Center" Margin="8,0,8,0" />
+                </DataTemplate>
+              </DataGridTemplateColumn.CellTemplate>
+            </DataGridTemplateColumn>
           </DataGrid.Columns>
 
           <DataGrid.Styles>
@@ -301,7 +364,7 @@
       </Border>
 
       <!-- Mod Details Panel -->
-      <Border Grid.Column="2" Background="#1E1E1E" Padding="15">
+      <Border Grid.Column="3" Background="#1E1E1E" Padding="15">
 
         <ScrollViewer x:Name="ModDetailsScroller">
           <Grid>
@@ -648,26 +711,26 @@
                 <DoubleTransition Property="Opacity" Duration="0:0:0.32" />
               </Transitions>
             </StackPanel.Transitions>
-             <!-- Use a two-column grid: left = progress bar, right = stacked count + speed to avoid overlap -->
-             <Grid Height="20">
-               <Grid.ColumnDefinitions>
-                 <ColumnDefinition Width="*" />
-                 <ColumnDefinition Width="Auto" />
-               </Grid.ColumnDefinitions>
+            <!-- Use a two-column grid: left = progress bar, right = stacked count + speed to avoid overlap -->
+            <Grid Height="20">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
 
-               <ProgressBar Grid.Column="0" Height="6" IsIndeterminate="False" Minimum="0" Maximum="100"
-                            Value="{Binding DownloadProgress.ProgressPercent, Mode=OneWay}"
-                            VerticalAlignment="Center"
-                            Margin="0,0,8,0" />
+              <ProgressBar Grid.Column="0" Height="6" IsIndeterminate="False" Minimum="0" Maximum="100"
+                           Value="{Binding DownloadProgress.ProgressPercent, Mode=OneWay}"
+                           VerticalAlignment="Center"
+                           Margin="0,0,8,0" />
 
-               <!-- Right: stacked count and speed -->
-               <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Spacing="0">
-                 <TextBlock Text="{Binding DownloadProgress.ProgressText}" Foreground="#DDD" FontSize="15" HorizontalAlignment="Right"  VerticalAlignment="Center" />
-                 <TextBlock Text=" | " Foreground="#DDD" FontSize="15" HorizontalAlignment="Right"  VerticalAlignment="Center" />
-                 <TextBlock Text="{Binding DownloadProgress.SpeedText}" Foreground="#DDD" FontSize="14" HorizontalAlignment="Right" VerticalAlignment="Center" Opacity="0.9" />
-               </StackPanel>
-             </Grid>
-           </StackPanel>
+              <!-- Right: stacked count and speed -->
+              <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Spacing="0">
+                <TextBlock Text="{Binding DownloadProgress.ProgressText}" Foreground="#DDD" FontSize="15" HorizontalAlignment="Right"  VerticalAlignment="Center" />
+                <TextBlock Text=" | " Foreground="#DDD" FontSize="15" HorizontalAlignment="Right"  VerticalAlignment="Center" />
+                <TextBlock Text="{Binding DownloadProgress.SpeedText}" Foreground="#DDD" FontSize="14" HorizontalAlignment="Right" VerticalAlignment="Center" Opacity="0.9" />
+              </StackPanel>
+            </Grid>
+          </StackPanel>
 
           <!-- Factorio Version -->
           <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" IsVisible="{Binding HasFactorioVersion}">

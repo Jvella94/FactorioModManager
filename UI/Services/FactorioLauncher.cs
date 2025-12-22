@@ -4,6 +4,7 @@ using FactorioModManager.Services.Settings;
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 
 namespace FactorioModManager.Services
 {
@@ -17,6 +18,9 @@ namespace FactorioModManager.Services
 
         // Detect installed factorio version and whether Space Age DLC bundle is present
         (string? Version, bool HasSpaceAgeDlc) DetectVersionAndDLC();
+
+        // Check whether Factorio is currently running
+        bool IsFactorioRunning();
     }
 
     public class FactorioLauncher(IFactorioEnvironment environment, ILogService logService, ISettingsService settingsService) : IFactorioLauncher
@@ -135,6 +139,42 @@ namespace FactorioModManager.Services
             {
                 _logService.LogWarning($"Error detecting Factorio DLC/version: {ex.Message}");
                 return (null, false);
+            }
+        }
+
+        // Check whether Factorio process is running (cross-platform tolerant)
+        public bool IsFactorioRunning()
+        {
+            try
+            {
+                // Fast direct lookup by process name
+                var byName = Process.GetProcessesByName("factorio");
+                if (byName != null && byName.Length > 0) return true;
+
+                // Fallback: enumerate processes and look for exact process name "factorio".
+                var procs = Process.GetProcesses();
+                foreach (var p in procs)
+                {
+                    try
+                    {
+                        var pname = p.ProcessName ?? string.Empty;
+
+                        // Match the process name exactly (not substring) to avoid matching
+                        // the manager application or other processes that contain "factorio"
+                        if (string.Equals(pname, "factorio", StringComparison.OrdinalIgnoreCase))
+                            return true;
+                    }
+                    catch
+                    {
+                        // Ignore failures getting process info and continue with others
+                    }
+                }
+
+                return false;
+            }
+            catch
+            {
+                return false;
             }
         }
     }

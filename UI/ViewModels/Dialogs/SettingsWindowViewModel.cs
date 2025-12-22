@@ -185,6 +185,22 @@ namespace FactorioModManager.ViewModels.Dialogs
             private set => this.RaiseAndSetIfChanged(ref _verboseStatusMessage, value);
         }
 
+        // New: show/hide columns in mods list
+        private bool _showCategoryColumn;
+        private bool _showSizeColumn;
+
+        public bool ShowCategoryColumn
+        {
+            get => _showCategoryColumn;
+            set => this.RaiseAndSetIfChanged(ref _showCategoryColumn, value);
+        }
+
+        public bool ShowSizeColumn
+        {
+            get => _showSizeColumn;
+            set => this.RaiseAndSetIfChanged(ref _showSizeColumn, value);
+        }
+
         public ReactiveCommand<Unit, Unit> SaveCommand { get; }
         public ReactiveCommand<Unit, Unit> CancelCommand { get; }
 
@@ -220,6 +236,14 @@ namespace FactorioModManager.ViewModels.Dialogs
 
             // Load verbose detection logging setting
             VerboseDetectionLogging = _settingsService.GetVerboseDetectionLogging();
+
+            // Load new column visibility settings
+            try
+            {
+                ShowCategoryColumn = _settingsService.GetShowCategoryColumn();
+                ShowSizeColumn = _settingsService.GetShowSizeColumn();
+            }
+            catch { }
 
             // ✅ SaveCommand with validation
             var canSave = this.WhenAnyValue(x => x.ModsPath)
@@ -382,6 +406,10 @@ namespace FactorioModManager.ViewModels.Dialogs
             _settingsService.SetAutoCheckModUpdates(AutoCheckModUpdates);
             _settingsService.SetShowHiddenDependencies(ShowHiddenDependencies);
             _settingsService.SetUpdateConcurrency(UpdateConcurrency);
+
+            // Persist new column visibility settings
+            _settingsService.SetShowCategoryColumn(ShowCategoryColumn);
+            _settingsService.SetShowSizeColumn(ShowSizeColumn);
 
             // Persist verbose detection logging setting
             _settingsService.SetVerboseDetectionLogging(VerboseDetectionLogging);

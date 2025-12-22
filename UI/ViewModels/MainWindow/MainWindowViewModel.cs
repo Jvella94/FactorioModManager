@@ -13,6 +13,8 @@ using System.Reactive.Disposables;
 using System.Reactive.Disposables.Fluent;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
+using Avalonia.Layout;
+using Avalonia.Controls;
 using static FactorioModManager.Constants;
 
 namespace FactorioModManager.ViewModels.MainWindow
@@ -40,7 +42,70 @@ namespace FactorioModManager.ViewModels.MainWindow
         private string _authorSearchText = string.Empty;
         private bool _showOnlyUnusedInternals = false;
         private bool _showOnlyPendingUpdates = false;
+        private bool _showCategoryColumn = true;
+        private bool _showSizeColumn = true;
         private bool _togglingMod = false;
+        private bool _areGroupsVisible = true;
+        private double _groupsColumnWidth = 200.0;
+
+        public bool ShowCategoryColumn
+        {
+            get => _showCategoryColumn;
+            set => this.RaiseAndSetIfChanged(ref _showCategoryColumn, value);
+        }
+
+        public bool ShowSizeColumn
+        {
+            get => _showSizeColumn;
+            set => this.RaiseAndSetIfChanged(ref _showSizeColumn, value);
+        }
+
+        public bool AreGroupsVisible
+        {
+            get => _areGroupsVisible;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _areGroupsVisible, value);
+                // Effective column width depends on visibility
+                this.RaisePropertyChanged(nameof(EffectiveGroupsColumnGridLength));
+            }
+        }
+
+        public double GroupsColumnWidth
+        {
+            get => _groupsColumnWidth;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _groupsColumnWidth, value);
+                // notify GridLength wrapper property as well
+                this.RaisePropertyChanged(nameof(GroupsColumnGridLength));
+                this.RaisePropertyChanged(nameof(EffectiveGroupsColumnGridLength));
+            }
+        }
+
+        // Bindable GridLength wrapper for XAML ColumnDefinition.Width
+        public GridLength GroupsColumnGridLength
+        {
+            get => new(GroupsColumnWidth, GridUnitType.Pixel);
+            set
+            {
+                // avoid recursion if same
+                if (Math.Abs(GroupsColumnWidth - value.Value) < 0.5)
+                    return;
+                GroupsColumnWidth = value.Value;
+                this.RaisePropertyChanged(nameof(GroupsColumnGridLength));
+            }
+        }
+
+        // New: effective grid length that collapses when groups hidden
+        public GridLength EffectiveGroupsColumnGridLength => AreGroupsVisible
+            ? new GridLength(GroupsColumnWidth, GridUnitType.Pixel)
+            : new GridLength(0, GridUnitType.Pixel);
+
+        // New: effective splitter column width (6 when visible, 0 when hidden)
+        public GridLength EffectiveSplitterGridLength => AreGroupsVisible
+            ? new GridLength(6, GridUnitType.Pixel)
+            : new GridLength(0, GridUnitType.Pixel);
 
         public bool HasSelectedMod => SelectedMod != null;
 
@@ -99,6 +164,77 @@ namespace FactorioModManager.ViewModels.MainWindow
             DownloadProgress = downloadProgress as DownloadProgressViewModel ?? throw new InvalidOperationException("DownloadProgress must be a DownloadProgressViewModel");
             ModManagement = new ModManagementViewModel();
 
+            // Load persisted groups visibility
+            try
+            {
+                AreGroupsVisible = _settingsService.GetShowGroupsPanel();
+                // Load persisted column width
+                GroupsColumnWidth = _settingsService.GetGroupsColumnWidth();
+            }
+            catch { }
+
+            // Load persisted column visibility for Category and Size
+            try
+            {
+                ShowCategoryColumn = _settingsService.GetShowCategoryColumn();
+                ShowSizeColumn = _settingsService.GetShowSizeColumn();
+            }
+            catch { }
+
+            // Watch for settings changes to update visibility
+            try
+            {
+                _settingsService.ShowGroupsPanelChanged += () =>
+                {
+                    AreGroupsVisible = _settingsService.GetShowGroupsPanel();
+                    // also refresh stored width when settings indicate change
+                    try { GroupsColumnWidth = _settingsService.GetGroupsColumnWidth(); } catch { }
+                };
+            }
+            catch { }
+
+            // Ensure ShowHiddenDependencies propagates to existing mod VMs
+            try
+            {
+                // Initialize existing mods later when they are created via UpdateModsCache.
+                _settingsService.ShowHiddenDependenciesChanged += () =>
+                {
+                    try
+                    {
+                        var val = _settingsService.GetShowHiddenDependencies();
+                        // preserve selection name before changing lists
+                        var prevName = SelectedMod?.Name;
+                        foreach (var m in _allMods)
+                        {
+                            m.ShowHiddenDependencies = val;
+                        }
+
+                        // Reapply filter so selection is restored consistently
+                        ApplyModFilter();
+
+                        // If ApplyModFilter didn't restore selection, try to restore from all mods
+                        if (!string.IsNullOrEmpty(prevName) && SelectedMod == null)
+                        {
+                            var fallback = _allMods.FirstOrDefault(x => x.Name.Equals(prevName, StringComparison.OrdinalIgnoreCase));
+                            if (fallback != null)
+                            {
+                                SelectedMod = fallback;
+                            }
+                        }
+                    }
+                    catch { }
+                };
+            }
+            catch { }
+
+            // Watch for changes to category/size column visibility
+            try
+            {
+                _settingsService.ShowCategoryColumnChanged += () => ShowCategoryColumn = _settingsService.GetShowCategoryColumn();
+                _settingsService.ShowSizeColumnChanged += () => ShowSizeColumn = _settingsService.GetShowSizeColumn();
+            }
+            catch { }
+
             SetupReactiveFiltering();
             InitializeCommands();
 
@@ -123,7 +259,7 @@ namespace FactorioModManager.ViewModels.MainWindow
             this.WhenAnyValue(
                 x => x.SearchText,
                 x => x.SelectedAuthorFilter,
-                x => x.SelectedGroup,
+                x => x.ActiveFilterGroup,
                 x => x.ShowOnlyUnusedInternals,
                 x => x.ShowOnlyPendingUpdates)
                 .Throttle(TimeSpan.FromMilliseconds(150))
@@ -196,13 +332,12 @@ namespace FactorioModManager.ViewModels.MainWindow
             var filtered = _modFilterService.ApplyFilter(_allMods,
                 _searchText,
                 _selectedAuthorFilter,
-                _selectedGroup,
+                _activeFilterGroup,
                 _showOnlyUnusedInternals,
                 _showOnlyPendingUpdates);
 
-            // ✅ Preserve selection
-            var currentSelection = SelectedMod;
-            var wasInFiltered = currentSelection != null && _filteredMods.Contains(currentSelection);
+            // ✅ Preserve selection by mod name (handles VM instances being recreated on reload)
+            var previousSelectedName = SelectedMod?.Name;
 
             _filteredMods.Clear();
             foreach (var mod in filtered)
@@ -210,18 +345,33 @@ namespace FactorioModManager.ViewModels.MainWindow
                 _filteredMods.Add(mod);
             }
 
-            // ✅ Restore selection if the mod is still in filtered results
-            if (currentSelection != null && filtered.Contains(currentSelection))
+            // Try to restore selection by name
+            if (!string.IsNullOrEmpty(previousSelectedName))
             {
-                // Don't trigger OnModSelected again, just restore the selection
-                _selectedMod = currentSelection;
-                this.RaisePropertyChanged(nameof(SelectedMod));
+                var newSelected = _filteredMods.FirstOrDefault(m => m.Name.Equals(previousSelectedName, StringComparison.OrdinalIgnoreCase));
+                if (newSelected != null)
+                {
+                    // Use property setter so side-effects (OnModSelected, thumbnail load) run
+                    SelectedMod = newSelected;
+                    // Ensure thumbnail load is triggered even if setter didn't (defensive)
+                    _ = LoadThumbnailAsync(newSelected);
+                }
+                else
+                {
+                    // If previously selected mod was filtered out, clear selection
+                    if (SelectedMod != null && !_filteredMods.Contains(SelectedMod))
+                    {
+                        SelectedMod = null;
+                    }
+                }
             }
-            else if (currentSelection != null && wasInFiltered)
+            else
             {
-                // Selection was filtered out, clear it
-                _selectedMod = null;
-                this.RaisePropertyChanged(nameof(SelectedMod));
+                // No previous selection - ensure we clear if selection not in filtered
+                if (SelectedMod != null && !_filteredMods.Contains(SelectedMod))
+                {
+                    SelectedMod = null;
+                }
             }
 
             this.RaisePropertyChanged(nameof(ModCountText));
@@ -411,6 +561,43 @@ namespace FactorioModManager.ViewModels.MainWindow
         {
             get => _selectedGroup;
             set => this.RaiseAndSetIfChanged(ref _selectedGroup, value);
+        }
+
+        private ModGroupViewModel? _activeFilterGroup;
+
+        public ModGroupViewModel? ActiveFilterGroup
+        {
+            get => _activeFilterGroup;
+            set
+            {
+                var old = _activeFilterGroup;
+                this.RaiseAndSetIfChanged(ref _activeFilterGroup, value);
+
+                // Update IsActiveFilter flag on groups for UI overlay
+                try
+                {
+                    old?.IsActiveFilter = false;
+                    _activeFilterGroup?.IsActiveFilter = true;
+                }
+                catch { }
+
+                // notify filter change
+                this.RaisePropertyChanged(nameof(ActiveFilterGroup));
+
+                // Reapply filters when active filter changes
+                ApplyModFilter();
+            }
+        }
+
+        // Public toggle used from UI double-click handler
+        public void ToggleActiveFilter(ModGroupViewModel? group)
+        {
+            if (group == null)
+                ActiveFilterGroup = null;
+            else if (ActiveFilterGroup == group)
+                ActiveFilterGroup = null;
+            else
+                ActiveFilterGroup = group;
         }
 
         public string SearchText

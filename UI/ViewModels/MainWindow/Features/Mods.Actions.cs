@@ -3,6 +3,7 @@ using ReactiveUI;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Diagnostics;
 using static FactorioModManager.Constants;
 
 namespace FactorioModManager.ViewModels.MainWindow
@@ -17,14 +18,55 @@ namespace FactorioModManager.ViewModels.MainWindow
             _togglingMod = true;
             var targetEnabled = mod.IsEnabled; // Checkbox binding already set this
 
+            // Prevent toggling while Factorio is running (use service)
+            if (_factorioLauncher.IsFactorioRunning())
+            {
+                // Revert UI checkbox state
+                mod.IsEnabled = !targetEnabled;
+                SetStatus("Cannot toggle mods while Factorio is running.", LogLevel.Warning);
+                await _uiService.ShowMessageAsync(
+                    "Factorio is running",
+                    "Mods cannot be toggled while Factorio is running. Please close the game and try again.");
+                _togglingMod = false;
+                return;
+            }
+
             if (targetEnabled)
             {
-                // Enabling: ensure dependencies are satisfied
-                var mandatoryDeps = DependencyHelper.GetMandatoryDependencies(mod.Dependencies);
-                var (installedEnabledDeps, installedDisabledDeps, missingDeps) = ClassifyDependencies(mandatoryDeps);
+                // Enabling: ensure dependencies are satisfied (now transitive)
+                var transitiveNames = GetTransitiveMandatoryDependencyNames(mod);
 
-                // Check incompatible mods
-                var incompatibleMods = GetIncompatibleMods(mod);
+                // Classify transitive deps into installed enabled, installed disabled, missing
+                var installedEnabledDeps = new List<ModViewModel>();
+                var installedDisabledDeps = new List<ModViewModel>();
+                var missingDeps = new List<string>();
+
+                foreach (var name in transitiveNames)
+                {
+                    var found = FindModByName(name);
+                    if (found == null)
+                        missingDeps.Add(name);
+                    else if (found.IsEnabled)
+                        installedEnabledDeps.Add(found);
+                    else
+                        installedDisabledDeps.Add(found);
+                }
+
+                // Build the set of names that will be enabled (main mod + all installed-but-disabled transitive deps)
+                var namesToEnable = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    mod.Name
+                };
+                foreach (var d in installedDisabledDeps)
+                    namesToEnable.Add(d.Name);
+
+                // Check incompatible mods against all mods that will be enabled
+                var incompatibleMods = _allMods.Where(m =>
+                    m.IsEnabled &&
+                    m.Dependencies != null &&
+                    DependencyHelper.GetIncompatibleDependencies(m.Dependencies)
+                        .Any(d => namesToEnable.Contains(d))
+                ).ToList();
 
                 if (missingDeps.Count > 0)
                 {
@@ -39,62 +81,107 @@ namespace FactorioModManager.ViewModels.MainWindow
                     return;
                 }
 
-                if (incompatibleMods.Count > 0)
-                {
-                    // Ask if user wants to disable incompatible mods
-                    var message =
-                        $"The following enabled mods are incompatible with {mod.Title}:\n\n" +
-                        string.Join("\n", incompatibleMods.Select(m => m.Title)) +
-                        "\n\nDo you want to disable them and continue?";
+                // Build a summary of actions: dependencies to enable and incompatible mods to disable
+                var willEnable = installedDisabledDeps.Select(m => $"{m.Title} ({m.Name})").ToList();
+                var willDisable = incompatibleMods.Select(m => $"{m.Title} ({m.Name})").ToList();
 
-                    var confirm = await _uiService.ShowConfirmationAsync(
-                        "Incompatible Mods",
-                        message,
+                if (willEnable.Count == 0 && willDisable.Count == 0)
+                {
+                    // Nothing special to do – proceed
+                }
+                else
+                {
+                    var parts = new List<string>();
+                    if (willEnable.Count > 0)
+                        parts.Add("The following mandatory dependencies will be enabled:\n\n" + string.Join("\n", willEnable));
+                    if (willDisable.Count > 0)
+                        parts.Add("The following currently enabled incompatible mods will be disabled:\n\n" + string.Join("\n", willDisable));
+
+                    var summary = string.Join("\n\n", parts);
+                    var confirmAll = await _uiService.ShowConfirmationAsync(
+                        "Confirm Dependency Changes",
+                        $"Enabling {mod.Title} will make the following changes:\n\n" + summary + "\n\nProceed?",
                         null);
 
-                    if (!confirm)
+                    if (!confirmAll)
                     {
                         mod.IsEnabled = false;
-                        SetStatus($"Cancelled enabling {mod.Title} due to incompatible mods.", LogLevel.Warning);
+                        SetStatus($"Cancelled enabling {mod.Title}.", LogLevel.Warning);
                         _togglingMod = false;
                         return;
                     }
 
-                    // Disable incompatible mods
+                    // Apply disables first
                     foreach (var inc in incompatibleMods)
                     {
                         inc.IsEnabled = false;
                         _modService.ToggleMod(inc.Name, false);
                     }
-                }
 
-                if (installedDisabledDeps.Count > 0)
-                {
-                    var message =
-                        $"The following mandatory dependencies for {mod.Title} are installed but disabled:\n\n" +
-                        string.Join("\n", installedDisabledDeps.Select(m => m.Title)) +
-                        "\n\nEnable them now?";
-
-                    var enableDeps = await _uiService.ShowConfirmationAsync(
-                        "Enable Dependencies",
-                        message,
-                        null);
-
-                    if (enableDeps)
+                    // Then enable transitive installed-disabled dependencies (full set)
+                    if (installedDisabledDeps.Count > 0)
                     {
-                        foreach (var dep in installedDisabledDeps)
+                        var toEnable = installedDisabledDeps.ToDictionary(x => x.Name, StringComparer.OrdinalIgnoreCase);
+
+                        // Build adjacency and indegree for Kahn's algorithm
+                        var indegree = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                        var adj = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+
+                        foreach (var name in toEnable.Keys)
                         {
-                            dep.IsEnabled = true;
-                            _modService.ToggleMod(dep.Name, true);
+                            indegree[name] = 0;
+                            adj[name] = [];
                         }
-                    }
-                    else
-                    {
-                        // User said no – do not enable main mod
-                        mod.IsEnabled = false;
-                        SetStatus($"Cancelled enabling {mod.Title} because dependencies were not enabled.", LogLevel.Warning);
-                        _togglingMod = false;
-                        return;
+
+                        // For each node, look at its mandatory dependencies; add edge dep -> node when dep is also in toEnable
+                        foreach (var kv in toEnable)
+                        {
+                            var nodeName = kv.Key;
+                            var nodeVm = kv.Value;
+                            var deps = DependencyHelper.GetMandatoryDependencies(nodeVm.Dependencies);
+                            foreach (var rawDep in deps)
+                            {
+                                var depName = DependencyHelper.ExtractDependencyName(rawDep);
+                                if (string.IsNullOrEmpty(depName)) continue;
+                                if (!toEnable.ContainsKey(depName)) continue; // dependency already enabled or external
+
+                                // edge depName -> nodeName
+                                adj[depName].Add(nodeName);
+                                indegree[nodeName]++;
+                            }
+                        }
+
+                        // Kahn's algorithm
+                        var queue = new Queue<string>(indegree.Where(kv => kv.Value == 0).Select(kv => kv.Key));
+                        var enabledOrder = new List<string>();
+
+                        while (queue.Count > 0)
+                        {
+                            var cur = queue.Dequeue();
+                            enabledOrder.Add(cur);
+
+                            foreach (var succ in adj[cur])
+                            {
+                                indegree[succ]--;
+                                if (indegree[succ] == 0)
+                                    queue.Enqueue(succ);
+                            }
+                        }
+
+                        // If cycle exists, enable remaining nodes in arbitrary order
+                        var remaining = indegree.Where(kv => kv.Value > 0).Select(kv => kv.Key).ToList();
+                        if (remaining.Count > 0)
+                        {
+                            enabledOrder.AddRange(remaining);
+                        }
+
+                        // Now enable in computed order
+                        foreach (var name in enabledOrder)
+                        {
+                            if (!toEnable.TryGetValue(name, out var vm)) continue;
+                            vm.IsEnabled = true;
+                            _modService.ToggleMod(vm.Name, true);
+                        }
                     }
                 }
 
@@ -259,6 +346,44 @@ namespace FactorioModManager.ViewModels.MainWindow
             ApplyModFilter();
             this.RaisePropertyChanged(nameof(EnabledCountText));
             SetStatus($"Removed {mod.Title}");
+        }
+
+        // Collect transitive mandatory dependency names for a mod (excluding game deps)
+        private HashSet<string> GetTransitiveMandatoryDependencyNames(ModViewModel mod)
+        {
+            var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var stack = new Stack<string>();
+
+            // Start with direct mandatory dependencies (by raw strings)
+            var direct = DependencyHelper.GetMandatoryDependencies(mod.Dependencies);
+            foreach (var d in direct)
+            {
+                if (!string.IsNullOrWhiteSpace(d) && !DependencyHelper.IsGameDependency(d))
+                    stack.Push(d);
+            }
+
+            while (stack.Count > 0)
+            {
+                var name = stack.Pop();
+                if (string.IsNullOrWhiteSpace(name)) continue;
+                if (result.Contains(name)) continue;
+
+                result.Add(name);
+
+                // Find the mod by name to inspect its own dependencies
+                var vm = FindModByName(name);
+                if (vm == null) continue;
+
+                var deps = DependencyHelper.GetMandatoryDependencies(vm.Dependencies);
+                foreach (var d in deps)
+                {
+                    if (string.IsNullOrWhiteSpace(d)) continue;
+                    if (DependencyHelper.IsGameDependency(d)) continue;
+                    if (!result.Contains(d)) stack.Push(d);
+                }
+            }
+
+            return result;
         }
     }
 }

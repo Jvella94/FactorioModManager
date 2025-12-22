@@ -53,8 +53,8 @@ namespace FactorioModManager.ViewModels.MainWindow
             // Changed: accept version string (CommandParameter="{Binding SelectedVersion}")
             DeleteOldVersionCommand = ReactiveCommand.Create<string>(DeleteOldVersion);
 
-            // New: command to set selected version as active
-            SetActiveVersionCommand = ReactiveCommand.Create<string>(SetActiveVersion);
+            // New: command to set selected version as active (async)
+            SetActiveVersionCommand = ReactiveCommand.CreateFromTask<string>(SetActiveVersion);
 
             CheckSingleModUpdateCommand = ReactiveCommand.CreateFromTask(CheckSingleModUpdateAsync);
             RefreshSelectedModCommand = ReactiveCommand.CreateFromTask(RefreshSelectedModAsync);
@@ -208,7 +208,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                     modName = url.Split('/').LastOrDefault();
                     if (!string.IsNullOrEmpty(modName))
                     {
-                        var qIndex = modName.IndexOfAny(['?', '#']);
+                        var qIndex = modName.AsSpan().IndexOfAny(Constants.DependencyHelper.Markers);
                         if (qIndex >= 0)
                             modName = modName[..qIndex];
                     }
@@ -635,14 +635,29 @@ namespace FactorioModManager.ViewModels.MainWindow
         /// </summary>
         private void LaunchFactorio()
         {
-            var result = _factorioLauncher.Launch();
-            if (result.Success)
+            try
             {
-                SetStatus("Launched Factorio");
+                // Prevent launching if Factorio is already running
+                if (_factorioLauncher.IsFactorioRunning())
+                {
+                    SetStatus("Factorio is already running. Cannot launch another instance.", LogLevel.Warning);
+                    _ = _uiService.ShowMessageAsync("Factorio is running", "Factorio appears to be already running. Please close it before launching from the manager.");
+                    return;
+                }
+
+                var result = _factorioLauncher.Launch();
+                if (result.Success)
+                {
+                    SetStatus("Launched Factorio");
+                }
+                else
+                {
+                    SetStatus(result.Error ?? "Failed to launch Factorio", LogLevel.Error);
+                }
             }
-            else
+            catch (Exception ex)
             {
-                SetStatus(result.Error ?? "Failed to launch Factorio", LogLevel.Error);
+                HandleError(ex, "Failed to launch Factorio");
             }
         }
 

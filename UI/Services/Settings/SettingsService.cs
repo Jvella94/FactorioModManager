@@ -70,15 +70,43 @@ namespace FactorioModManager.Services.Settings
 
         // Auto-check mods on startup (new)
         bool GetAutoCheckModUpdates();
+
         void SetAutoCheckModUpdates(bool enabled);
+
+        // Groups panel visibility
+        bool GetShowGroupsPanel();
+
+        void SetShowGroupsPanel(bool value);
+
+        double GetGroupsColumnWidth();
+
+        void SetGroupsColumnWidth(double width);
+
+        // New: column visibility for mods list
+        bool GetShowCategoryColumn();
+
+        void SetShowCategoryColumn(bool value);
+
+        bool GetShowSizeColumn();
+
+        void SetShowSizeColumn(bool value);
 
         public event Action? FactorioPathChanged;
 
         // New optional events for reactive updates
         public event Action? ModsPathChanged;
+
         public event Action? ShowHiddenDependenciesChanged;
+
         // Fired when Factorio data path changes (used to re-run DLC/version detection)
         public event Action? FactorioDataPathChanged;
+
+        public event Action? ShowGroupsPanelChanged;
+
+        // New events for column visibility changes
+        public event Action? ShowCategoryColumnChanged;
+
+        public event Action? ShowSizeColumnChanged;
     }
 
     public class AppSettings
@@ -105,14 +133,21 @@ namespace FactorioModManager.Services.Settings
 
         // New: auto-check mods on startup
         public bool AutoCheckModUpdates { get; set; } = true;
+
+        // New: remember groups panel visibility
+        public bool ShowGroupsPanel { get; set; } = true;
+
+        // Persist last width of the groups column (pixels)
+        public double GroupsColumnWidth { get; set; } = 200.0;
+
+        // Persist visibility of category and size columns (default true = visible)
+        public bool ShowCategoryColumn { get; set; } = true;
+
+        public bool ShowSizeColumn { get; set; } = true;
     }
 
-    public class SettingsService : SettingsServiceBase, ISettingsService
+    public class SettingsService(ILogService logService) : SettingsServiceBase(logService), ISettingsService
     {
-        public SettingsService(ILogService logService) : base(logService)
-        {
-        }
-
         public string GetModsPath()
         {
             return _settings.FactorioModsPath ?? FolderPathHelper.GetModsDirectory();
@@ -132,6 +167,7 @@ namespace FactorioModManager.Services.Settings
         }
 
         public string? GetApiKey() => _settings.ApiKey;
+
         public void SetApiKey(string? apiKey)
         {
             var current = _settings.ApiKey ?? string.Empty;
@@ -144,6 +180,7 @@ namespace FactorioModManager.Services.Settings
         }
 
         public string? GetUsername() => _settings.Username;
+
         public void SetUsername(string? username)
         {
             var current = _settings.Username ?? string.Empty;
@@ -156,6 +193,7 @@ namespace FactorioModManager.Services.Settings
         }
 
         public string? GetToken() => _settings.Token;
+
         public void SetToken(string? token)
         {
             var current = _settings.Token ?? string.Empty;
@@ -168,9 +206,11 @@ namespace FactorioModManager.Services.Settings
         }
 
         public DateTime? GetLastModUpdateCheck() => _settings.LastModUpdateCheck;
+
         public void SetLastModUpdateCheck(DateTime dateTime) => UpdateAndSave(s => s.LastModUpdateCheck = dateTime);
 
         public bool GetKeepOldModFiles() => _settings.KeepOldModFiles;
+
         public void SetKeepOldModFiles(bool keepOldFiles)
         {
             if (_settings.KeepOldModFiles == keepOldFiles)
@@ -181,6 +221,7 @@ namespace FactorioModManager.Services.Settings
         }
 
         public string? GetFactorioExecutablePath() => _settings.FactorioExePath;
+
         public void SetFactorioExecutablePath(string path)
         {
             var current = _settings.FactorioExePath ?? string.Empty;
@@ -194,9 +235,11 @@ namespace FactorioModManager.Services.Settings
         }
 
         public DateTime? GetLastAppUpdateCheck() => _settings.LastAppUpdateCheck;
+
         public void SetLastAppUpdateCheck(DateTime timestamp) => UpdateAndSave(s => s.LastAppUpdateCheck = timestamp);
 
         public bool GetCheckForAppUpdates() => _settings.CheckForAppUpdates;
+
         public void SetCheckForAppUpdates(bool enabled)
         {
             if (_settings.CheckForAppUpdates == enabled)
@@ -207,6 +250,7 @@ namespace FactorioModManager.Services.Settings
         }
 
         public string? GetFactorioVersion() => _settings.FactorioVersion;
+
         public void SetFactorioVersion(string? version)
         {
             var current = _settings.FactorioVersion ?? string.Empty;
@@ -219,6 +263,7 @@ namespace FactorioModManager.Services.Settings
         }
 
         public bool GetHasSpaceAgeDLC() => _settings.HasSpaceAgeDlc;
+
         public void SetHasSpaceAgeDlc(bool value)
         {
             if (_settings.HasSpaceAgeDlc == value)
@@ -229,6 +274,7 @@ namespace FactorioModManager.Services.Settings
         }
 
         public string? GetFactorioDataPath() => _settings.FactorioDataPath;
+
         public void SetFactorioDataPath(string? path)
         {
             var current = _settings.FactorioDataPath ?? string.Empty;
@@ -242,6 +288,7 @@ namespace FactorioModManager.Services.Settings
         }
 
         public bool GetVerboseDetectionLogging() => _settings.VerboseDetectionLogging;
+
         public void SetVerboseDetectionLogging(bool enabled)
         {
             if (_settings.VerboseDetectionLogging == enabled)
@@ -253,11 +300,21 @@ namespace FactorioModManager.Services.Settings
         }
 
         public event Action? FactorioPathChanged;
+
         public event Action? ModsPathChanged;
+
         public event Action? ShowHiddenDependenciesChanged;
+
         public event Action? FactorioDataPathChanged;
 
+        public event Action? ShowGroupsPanelChanged;
+
+        public event Action? ShowCategoryColumnChanged;
+
+        public event Action? ShowSizeColumnChanged;
+
         public bool GetShowHiddenDependencies() => _settings.ShowHiddenDependencies;
+
         public void SetShowHiddenDependencies(bool value)
         {
             if (_settings.ShowHiddenDependencies == value)
@@ -269,6 +326,7 @@ namespace FactorioModManager.Services.Settings
         }
 
         public int GetUpdateConcurrency() => _settings.UpdateConcurrency <= 0 ? 1 : _settings.UpdateConcurrency;
+
         public void SetUpdateConcurrency(int concurrency)
         {
             if (_settings.UpdateConcurrency == concurrency)
@@ -278,7 +336,20 @@ namespace FactorioModManager.Services.Settings
             _logService.LogDebug($"Settings: UpdateConcurrency changed to {concurrency}");
         }
 
+        // Persist column width for Groups panel
+        public double GetGroupsColumnWidth() => _settings.GroupsColumnWidth <= 0 ? 200.0 : _settings.GroupsColumnWidth;
+
+        public void SetGroupsColumnWidth(double width)
+        {
+            if (Math.Abs(_settings.GroupsColumnWidth - width) < 0.5)
+                return;
+            UpdateAndSave(s => s.GroupsColumnWidth = width);
+            _logService.LogDebug($"Settings: GroupsColumnWidth changed to {width}");
+            ShowGroupsPanelChanged?.Invoke();
+        }
+
         public bool GetAutoCheckModUpdates() => _settings.AutoCheckModUpdates;
+
         public void SetAutoCheckModUpdates(bool enabled)
         {
             if (_settings.AutoCheckModUpdates == enabled)
@@ -286,6 +357,42 @@ namespace FactorioModManager.Services.Settings
 
             UpdateAndSave(s => s.AutoCheckModUpdates = enabled);
             _logService.LogDebug($"Settings: AutoCheckModUpdates changed to {enabled}");
+        }
+
+        public bool GetShowGroupsPanel() => _settings.ShowGroupsPanel;
+
+        public void SetShowGroupsPanel(bool value)
+        {
+            if (_settings.ShowGroupsPanel == value)
+                return;
+
+            UpdateAndSave(s => s.ShowGroupsPanel = value);
+            _logService.LogDebug($"Settings: ShowGroupsPanel changed to {value}");
+            ShowGroupsPanelChanged?.Invoke();
+        }
+
+        public bool GetShowCategoryColumn() => _settings.ShowCategoryColumn;
+
+        public void SetShowCategoryColumn(bool value)
+        {
+            if (_settings.ShowCategoryColumn == value)
+                return;
+
+            UpdateAndSave(s => s.ShowCategoryColumn = value);
+            _logService.LogDebug($"Settings: ShowCategoryColumn changed to {value}");
+            ShowCategoryColumnChanged?.Invoke();
+        }
+
+        public bool GetShowSizeColumn() => _settings.ShowSizeColumn;
+
+        public void SetShowSizeColumn(bool value)
+        {
+            if (_settings.ShowSizeColumn == value)
+                return;
+
+            UpdateAndSave(s => s.ShowSizeColumn = value);
+            _logService.LogDebug($"Settings: ShowSizeColumn changed to {value}");
+            ShowSizeColumnChanged?.Invoke();
         }
     }
 }

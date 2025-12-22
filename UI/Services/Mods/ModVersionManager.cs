@@ -5,7 +5,9 @@ using static FactorioModManager.Constants;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -14,14 +16,18 @@ namespace FactorioModManager.Services.Mods
     public interface IModVersionManager
     {
         List<string> GetInstalledVersions(string modName);
+
         void DeleteVersion(string modName, string version);
+
         Task<Result<bool>> DownloadVersionAsync(
             string modName,
             string version,
             string downloadUrl,
             IProgress<(long bytesDownloaded, long? totalBytes)>? progress = null,
             CancellationToken cancellationToken = default);
+
         void RefreshVersionCache(string modName);
+
         void ClearVersionCache();
     }
 
@@ -40,7 +46,6 @@ namespace FactorioModManager.Services.Mods
             if (string.IsNullOrWhiteSpace(modName))
                 return [];
 
-            // Support callers passing raw dependency strings (e.g. "modname >= 1.2") by extracting the name
             var name = DependencyHelper.ExtractDependencyName(modName);
             if (string.IsNullOrEmpty(name))
                 name = modName;
@@ -55,22 +60,52 @@ namespace FactorioModManager.Services.Mods
 
             try
             {
-                var modFiles = Directory.GetFiles(modsDirectory, $"{name}_*.zip");
-
-                foreach (var file in modFiles)
+                if (!Directory.Exists(modsDirectory))
                 {
-                    var fileName = Path.GetFileNameWithoutExtension(file);
-                    var parts = fileName.Split('_');
+                    _logService.LogWarning($"Mods directory not found: {modsDirectory}");
+                    _versionCache[name] = versions;
+                    return versions;
+                }
 
-                    if (parts.Length >= 2)
+                // 1) Parse zip filenames: <mod>_<version>.zip
+                var zipFiles = Directory.GetFiles(modsDirectory, $"{name}_*.zip");
+                foreach (var zip in zipFiles)
+                {
+                    try
                     {
-                        var version = parts[^1];
+                        var fileName = Path.GetFileNameWithoutExtension(zip);
+                        var lastUnderscore = fileName.LastIndexOf('_');
+                        if (lastUnderscore <= 0) continue;
+                        var version = fileName[(lastUnderscore + 1)..];
                         if (!string.IsNullOrEmpty(version))
                             versions.Add(version);
                     }
+                    catch { /* ignore filename parse errors */ }
                 }
 
-                // Sort using semantic-aware comparer when possible
+                // 2) Inspect directories: read info.json inside directory to determine mod name + version
+                var dirs = Directory.GetDirectories(modsDirectory);
+                foreach (var dir in dirs)
+                {
+                    try
+                    {
+                        var infoPath = Path.Combine(dir, FileSystem.InfoJsonFileName);
+                        if (!File.Exists(infoPath))
+                            continue;
+
+                        var json = File.ReadAllText(infoPath);
+                        var modInfo = JsonSerializer.Deserialize<ModInfo>(json, JsonOptions.CaseInsensitive);
+                        if (modInfo != null && string.Equals(modInfo.Name, name, StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (!string.IsNullOrEmpty(modInfo.Version))
+                                versions.Add(modInfo.Version);
+                        }
+                    }
+                    catch { /* ignore malformed info.json */ }
+                }
+
+                // Deduplicate and sort using semantic-aware comparer when possible
+                versions = [.. versions.Distinct(StringComparer.OrdinalIgnoreCase)];
                 versions = [.. versions.OrderByDescending(v => v, Comparer<string>.Create((a, b) => VersionHelper.CompareVersions(a, b)))];
                 _versionCache[name] = versions;
             }
@@ -85,21 +120,57 @@ namespace FactorioModManager.Services.Mods
         public void DeleteVersion(string modName, string version)
         {
             var modsDirectory = _pathSettings.GetModsPath();
-            var fileName = $"{modName}_{version}.zip";
-            var filePath = Path.Combine(modsDirectory, fileName);
+            var zipFileName = $"{modName}_{version}.zip";
+            var zipFilePath = Path.Combine(modsDirectory, zipFileName);
 
             try
             {
-                if (File.Exists(filePath))
+                // Prefer the zip file if present
+                if (File.Exists(zipFilePath))
                 {
-                    File.Delete(filePath);
-                    _logService.Log($"Deleted {fileName}");
+                    File.Delete(zipFilePath);
+                    _logService.Log($"Deleted {zipFileName}");
                     RefreshVersionCache(modName);
+                    return;
                 }
-                else
+
+                // Try conventional directory name first
+                var dirName = $"{modName}_{version}";
+                var dirPath = Path.Combine(modsDirectory, dirName);
+                if (Directory.Exists(dirPath))
                 {
-                    _logService.LogWarning($"Version file not found: {fileName}");
+                    Directory.Delete(dirPath, recursive: true);
+                    _logService.Log($"Deleted directory {dirName}");
+                    RefreshVersionCache(modName);
+                    return;
                 }
+
+                // If no conventional directory, scan directories and inspect info.json to find the matching version
+                var dirs = Directory.GetDirectories(modsDirectory);
+                foreach (var d in dirs)
+                {
+                    try
+                    {
+                        var infoPath = Path.Combine(d, FileSystem.InfoJsonFileName);
+                        if (!File.Exists(infoPath))
+                            continue;
+
+                        var json = File.ReadAllText(infoPath);
+                        var modInfo = JsonSerializer.Deserialize<ModInfo>(json, JsonOptions.CaseInsensitive);
+                        if (modInfo != null
+                            && string.Equals(modInfo.Name, modName, StringComparison.OrdinalIgnoreCase)
+                            && string.Equals(modInfo.Version, version, StringComparison.OrdinalIgnoreCase))
+                        {
+                            Directory.Delete(d, recursive: true);
+                            _logService.Log($"Deleted directory {Path.GetFileName(d)}");
+                            RefreshVersionCache(modName);
+                            return;
+                        }
+                    }
+                    catch { /* ignore per-directory failures */ }
+                }
+
+                _logService.LogWarning($"Version file or directory not found: {zipFileName} or any directory with {FileSystem.InfoJsonFileName} matching {modName}@{version}");
             }
             catch (Exception ex)
             {
@@ -146,11 +217,7 @@ namespace FactorioModManager.Services.Mods
 
                 if (File.Exists(filePath))
                 {
-                    try
-                    {
-                        File.Delete(filePath);
-                    }
-                    catch { }
+                    try { File.Delete(filePath); } catch { }
                 }
 
                 return Result.Fail<bool>(ex.Message, ErrorCode.UnexpectedError);
@@ -159,6 +226,7 @@ namespace FactorioModManager.Services.Mods
 
         public void RefreshVersionCache(string modName)
         {
+            if (string.IsNullOrEmpty(modName)) return;
             _versionCache.Remove(modName);
         }
 

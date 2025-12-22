@@ -17,6 +17,7 @@ namespace FactorioModManager.ViewModels
         private int _totalCount;
         private bool _isEditing;
         private string _editName = string.Empty;
+        private bool _isActiveFilter = false;
 
         public string Name
         {
@@ -50,6 +51,13 @@ namespace FactorioModManager.ViewModels
         {
             get => _editName;
             set => this.RaiseAndSetIfChanged(ref _editName, value);
+        }
+
+        // Indicates whether this group is currently used as the active filter
+        public bool IsActiveFilter
+        {
+            get => _isActiveFilter;
+            set => this.RaiseAndSetIfChanged(ref _isActiveFilter, value);
         }
 
         public ModGroupViewModel()

@@ -26,11 +26,12 @@ namespace FactorioModManager.ViewModels.Dialogs
         private readonly IUIService _uiService;
         private readonly IModService _modService;
         private readonly Window? _parentWindow;
-        private readonly CompositeDisposable _disposables = new CompositeDisposable();
+        private readonly CompositeDisposable _disposables = [];
         private CancellationTokenSource? _currentOperationCts;
 
         // Indicates whether any release is currently performing an operation
         private bool _isOperationInProgress;
+
         public bool IsOperationInProgress
         {
             get => _isOperationInProgress;
@@ -144,6 +145,13 @@ namespace FactorioModManager.ViewModels.Dialogs
             catch (OperationCanceledException)
             {
                 _logService.Log("Delete/Download cancelled");
+                // Also update UI main status
+                await _uiService.InvokeAsync(() =>
+                {
+                    var mainWin = _uiService.GetMainWindow();
+                    if (mainWin?.DataContext is MainWindowViewModel mainVm)
+                        mainVm.StatusText = "Operation cancelled";
+                });
             }
         }
 
@@ -241,6 +249,15 @@ namespace FactorioModManager.ViewModels.Dialogs
             release.IsInstalling = true;
             try
             {
+                // Update main status and log
+                await _uiService.InvokeAsync(() =>
+                {
+                    var mainWin = _uiService.GetMainWindow();
+                    if (mainWin?.DataContext is MainWindowViewModel mainVm)
+                        mainVm.StatusText = $"Deleting {ModTitle} version {release.Version}...";
+                });
+                _logService.Log($"Deleting {ModName} v{release.Version}...");
+
                 cancellationToken.ThrowIfCancellationRequested();
 
                 const int maxAttempts = 3;
@@ -260,10 +277,25 @@ namespace FactorioModManager.ViewModels.Dialogs
                         deleted = true;
                         release.IsInstalled = false;
                         _logService.Log($"🗑️ Deleted {ModName} v{release.Version}");
+
+                        // Update main status
+                        await _uiService.InvokeAsync(() =>
+                        {
+                            var mainWin = _uiService.GetMainWindow();
+                            if (mainWin?.DataContext is MainWindowViewModel mainVm)
+                                mainVm.StatusText = $"Deleted {ModTitle} version {release.Version}";
+                        });
                     }
                     catch (OperationCanceledException)
                     {
                         _logService.Log("Deleting Version Cancelled.");
+                        // Reflect cancellation in status
+                        await _uiService.InvokeAsync(() =>
+                        {
+                            var mainWin = _uiService.GetMainWindow();
+                            if (mainWin?.DataContext is MainWindowViewModel mainVm)
+                                mainVm.StatusText = "Delete cancelled";
+                        });
                         throw;
                     }
                     catch (UnauthorizedAccessException uaEx)
@@ -273,6 +305,14 @@ namespace FactorioModManager.ViewModels.Dialogs
                         await _uiService.ShowMessageAsync(
                             "Delete Failed",
                             $"Unable to delete {ModTitle} version {release.Version}: access denied or file in use. Please close other programs and try again.");
+
+                        // Update status
+                        await _uiService.InvokeAsync(() =>
+                        {
+                            var mainWin = _uiService.GetMainWindow();
+                            if (mainWin?.DataContext is MainWindowViewModel mainVm)
+                                mainVm.StatusText = $"Delete failed: access denied for {ModTitle} {release.Version}";
+                        });
                         break;
                     }
                     catch (IOException ioEx) when (attempt < maxAttempts)
@@ -286,12 +326,27 @@ namespace FactorioModManager.ViewModels.Dialogs
                     {
                         _logService.LogError($"I/O error deleting version: {ioEx.Message}", ioEx);
                         await _uiService.ShowMessageAsync("Delete Failed", $"Failed to delete file: {ioEx.Message}");
+
+                        // Update status
+                        await _uiService.InvokeAsync(() =>
+                        {
+                            var mainWin = _uiService.GetMainWindow();
+                            if (mainWin?.DataContext is MainWindowViewModel mainVm)
+                                mainVm.StatusText = $"Delete failed: {ioEx.Message}";
+                        });
                         break;
                     }
                     catch (Exception ex)
                     {
                         _logService.LogError($"Delete failed: {ex.Message}", ex);
                         await _uiService.ShowMessageAsync("Delete Failed", $"Unexpected error deleting version: {ex.Message}");
+
+                        await _uiService.InvokeAsync(() =>
+                        {
+                            var mainWin = _uiService.GetMainWindow();
+                            if (mainWin?.DataContext is MainWindowViewModel mainVm)
+                                mainVm.StatusText = $"Delete failed: unexpected error";
+                        });
                         break;
                     }
                 }
@@ -317,6 +372,15 @@ namespace FactorioModManager.ViewModels.Dialogs
 
             try
             {
+                // Update status when starting
+                await _uiService.InvokeAsync(() =>
+                {
+                    var mainWin = _uiService.GetMainWindow();
+                    if (mainWin?.DataContext is MainWindowViewModel mainVm)
+                        mainVm.StatusText = $"Downloading {ModTitle} v{release.Version}...";
+                });
+                _logService.Log($"Downloading {ModName} v{release.Version}...");
+
                 var downloadUrl = release.DownloadUrl;
                 if (string.IsNullOrEmpty(downloadUrl))
                 {
@@ -381,15 +445,35 @@ namespace FactorioModManager.ViewModels.Dialogs
 
                 release.IsInstalled = true;
                 _logService.Log($"✅ Installed {ModName} v{release.Version}");
+
+                // Update main status on success
+                await _uiService.InvokeAsync(() =>
+                {
+                    var mainWin = _uiService.GetMainWindow();
+                    if (mainWin?.DataContext is MainWindowViewModel mainVm)
+                        mainVm.StatusText = $"Installed {ModTitle} v{release.Version}";
+                });
             }
             catch (OperationCanceledException)
             {
                 _logService.Log("Download cancelled");
+                await _uiService.InvokeAsync(() =>
+                {
+                    var mainWin = _uiService.GetMainWindow();
+                    if (mainWin?.DataContext is MainWindowViewModel mainVm)
+                        mainVm.StatusText = "Download cancelled";
+                });
                 throw;
             }
             catch (Exception ex)
             {
                 _logService.LogError($"Download failed: {ex.Message}", ex);
+                await _uiService.InvokeAsync(() =>
+                {
+                    var mainWin = _uiService.GetMainWindow();
+                    if (mainWin?.DataContext is MainWindowViewModel mainVm)
+                        mainVm.StatusText = $"Download failed: {ex.Message}";
+                });
             }
             finally
             {
@@ -450,14 +534,73 @@ namespace FactorioModManager.ViewModels.Dialogs
                     try
                     {
                         var modsDirectory = FolderPathHelper.GetModsDirectory();
-                        var files = Directory.GetFiles(modsDirectory, $"{ModName}_*.zip")
-                                             .OrderByDescending(f => f)
-                                             .ToList();
 
+                        // Rebuild VersionFilePaths to align with AvailableVersions order.
                         modVm.VersionFilePaths.Clear();
-                        foreach (var f in files)
+                        foreach (var v in modVm.AvailableVersions)
                         {
-                            modVm.VersionFilePaths.Add(f);
+                            // Prefer zip file if present
+                            var zipCandidate = Path.Combine(modsDirectory, $"{ModName}_{v}.zip");
+                            if (File.Exists(zipCandidate))
+                            {
+                                modVm.VersionFilePaths.Add(zipCandidate);
+                                continue;
+                            }
+
+                            // Conventional directory name
+                            var dirCandidate = Path.Combine(modsDirectory, $"{ModName}_{v}");
+                            if (Directory.Exists(dirCandidate))
+                            {
+                                modVm.VersionFilePaths.Add(dirCandidate);
+                                continue;
+                            }
+
+                            // Fallback: scan directories and inspect info.json to find matching version
+                            try
+                            {
+                                string? foundDir = null;
+                                var dirs = Directory.GetDirectories(modsDirectory);
+                                foreach (var d in dirs)
+                                {
+                                    try
+                                    {
+                                        var infoPath = Path.Combine(d, Constants.FileSystem.InfoJsonFileName);
+                                        if (!File.Exists(infoPath))
+                                            continue;
+                                        var json = File.ReadAllText(infoPath);
+                                        var info = System.Text.Json.JsonSerializer.Deserialize<Models.ModInfo>(json, Constants.JsonOptions.CaseInsensitive);
+                                        if (info != null && string.Equals(info.Name, ModName, StringComparison.OrdinalIgnoreCase) && string.Equals(info.Version, v, StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            foundDir = d;
+                                            break;
+                                        }
+                                    }
+                                    catch { }
+                                }
+
+                                if (foundDir != null)
+                                {
+                                    modVm.VersionFilePaths.Add(foundDir);
+                                    continue;
+                                }
+                            }
+                            catch { }
+
+                            // Final fallback: try to find any zip that ends with _{version}
+                            try
+                            {
+                                var zips = Directory.GetFiles(modsDirectory, $"{ModName}_*.zip");
+                                var match = zips.FirstOrDefault(f => Path.GetFileNameWithoutExtension(f).EndsWith($"_{v}", StringComparison.OrdinalIgnoreCase));
+                                if (match != null)
+                                {
+                                    modVm.VersionFilePaths.Add(match);
+                                    continue;
+                                }
+                            }
+                            catch { }
+
+                            // Nothing found -> keep index alignment with empty string
+                            modVm.VersionFilePaths.Add(string.Empty);
                         }
                     }
                     catch (Exception ex)

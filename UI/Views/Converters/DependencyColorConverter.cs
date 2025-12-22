@@ -13,19 +13,29 @@ namespace FactorioModManager.Views.Converters
             // Accept either the DependencyStatus enum or the whole DependencyViewModel for richer logic
             if (value is DependencyViewModel vm)
             {
-                // Prefer explicit installed/version state
+                // Ensure incompatible dependencies are shown distinctly
+                if (vm.Status == DependencyStatus.Incompatible)
+                    return Brushes.Red;
+
+                // Prefer explicit installed/version state for mandatory and optional
                 if (vm.Status == DependencyStatus.Mandatory)
                     return Brushes.Green;
 
-                if (!vm.IsInstalled)
+                if (vm.Status == DependencyStatus.OptionalInstalled)
+                    return Brushes.LightGreen;
+
+                if (vm.Status == DependencyStatus.OptionalNotInstalled)
                     return Brushes.DarkGoldenrod;
 
                 // Installed but version mismatch
-                if (!vm.IsVersionSatisfied)
+                if (vm.IsInstalled && !vm.IsVersionSatisfied)
                     return Brushes.OrangeRed;
 
                 // Installed and satisfied
-                return Brushes.DarkOliveGreen;
+                if (vm.IsInstalled)
+                    return Brushes.DarkOliveGreen;
+
+                return Brushes.Transparent;
             }
 
             if (value is DependencyStatus status)
