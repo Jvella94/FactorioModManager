@@ -6,6 +6,7 @@ namespace FactorioModManager.Views
     {
         public ChangelogWindow()
         {
+            CanResize = true;
             InitializeComponent();
         }
 

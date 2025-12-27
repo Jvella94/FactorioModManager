@@ -28,6 +28,11 @@ namespace FactorioModManager.ViewModels.MainWindow
         private Timer? _updateAllProgressTimer;
         private volatile bool _updateAllProgressPending = false;
 
+        // Debounced targeted refresh state for affected mods to reduce UI churn
+        private readonly Lock _refreshAffectedLock = new();
+
+        private readonly HashSet<string> _refreshAffectedNames = new(StringComparer.OrdinalIgnoreCase);
+
         // Schedule a batched UI update for Download progress
         private void ScheduleUpdateAllProgressUiUpdate()
         {
@@ -36,7 +41,10 @@ namespace FactorioModManager.ViewModels.MainWindow
             {
                 _updateAllProgressTimer?.Change(_updateProgressUiThrottle, Timeout.InfiniteTimeSpan);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                _logService.LogDebug($"Failed to schedule progress timer: {ex.Message}");
+            }
         }
 
         // Flush pending progress update to UI thread
@@ -64,7 +72,10 @@ namespace FactorioModManager.ViewModels.MainWindow
                     helper.SetTargetPercent(targetPercent);
                     helper.StartAnimation();
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    _logService.LogDebug($"Failed to start progress helper animation: {ex.Message}");
+                }
             });
         }
 
@@ -103,7 +114,7 @@ namespace FactorioModManager.ViewModels.MainWindow
         private void UpdateProgressText()
         {
             var text = DownloadProgressTotal > 0 ? $"{DownloadProgressCompleted}/{DownloadProgressTotal}" : string.Empty;
-            try { DownloadProgress.UpdateProgressText(text); } catch { }
+            try { DownloadProgress.UpdateProgressText(text); } catch (Exception ex) { _logService.LogDebug($"UpdateProgressText failed: {ex.Message}"); }
         }
 
         /// <summary>
@@ -257,10 +268,10 @@ namespace FactorioModManager.ViewModels.MainWindow
                 });
 
                 // Determine actual dependencies that need installing (not already installed)
-                depsToInstall = aggregatedMissing.Where(d => FindModByName(d) == null).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                depsToInstall = [.. aggregatedMissing.Where(d => FindModByName(d) == null).Distinct(StringComparer.OrdinalIgnoreCase)];
 
                 // Include dependency installs in the overall progress total on UI thread
-                try { await _uiService.InvokeAsync(() => DownloadProgressTotal = modsToUpdate.Count + depsToInstall.Count); } catch { }
+                try { await _uiService.InvokeAsync(() => DownloadProgressTotal = modsToUpdate.Count + depsToInstall.Count); } catch (Exception ex) { _logService.LogDebug($"Setting DownloadProgressTotal failed: {ex.Message}"); }
 
                 // Install aggregated dependencies sequentially
                 foreach (var depName in depsToInstall)
@@ -280,8 +291,8 @@ namespace FactorioModManager.ViewModels.MainWindow
                     await Task.Delay(200);
                 }
 
-                // Refresh mods so parallel updates see the new installs
-                await RefreshModsAsync();
+                // Refresh mods so parallel updates see the new installs (force immediate refresh)
+                try { await ForceRefreshAffectedModsAsync(depsToInstall); } catch (Exception ex) { _logService.LogDebug($"ForceRefreshAffectedModsAsync failed: {ex.Message}"); }
             }
 
             // ------------------
@@ -289,20 +300,20 @@ namespace FactorioModManager.ViewModels.MainWindow
             // ------------------
             // Initialize progress
             // Dispose and reset any previous timers/state to avoid stale values from prior runs
-            try { _updateAllProgressTimer?.Dispose(); } catch { }
+            try { _updateAllProgressTimer?.Dispose(); } catch (Exception ex) { _logService.LogDebug($"Disposing progress timer failed: {ex.Message}"); }
             _updateAllProgressTimer = null;
             _updateAllProgressPending = false;
-            try { DownloadProgress.UpdateSpeedText(null); } catch { }
-            try { GetOrCreateDownloadProgressHelper().StopAndSetPercent(DownloadProgress.ProgressPercent); } catch { }
+            try { DownloadProgress.UpdateSpeedText(null); } catch (Exception ex) { _logService.LogDebug($"UpdateSpeedText failed: {ex.Message}"); }
+            try { GetOrCreateDownloadProgressHelper().StopAndSetPercent(DownloadProgress.ProgressPercent); } catch (Exception ex) { _logService.LogDebug($"StopAndSetPercent failed: {ex.Message}"); }
 
             // Reset counters (use Interlocked to reset backing field used by concurrent increments)
             Interlocked.Exchange(ref _downloadProgressCompleted, 0);
             if (DownloadProgressTotal <= 0)
             {
                 // If no dependencies were included earlier, default the total to the number of mods to update
-                try { await _uiService.InvokeAsync(() => DownloadProgressTotal = modsToUpdate.Count); } catch { }
+                try { await _uiService.InvokeAsync(() => DownloadProgressTotal = modsToUpdate.Count); } catch (Exception ex) { _logService.LogDebug($"Setting DownloadProgressTotal failed: {ex.Message}"); }
             }
-            try { await _uiService.InvokeAsync(() => DownloadProgressCompleted = 0); } catch { }
+            try { await _uiService.InvokeAsync(() => DownloadProgressCompleted = 0); } catch (Exception ex) { _logService.LogDebug($"Setting DownloadProgressCompleted failed: {ex.Message}"); }
             // Ensure UI-visible flag is set on UI thread
             await _uiService.InvokeAsync(() => IsDownloadProgressVisible = true);
 
@@ -373,7 +384,7 @@ namespace FactorioModManager.ViewModels.MainWindow
 
                 // Ensure any pending progress update is flushed to UI before finishing
                 FlushUpdateAllProgressToUi();
-                try { _updateAllProgressTimer?.Dispose(); } catch { }
+                try { _updateAllProgressTimer?.Dispose(); } catch (Exception ex) { _logService.LogDebug($"Disposing progress timer failed: {ex.Message}"); }
                 _updateAllProgressTimer = null;
 
                 await _uiService.InvokeAsync(() =>
@@ -397,7 +408,14 @@ namespace FactorioModManager.ViewModels.MainWindow
                 await _uiService.ShowMessageAsync("Update All Summary", summary);
 
                 // Refresh mods once more
-                await RefreshModsAsync();
+                // Refresh only affected mods (updated targets, enabled/disabled suggestions, and installed deps)
+                var affected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var m in modsToUpdate) affected.Add(m.Name);
+                foreach (var kv in combinedEnable.Keys) affected.Add(kv);
+                foreach (var kv in combinedDisable.Keys) affected.Add(kv);
+                foreach (var d in depsToInstall) affected.Add(d);
+
+                try { await ForceRefreshAffectedModsAsync(affected); } catch (Exception ex) { _logService.LogDebug($"ForceRefreshAffectedModsAsync failed: {ex.Message}"); }
 
                 // End batch aggregation and recompute unused-internal flags for collected candidates
                 EndCandidateAggregationAndRecompute();
@@ -414,7 +432,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                         }
                     });
                 }
-                catch { }
+                catch (Exception ex) { _logService.LogDebug($"Clearing pending updates filter failed: {ex.Message}"); }
             }
             catch (Exception _ex)
             {
@@ -452,19 +470,19 @@ namespace FactorioModManager.ViewModels.MainWindow
                 }
 
                 // Ensure UI animation/timers are cleaned up and progress UI is hidden even on error
-                try { FlushUpdateAllProgressToUi(); } catch { }
-                try { _updateAllProgressTimer?.Dispose(); } catch { }
+                try { FlushUpdateAllProgressToUi(); } catch (Exception ex) { _logService.LogDebug($"FlushUpdateAllProgressToUi failed: {ex.Message}"); }
+                try { _updateAllProgressTimer?.Dispose(); } catch (Exception ex) { _logService.LogDebug($"Disposing progress timer in finally failed: {ex.Message}"); }
                 _updateAllProgressTimer = null;
 
                 // Stop/flush the progress animation and set to final value (100%)
-                try { GetOrCreateDownloadProgressHelper().StopAndSetPercent(100.0); } catch { }
+                try { GetOrCreateDownloadProgressHelper().StopAndSetPercent(100.0); } catch (Exception ex) { _logService.LogDebug($"StopAndSetPercent final failed: {ex.Message}"); }
 
                 // Briefly show 100% to indicate completion, then hide after a short delay
-                try { await Task.Delay(400); } catch { }
+                try { await Task.Delay(400); } catch (Exception ex) { _logService.LogDebug($"Final delay failed: {ex.Message}"); }
 
                 // Clear speed and text to hide UI quickly
-                try { DownloadProgress.UpdateSpeedText(null); } catch { }
-                try { DownloadProgress.UpdateProgressText(string.Empty); } catch { }
+                try { DownloadProgress.UpdateSpeedText(null); } catch (Exception ex) { _logService.LogDebug($"UpdateSpeedText clear failed: {ex.Message}"); }
+                try { DownloadProgress.UpdateProgressText(string.Empty); } catch (Exception ex) { _logService.LogDebug($"UpdateProgressText clear failed: {ex.Message}"); }
 
                 // Hide the progress UI and reset counters
                 try
@@ -478,7 +496,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                         DownloadProgress.UpdateProgressPercent(0.0);
                     });
                 }
-                catch { /* swallow */ }
+                catch (Exception ex) { _logService.LogDebug($"Hiding progress UI failed: {ex.Message}"); }
             }
         }
 
@@ -558,6 +576,10 @@ namespace FactorioModManager.ViewModels.MainWindow
             }
 
             // Use DependencyFlow to resolve update-time dependencies and prompt the user if needed
+            // Track dependencies and toggled mods in outer scope so final refresh can reference them
+            var installedDepsDuringUpdate = new List<string>();
+            var toggledModsDuringUpdate = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var refreshedNamesDuringResolution = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             try
             {
                 // Treat this single update as a planned update so version checks consider the target version
@@ -588,6 +610,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                             {
                                 vm.IsEnabled = true;
                                 _modService.ToggleMod(vm.Name, true);
+                                toggledModsDuringUpdate.Add(vm.Name);
                             }
                         }
                     }
@@ -600,6 +623,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                         {
                             vm.IsEnabled = false;
                             _modService.ToggleMod(vm.Name, false);
+                            toggledModsDuringUpdate.Add(vm.Name);
                         }
                     }
                 });
@@ -633,6 +657,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                             {
                                 vm.IsEnabled = true;
                                 _modService.ToggleMod(vm.Name, true);
+                                toggledModsDuringUpdate.Add(vm.Name);
                             }
                         }
 
@@ -643,6 +668,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                             {
                                 vm.IsEnabled = false;
                                 _modService.ToggleMod(vm.Name, false);
+                                toggledModsDuringUpdate.Add(vm.Name);
                             }
                         }
                     });
@@ -650,7 +676,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                     // If singleProgress mode, expand total to include dependency downloads
                     if (singleProgress && previewResolution.MissingDependenciesToInstall.Count > 0)
                     {
-                        try { await _uiService.InvokeAsync(() => DownloadProgressTotal += previewResolution.MissingDependenciesToInstall.Distinct(StringComparer.OrdinalIgnoreCase).Count()); } catch { }
+                        try { await _uiService.InvokeAsync(() => DownloadProgressTotal += previewResolution.MissingDependenciesToInstall.Distinct(StringComparer.OrdinalIgnoreCase).Count()); } catch (Exception ex) { _logService.LogDebug($"Setting DownloadProgressTotal failed: {ex.Message}"); }
                     }
 
                     // Install aggregated dependencies sequentially
@@ -667,6 +693,9 @@ namespace FactorioModManager.ViewModels.MainWindow
                             return;
                         }
 
+                        // record for later targeted refresh
+                        installedDepsDuringUpdate.Add(depName);
+
                         // If running as part of UpdateAll (not singleProgress), these were already counted earlier; reflect completion
                         if (!singleProgress)
                         {
@@ -677,7 +706,31 @@ namespace FactorioModManager.ViewModels.MainWindow
                         await Task.Delay(200);
                     }
 
-                    await RefreshModsAsync();
+                    await Task.Delay(500);
+
+                    // Refresh only affected VMs (installed deps + mods toggled by preview).
+                    // Track which names were refreshed during the resolution step to avoid duplicating
+                    // the same targeted refresh after the final install.
+                    var affectedDeps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var d in installedDepsDuringUpdate) affectedDeps.Add(d);
+                    foreach (var e in previewResolution.ModsToEnable) affectedDeps.Add(e.Name);
+                    foreach (var d in previewResolution.ModsToDisable) affectedDeps.Add(d.Name);
+                    // include target mod so version lists are accurate
+                    affectedDeps.Add(mod.Name);
+
+                    try
+                    {
+                        if (!singleProgress)
+                        {
+                            await ForceRefreshAffectedModsAsync(affectedDeps);
+                            // remember these names were refreshed already
+                            foreach (var n in affectedDeps) refreshedNamesDuringResolution.Add(n);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logService.LogDebug($"Ignored error refreshing affected mods during resolution: {ex.Message}");
+                    }
                 }
             }
             catch (Exception ex)
@@ -686,7 +739,6 @@ namespace FactorioModManager.ViewModels.MainWindow
                 await _uiService.InvokeAsync(() => SetStatus($"Error resolving dependencies: {ex.Message}", LogLevel.Error));
                 return;
             }
-
             var modName = mod.Name;
             try
             {
@@ -755,7 +807,32 @@ namespace FactorioModManager.ViewModels.MainWindow
                 });
 
                 await Task.Delay(500);
-                await RefreshModsAsync();
+                // Refresh only affected mods (target mod, any installed dependencies, and any mods toggled during resolution).
+                try
+                {
+                    var affected = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { mod.Name };
+                    foreach (var d in installedDepsDuringUpdate) affected.Add(d);
+                    foreach (var t in toggledModsDuringUpdate) affected.Add(t);
+
+                    // Remove any names already refreshed during the resolution step to avoid duplicate work
+                    affected.ExceptWith(refreshedNamesDuringResolution);
+
+                    if (affected.Count > 0)
+                    {
+                        try
+                        {
+                            await ForceRefreshAffectedModsAsync(affected);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logService.LogDebug($"Ignored error refreshing affected mods after install: {ex.Message}");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logService.LogDebug($"Error preparing targeted refresh set: {ex.Message}");
+                }
 
                 await _uiService.InvokeAsync(() =>
                 {
@@ -792,17 +869,17 @@ namespace FactorioModManager.ViewModels.MainWindow
                 if (singleProgress)
                 {
                     // Ensure any pending batched UI updates are applied
-                    try { FlushUpdateAllProgressToUi(); } catch { }
-                    try { _updateAllProgressTimer?.Dispose(); } catch { }
+                    try { FlushUpdateAllProgressToUi(); } catch (Exception ex) { _logService.LogDebug($"FlushUpdateAllProgressToUi failed: {ex.Message}"); }
+                    try { _updateAllProgressTimer?.Dispose(); } catch (Exception ex) { _logService.LogDebug($"Disposing progress timer failed: {ex.Message}"); }
                     _updateAllProgressTimer = null;
 
                     // Show 100% and then hide the UI similar to UpdateAll flow
-                    try { GetOrCreateDownloadProgressHelper().StopAndSetPercent(100.0); } catch { }
-                    try { await Task.Delay(400); } catch { }
+                    try { GetOrCreateDownloadProgressHelper().StopAndSetPercent(100.0); } catch (Exception ex) { _logService.LogDebug($"StopAndSetPercent final failed: {ex.Message}"); }
+                    try { await Task.Delay(400); } catch (Exception ex) { _logService.LogDebug($"Final delay failed: {ex.Message}"); }
 
                     // Clear speed and text to hide UI quickly
-                    try { DownloadProgress.UpdateSpeedText(null); } catch { }
-                    try { DownloadProgress.UpdateProgressText(string.Empty); } catch { }
+                    try { DownloadProgress.UpdateSpeedText(null); } catch (Exception ex) { _logService.LogDebug($"UpdateSpeedText clear failed: {ex.Message}"); }
+                    try { DownloadProgress.UpdateProgressText(string.Empty); } catch (Exception ex) { _logService.LogDebug($"UpdateProgressText clear failed: {ex.Message}"); }
 
                     // Reset counters and hide UI on UI thread
                     try
@@ -816,14 +893,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                             DownloadProgress.UpdateProgressPercent(0.0);
                         });
                     }
-                    catch
-                    {
-                        IsDownloadProgressVisible = false;
-                        Interlocked.Exchange(ref _downloadProgressCompleted, 0);
-                        DownloadProgressCompleted = 0;
-                        DownloadProgressTotal = 0;
-                        DownloadProgress.UpdateProgressPercent(0.0);
-                    }
+                    catch (Exception ex) { _logService.LogDebug($"Hiding progress UI failed: {ex.Message}"); }
                 }
             }
         }
@@ -883,7 +953,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                                 var latestVersion = latestRelease.Version;
                                 if (VersionHelper.IsNewerVersion(latestVersion, mod.Version))
                                 {
-                                    _metadataService.UpdateLatestVersion(mod.Title, latestVersion, hasUpdate: true);
+                                    _metadataService.UpdateLatestVersion(mod.Name, latestVersion, hasUpdate: true);
                                     await _uiService.InvokeAsync(() =>
                                     {
                                         mod.HasUpdate = true;
@@ -894,7 +964,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                                 }
                                 else
                                 {
-                                    _metadataService.UpdateLatestVersion(mod.Title, latestVersion, hasUpdate: false);
+                                    _metadataService.UpdateLatestVersion(mod.Name, latestVersion, hasUpdate: false);
                                 }
                             }
                         }
@@ -913,6 +983,9 @@ namespace FactorioModManager.ViewModels.MainWindow
                     {
                         SetStatus($"Found {updateCount} mod update(s) available.");
                         this.RaisePropertyChanged(nameof(EnabledCountText));
+                        // ensure filtered view reflects newly-found updates
+                        if (ShowOnlyPendingUpdates)
+                            ApplyModFilter();
                     }
                     else
                     {
@@ -967,6 +1040,10 @@ namespace FactorioModManager.ViewModels.MainWindow
                                     this.RaisePropertyChanged(nameof(EnabledCountText));
                                     SetStatus($"Update available for {SelectedMod.Title}: {SelectedMod.Version} → {latestVersion}");
                                 });
+
+                                // Ensure pending-updates filter reflects this new item immediately
+                                if (ShowOnlyPendingUpdates)
+                                    ApplyModFilter();
                             }
                             else
                             {
@@ -978,6 +1055,9 @@ namespace FactorioModManager.ViewModels.MainWindow
                                     this.RaisePropertyChanged(nameof(EnabledCountText));
                                     SetStatus($"{SelectedMod.Title} is up to date (version {SelectedMod.Version})");
                                 });
+
+                                if (ShowOnlyPendingUpdates)
+                                    ApplyModFilter();
                             }
                         }
                     }
@@ -1002,5 +1082,71 @@ namespace FactorioModManager.ViewModels.MainWindow
 
         private ModViewModel? FindModByName(string name) =>
            _allMods.FirstOrDefault(m => m.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+
+        // Force immediate refresh and wait for completion (no debounce)
+        private async Task ForceRefreshAffectedModsAsync(IEnumerable<string> modNames)
+        {
+            var names = modNames?.Where(n => !string.IsNullOrWhiteSpace(n)).Distinct(StringComparer.OrdinalIgnoreCase).ToList() ?? [];
+            if (names.Count == 0) return;
+
+            // Cancel any pending debounced refresh for these names by removing them from pending set
+            lock (_refreshAffectedLock)
+            {
+                foreach (var n in names) _refreshAffectedNames.Remove(n);
+            }
+
+            await DoRefreshAffectedModsAsync(names);
+        }
+
+        private async Task DoRefreshAffectedModsAsync(IEnumerable<string> names)
+        {
+            var list = names?.Where(n => !string.IsNullOrWhiteSpace(n)).Distinct(StringComparer.OrdinalIgnoreCase).ToList() ?? [];
+            if (list.Count == 0) return;
+
+            // Refresh version caches on background thread
+            await Task.Run(() =>
+            {
+                foreach (var name in list)
+                {
+                    try { _modVersionManager.RefreshVersionCache(name); } catch (Exception ex) { _logService.LogDebug($"RefreshVersionCache failed for {name}: {ex.Message}"); }
+                }
+            });
+
+            // Update UI-bound VM properties for each affected mod (batch on UI thread)
+            await _uiService.InvokeAsync(() =>
+            {
+                foreach (var name in list)
+                {
+                    try
+                    {
+                        var vm = _allMods.FirstOrDefault(m => m.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+                        if (vm == null) continue;
+
+                        try { LoadModVersions(vm); } catch (Exception ex) { _logService.LogDebug($"LoadModVersions failed for {name}: {ex.Message}"); }
+
+                        try
+                        {
+                            // Apply metadata directly into VM
+                            vm.HasUpdate = _metadataService.GetHasUpdate(name);
+                            vm.LatestVersion = _metadataService.GetLatestVersion(name);
+                        }
+                        catch (Exception ex) { _logService.LogDebug($"Applying metadata failed for {name}: {ex.Message}"); }
+
+                        // Rely on property setters to raise most notifications; raise dependent computed properties explicitly
+                        vm.RaisePropertyChanged(nameof(vm.HasMultipleVersions));
+                        vm.RaisePropertyChanged(nameof(vm.UpdateText));
+                    }
+                    catch (Exception ex) { _logService.LogDebug($"Error updating VM for {name}: {ex.Message}"); }
+                }
+
+                // Batch notifications for counts/filters once
+                this.RaisePropertyChanged(nameof(EnabledCountText));
+                this.RaisePropertyChanged(nameof(UpdatesAvailableCount));
+                this.RaisePropertyChanged(nameof(HasUpdates));
+                this.RaisePropertyChanged(nameof(UpdatesCountText));
+                if (ShowOnlyPendingUpdates)
+                    ApplyModFilter();
+            });
+        }
     }
 }

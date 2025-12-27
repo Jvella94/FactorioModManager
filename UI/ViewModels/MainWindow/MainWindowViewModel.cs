@@ -15,6 +15,7 @@ using System.Reactive.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using static FactorioModManager.Constants;
+using System.Threading;
 
 namespace FactorioModManager.ViewModels.MainWindow
 {
@@ -46,6 +47,12 @@ namespace FactorioModManager.ViewModels.MainWindow
         private bool _togglingMod = false;
         private bool _areGroupsVisible = true;
         private double _groupsColumnWidth = 200.0;
+
+        // Debounce for ApplyModFilter to avoid frequent re-filtering under heavy updates
+        private static readonly TimeSpan _applyFilterDebounce = TimeSpan.FromMilliseconds(150);
+
+        private Timer? _applyFilterTimer;
+        private volatile bool _applyFilterPending = false;
 
         public bool ShowCategoryColumn
         {
@@ -209,7 +216,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                         }
 
                         // Reapply filter so selection is restored consistently
-                        ApplyModFilter();
+                        ScheduleApplyModFilter();
 
                         // If ApplyModFilter didn't restore selection, try to restore from all mods
                         if (!string.IsNullOrEmpty(prevName) && SelectedMod == null)
@@ -250,6 +257,37 @@ namespace FactorioModManager.ViewModels.MainWindow
         }
 
         /// <summary>
+        /// Schedule a debounced ApplyModFilter() call.
+        /// Multiple calls within the debounce window coalesce into a single filter application.
+        /// </summary>
+        private void ScheduleApplyModFilter()
+        {
+            _applyFilterPending = true;
+            try
+            {
+                _applyFilterTimer ??= new Timer(_ => FlushApplyFilterToUi(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+                _applyFilterTimer.Change(_applyFilterDebounce, Timeout.InfiniteTimeSpan);
+            }
+            catch { }
+        }
+
+        private void FlushApplyFilterToUi()
+        {
+            if (!_applyFilterPending)
+                return;
+
+            _applyFilterPending = false;
+            _uiService.Post(() =>
+            {
+                try
+                {
+                    ApplyModFilter();
+                }
+                catch { }
+            });
+        }
+
+        /// <summary>
         /// Sets up reactive filtering with throttling
         /// </summary>
         private void SetupReactiveFiltering()
@@ -263,7 +301,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                 x => x.ShowOnlyPendingUpdates)
                 .Throttle(TimeSpan.FromMilliseconds(150))
                 .ObserveOn(RxApp.MainThreadScheduler)
-                .Subscribe(_ => ApplyModFilter())
+                .Subscribe(_ => ScheduleApplyModFilter())
                 .DisposeWith(_disposables);
 
             // Throttle author search
@@ -313,6 +351,13 @@ namespace FactorioModManager.ViewModels.MainWindow
                                 this.RaisePropertyChanged(nameof(UnusedInternalCount));
                                 this.RaisePropertyChanged(nameof(HasUnusedInternals));
                                 this.RaisePropertyChanged(nameof(UnusedInternalWarning));
+
+                                // Reapply filter when relevant flags change so the filtered collection updates
+                                // only when filter depends on those flags (avoid unnecessary re-filtering).
+                                if (ShowOnlyPendingUpdates || ShowOnlyUnusedInternals)
+                                {
+                                    ScheduleApplyModFilter();
+                                }
                             })
                             .DisposeWith(_disposables);
                     }
@@ -602,7 +647,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                 this.RaisePropertyChanged(nameof(ActiveFilterGroup));
 
                 // Reapply filters when active filter changes
-                ApplyModFilter();
+                ScheduleApplyModFilter();
             }
         }
 
@@ -705,6 +750,8 @@ namespace FactorioModManager.ViewModels.MainWindow
                 // Don't dispose mods here - let GC handle it
                 _allMods.Clear();
                 _filteredMods.Clear();
+
+                try { _applyFilterTimer?.Dispose(); } catch { }
 
                 foreach (var group in Groups)
                 {

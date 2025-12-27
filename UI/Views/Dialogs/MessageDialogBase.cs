@@ -1,5 +1,6 @@
 ﻿using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Media;
 using FactorioModManager.Views.Base;
 using System;
@@ -17,6 +18,8 @@ namespace FactorioModManager.Views.Dialogs
             Height = height;
             MinWidth = 400;
             MinHeight = 120;
+            // Set a reasonable maximum height so very long messages don't grow the window indefinitely
+            MaxHeight = 600;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
             SizeToContent = SizeToContent.Height;
             CanResize = false;
@@ -43,7 +46,20 @@ namespace FactorioModManager.Views.Dialogs
 
             // Message text with improved styling
             var messageBlock = CreateMessageTextBlock();
-            mainPanel.Children.Add(messageBlock);
+
+            // Wrap the message in a ScrollViewer so long messages can be scrolled
+            var scrollViewer = new ScrollViewer
+            {
+                Content = messageBlock,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                Margin = new Thickness(0)
+            };
+
+            // Limit the scroll area so it doesn't exceed the window max height
+            scrollViewer.MaxHeight = 420;
+
+            mainPanel.Children.Add(scrollViewer);
 
             // Button panel
             mainPanel.Children.Add(CreateButtonPanel());

@@ -601,7 +601,7 @@
                             CornerRadius="6"
                             Padding="0"
                             VerticalAlignment="Center"
-                            IsVisible="{Binding SortedDependencies.Count, Converter={StaticResource GreaterThanFiveConverter}}">
+                            IsVisible="{Binding OnlyModSortedDepedencies.Count, Converter={StaticResource GreaterThanFiveConverter}}">
                       <Button Command="{Binding ToggleDependencyListCommand}"
                               Background="Transparent"
                               BorderThickness="0"

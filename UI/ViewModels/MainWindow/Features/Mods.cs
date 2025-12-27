@@ -341,7 +341,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                 if (lastCheck.HasValue)
                     _logService.Log($"Checking for updates on Portal since {lastCheck.Value}");
 
-                var hours = lastCheck.HasValue ? (DateTime.UtcNow - lastCheck.Value).Hours + 1 : 1;
+                var hours = lastCheck.HasValue ? (int)(DateTime.UtcNow - lastCheck.Value).TotalHours + 1 : 1;
                 _settingsService.SetLastModUpdateCheck(DateTime.UtcNow);
                 await CheckForUpdatesAsync(hours);
             }
