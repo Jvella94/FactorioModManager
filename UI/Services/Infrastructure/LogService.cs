@@ -90,7 +90,7 @@ namespace FactorioModManager.Services.Infrastructure
         {
             var props = properties != null
                 ? new Dictionary<string, object?>(properties)
-                : new Dictionary<string, object?>();
+                : [];
 
             props["event"] = eventName;
             LogInternal($"Event: {eventName}", level, props);

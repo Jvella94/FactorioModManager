@@ -1,6 +1,7 @@
+using FactorioModManager.Models;
+using FactorioModManager.Models.DTO;
 using FactorioModManager.Services.Infrastructure;
 using FactorioModManager.ViewModels.MainWindow;
-using FactorioModManager.Models.DTO;
 
 namespace FMM.Tests.ServicesTests
 {
@@ -54,6 +55,24 @@ namespace FMM.Tests.ServicesTests
         public Task ShowVersionHistoryAsync(string modTitle, string modName, System.Collections.Generic.List<ShortReleaseDTO> releases) => Task.CompletedTask;
 
         public Task SetClipboardTextAsync(string text) => Task.CompletedTask;
+
+        public Task<System.Collections.Generic.List<ModListPreviewResult>?> ShowModListPreviewAsync(System.Collections.Generic.List<ModListPreviewItem> items, string listName, Avalonia.Controls.Window? parentWindow = null)
+        {
+            return Task.FromResult<System.Collections.Generic.List<ModListPreviewResult>?>(null);
+        }
+
+        public Task<string?> ShowPickModListAsync(System.Collections.Generic.List<string> listNames, string? title = null, Avalonia.Controls.Window? parentWindow = null)
+        {
+            return Task.FromResult<string?>(null);
+        }
+
+        public Task<System.Collections.Generic.List<string>?> ShowActivationConfirmationAsync(string title, string message, System.Collections.Generic.List<(string Name, string Version)> items, Avalonia.Controls.Window? parentWindow = null)
+        {
+            // Default test behavior: approve all activations
+            var list = new System.Collections.Generic.List<string>();
+            foreach (var it in items) list.Add($"{it.Name}@{it.Version}");
+            return Task.FromResult<System.Collections.Generic.List<string>?>(list);
+        }
     }
 
     public class DownloadProgressViewModelTests
@@ -95,7 +114,8 @@ namespace FMM.Tests.ServicesTests
             var parts = vm.SpeedText!.Split(' ');
             var numStr = parts.Length > 0 ? parts[0] : "0";
             if (numStr.EndsWith("MB/s")) numStr = numStr.Replace("MB/s", "");
-            double.TryParse(numStr, out var value);
+            if (!double.TryParse(numStr, out var value))
+                value = 0;
 
             // Value should be > 1 (low) and < 100 (unrealistic), allow generous bounds
             Assert.InRange(value, 1.0, 200.0);

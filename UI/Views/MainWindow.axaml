@@ -3,6 +3,7 @@
         xmlns:vm="using:FactorioModManager.ViewModels"
         xmlns:vmmw="using:FactorioModManager.ViewModels.MainWindow"
         xmlns:converter="using:FactorioModManager.Views.Converters"
+        xmlns:controls="using:FactorioModManager.Views.Controls"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="700"
@@ -27,6 +28,7 @@
     <converter:BoolToOpacityConverter x:Key="BoolToOpacityConverter" />
     <converter:DoubleStringToGridLengthConverter x:Key="DoubleStringToGridLengthConverter" />
     <converter:BoolToBrushConverter x:Key="BoolToBrushConverter" />
+    <converter:InverseBooleanConverter x:Key="InverseBooleanConverter" />
     <!-- Toggle command in UI to control visibility -->
   </Window.Resources>
 
@@ -89,7 +91,7 @@
                         ToolTip.Tip="Show / hide groups panel">
             <StackPanel Orientation="Horizontal" Spacing="6">
               <TextBlock Text="📁" FontSize="14" />
-              <TextBlock Text="Groups" />
+              <TextBlock Text="Playsets" />
             </StackPanel>
           </ToggleButton>
         </StackPanel>
@@ -188,101 +190,135 @@
         <ColumnDefinition Width="*" />
       </Grid.ColumnDefinitions>
 
-      <!-- Groups Panel -->
-      <Border Grid.Column="0" BorderBrush="#333" BorderThickness="0,0,1,0"
-               Background="#252525" Padding="10">
-        <Border.Transitions>
-          <Transitions>
-            <DoubleTransition Property="Opacity" Duration="0:0:0.18" />
-          </Transitions>
-        </Border.Transitions>
-        <Border.Opacity>
-          <Binding Path="AreGroupsVisible" Converter="{StaticResource BoolToOpacityConverter}" />
-        </Border.Opacity>
-        <Border.IsVisible>
-          <Binding Path="AreGroupsVisible" />
-        </Border.IsVisible>
+      <!-- Groups Panel and Mod Lists combined into a single left column grid to avoid overlap -->
+      <Grid Grid.Column="0">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="*" />
+          <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
 
-        <Grid RowDefinitions="Auto,*,Auto">
-          <TextBlock Grid.Row="0" Text="Mod Groups"
-                     FontWeight="Bold" FontSize="14" Margin="0,0,0,10" />
+        <!-- Groups Panel -->
+        <Border Grid.Row="0" BorderBrush="#333" BorderThickness="0,0,1,0"
+                 Background="#252525" Padding="10">
+          <Border.Transitions>
+            <Transitions>
+              <DoubleTransition Property="Opacity" Duration="0:0:0.18" />
+            </Transitions>
+          </Border.Transitions>
+          <Border.Opacity>
+            <Binding Path="AreGroupsVisible" Converter="{StaticResource BoolToOpacityConverter}" />
+          </Border.Opacity>
+          <Border.IsVisible>
+            <Binding Path="AreGroupsVisible" />
+          </Border.IsVisible>
 
-          <ListBox x:Name="GroupsListBox" Grid.Row="1"
-                   ItemsSource="{Binding Groups}"
-                   SelectedItem="{Binding SelectedGroup}"
-                   DoubleTapped="GroupsListBox_OnDoubleTapped">
-            <ListBox.ItemTemplate>
-              <DataTemplate>
-                <!-- Highlight entire item when active filter set by binding Border background to IsActiveFilter -->
-                <Border Background="{Binding IsActiveFilter, Converter={StaticResource BoolToBrushConverter}}" CornerRadius="6" Padding="6">
-                  <StackPanel Spacing="3">
-                    <!-- Display mode -->
-                    <StackPanel IsVisible="{Binding !IsRenaming}">
-                      <ToolTip.Tip>
-                        <StackPanel MaxWidth="300">
-                          <TextBlock Text="{Binding Name}" FontWeight="Bold" Margin="0,0,0,5" />
-                          <TextBlock Text="Mods in this group:" FontSize="11" Margin="0,0,0,3" />
-                          <ItemsControl ItemsSource="{Binding ModNames}">
-                            <ItemsControl.ItemTemplate>
-                              <DataTemplate>
-                                <TextBlock Text="{Binding}" Margin="5,2" FontSize="11" />
-                              </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                          </ItemsControl>
+          <Grid RowDefinitions="Auto,*,Auto">
+            <TextBlock Grid.Row="0" Text="Mod Groups"
+                       FontWeight="Bold" FontSize="14" Margin="0,0,0,10" />
+
+            <ListBox x:Name="GroupsListBox" Grid.Row="1"
+                     ItemsSource="{Binding Groups}"
+                     SelectedItem="{Binding SelectedGroup}"
+                     DoubleTapped="GroupsListBox_OnDoubleTapped">
+              <ListBox.ItemTemplate>
+                <DataTemplate>
+                  <!-- Highlight entire item when active filter set by binding Border background to IsActiveFilter -->
+                  <Border Background="{Binding IsActiveFilter, Converter={StaticResource BoolToBrushConverter}}" CornerRadius="4" Padding="4" Margin="0,0,0,6">
+                    <StackPanel Spacing="2">
+                      <!-- Display mode -->
+                      <StackPanel IsVisible="{Binding !IsRenaming}">
+                        <ToolTip.Tip>
+                          <StackPanel MaxWidth="300">
+                            <TextBlock Text="{Binding Name}" FontWeight="Bold" Margin="0,0,0,4" FontSize="13" />
+                            <TextBlock Text="Mods in this group:" FontSize="11" Margin="0,0,0,3" />
+                            <ItemsControl ItemsSource="{Binding ModNames}">
+                              <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                  <TextBlock Text="{Binding}" Margin="4,1" FontSize="11" />
+                                </DataTemplate>
+                              </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                          </StackPanel>
+                        </ToolTip.Tip>
+                        <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="13" />
+                        <TextBlock Text="{Binding StatusText}" FontSize="10" Foreground="#888" Margin="0,2,0,4" />
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                          <Button Content="Toggle"
+                                  Command="{Binding $parent[Window].((vmmw:MainWindowViewModel)DataContext).ToggleGroupCommand}"
+                                  CommandParameter="{Binding}"
+                                  FontSize="11" Padding="6,4" />
+                          <Button Content="Rename"
+                                  Command="{Binding $parent[Window].((vmmw:MainWindowViewModel)DataContext).RenameGroupCommand}"
+                                  CommandParameter="{Binding}"
+                                  FontSize="11" Padding="6,4" />
+                          <Button Content="Delete"
+                                 Click="DeleteGroup_Click"
+                                 FontSize="11" Padding="6,4" />
                         </StackPanel>
-                      </ToolTip.Tip>
-                      <TextBlock Text="{Binding Name}" FontWeight="Bold" />
-                      <TextBlock Text="{Binding StatusText}" FontSize="11" Foreground="#888" />
-                      <StackPanel Orientation="Horizontal" Spacing="5" Margin="0,3,0,0">
-                        <Button Content="Toggle"
-                                Command="{Binding $parent[Window].((vmmw:MainWindowViewModel)DataContext).ToggleGroupCommand}"
-                                CommandParameter="{Binding}"
-                                FontSize="10" Padding="5,2" />
-                        <Button Content="Rename"
-                                Command="{Binding $parent[Window].((vmmw:MainWindowViewModel)DataContext).RenameGroupCommand}"
-                                CommandParameter="{Binding}"
-                                FontSize="10" Padding="5,2" />
-                        <Button Content="Delete"
-                               Click="DeleteGroup_Click"
-                              FontSize="10" Padding="5,2" />
+                      </StackPanel>
+
+                      <!-- Edit mode: use shared RenameEditor control -->
+                      <controls:RenameEditor IsVisible="{Binding IsRenaming}"
+                                             SaveClicked="RenameEditor_SaveClicked"
+                                             CancelClicked="RenameEditor_CancelClicked" />
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+
+            <StackPanel Grid.Row="2" Spacing="6" Margin="0,10,0,0">
+              <Button Content="New Group"
+                      Command="{Binding CreateGroupCommand}"
+                      HorizontalAlignment="Stretch"
+                      Background="#3A3A3A" Foreground="White" Padding="6" />
+              <Button Content="Add to Group"
+                      Command="{Binding AddMultipleToGroupCommand}"
+                      HorizontalAlignment="Stretch"
+                      Background="#3A3A3A" Foreground="White" Padding="6" />
+              <Button Content="Remove from Group"
+                      Command="{Binding RemoveMultipleFromGroupCommand}"
+                      HorizontalAlignment="Stretch"
+                      Background="#3A3A3A" Foreground="White" Padding="6" />
+            </StackPanel>
+          </Grid>
+        </Border>
+
+        <!-- Mod Lists Panel -->
+        <Border Grid.Row="1" BorderBrush="#2A2A2A" BorderThickness="1,10,1,1" Background="#202020" Padding="8" Margin="0,12,0,0">
+          <StackPanel>
+            <TextBlock Text="Saved Mod Lists" FontWeight="Bold" FontSize="13" Margin="2,0,0,8" />
+            <ListBox ItemsSource="{Binding ModLists}" SelectedItem="{Binding SelectedModList}" Name="ModListsListBox" VerticalAlignment="Stretch">
+              <ListBox.ItemTemplate>
+                <DataTemplate>
+                  <Border CornerRadius="4" Padding="6" Background="#2A2A2A" Margin="0,0,0,6">
+                    <StackPanel>
+                      <controls:RenameEditor IsVisible="{Binding IsRenaming}"
+                                             SaveClicked="RenameEditor_SaveClicked"
+                                             CancelClicked="RenameEditor_CancelClicked" />
+
+                      <StackPanel IsVisible="{Binding IsRenaming, Converter={StaticResource InverseBooleanConverter}}">
+                        <TextBlock Text="{Binding Name}" FontWeight="Bold" />
+                        <!-- show number of mods in this list -->
+                        <TextBlock Text="{Binding Entries.Count, StringFormat='{}{0} mods'}" FontSize="11" Foreground="#888" />
+                        <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,6,0,0">
+                          <Button Content="Apply" Command="{Binding DataContext.ApplyModListCommand, ElementName=RootWindow}" CommandParameter="{Binding Name}" FontSize="11" Padding="6" />
+                          <Button Content="Rename" Command="{Binding DataContext.StartRenameModListCommand, ElementName=RootWindow}" CommandParameter="{Binding}" FontSize="11" Padding="6" />
+                          <Button Content="Delete" Command="{Binding DataContext.DeleteModListCommand, ElementName=RootWindow}" CommandParameter="{Binding Name}" FontSize="11" Padding="6" />
+                        </StackPanel>
                       </StackPanel>
                     </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
 
-                    <!-- Edit mode -->
-                    <StackPanel IsVisible="{Binding IsRenaming}" Spacing="5"
-                                PropertyChanged="GroupEditPanel_OnPropertyChanged">
-                      <TextBox x:Name="GroupNameEditBox" Text="{Binding EditedName}" AttachedToVisualTree="GroupNameEditBox_OnAttachedToVisualTree"
-                               Watermark="Group name"
-                               KeyDown="GroupNameEditBox_OnKeyDown" />
-                      <StackPanel Orientation="Horizontal" Spacing="5">
-                        <Button Content="Save"
-                                Command="{Binding $parent[Window].((vmmw:MainWindowViewModel)DataContext).ConfirmRenameGroupCommand}"
-                                CommandParameter="{Binding}"
-                                FontSize="10" Padding="5,2" />
-                        <Button Content="Cancel"
-                                Click="CancelRename"
-                                FontSize="10" Padding="5,2" />
-                      </StackPanel>
-                    </StackPanel>
-                  </StackPanel>
-                </Border>
-              </DataTemplate>
-            </ListBox.ItemTemplate>
-          </ListBox>
-
-          <StackPanel Grid.Row="2" Spacing="5" Margin="0,10,0,0">
-            <Button Content="New Group"
-                    Command="{Binding CreateGroupCommand}"
-                    HorizontalAlignment="Stretch" />
-            <Button Content="Add to Group"
-                    Command="{Binding AddMultipleToGroupCommand}"
-                    HorizontalAlignment="Stretch" />
-            <Button Content="Remove from Group"
-                    Command="{Binding RemoveMultipleFromGroupCommand}"
-                    HorizontalAlignment="Stretch" />
+            <StackPanel Orientation="Vertical" Spacing="8" Margin="0,6,0,0">
+              <Button Content="New List" Command="{Binding CreateModListCommand}" HorizontalAlignment="Stretch" Background="#3A3A3A" Foreground="White" Padding="6" />
+            </StackPanel>
           </StackPanel>
-        </Grid>
-      </Border>
+        </Border>
+      </Grid>
 
       <!-- GridSplitter to allow resizing Groups column -->
       <GridSplitter Grid.Column="1"
@@ -297,17 +333,17 @@
         <Grid>
           <!-- Data grid shown when not refreshing -->
           <DataGrid ItemsSource="{Binding FilteredMods}"
-                    Name="ModGrid"
-                    SelectedItem="{Binding SelectedMod}"
-                    SelectionChanged="DataGrid_OnSelectionChanged"
-                    AutoGenerateColumns="False"
-                    CanUserReorderColumns="True"
-                    CanUserResizeColumns="True"
-                    GridLinesVisibility="Horizontal"
-                    IsReadOnly="True"
-                    SelectionMode="Extended"
-                    RowHeight="32"
-                    IsVisible="{Binding !IsRefreshing}">
+                     Name="ModGrid"
+                     SelectedItem="{Binding SelectedMod}"
+                     SelectionChanged="DataGrid_OnSelectionChanged"
+                     AutoGenerateColumns="False"
+                     CanUserReorderColumns="True"
+                     CanUserResizeColumns="True"
+                     GridLinesVisibility="Horizontal"
+                     IsReadOnly="True"
+                     SelectionMode="Extended"
+                     RowHeight="32"
+                     IsVisible="{Binding !IsRefreshing}">
             <DataGrid.Columns>
               <DataGridTemplateColumn Header="Enabled" Width="100" SortMemberPath="IsEnabled">
                 <DataGridTemplateColumn.CellTemplate>
@@ -443,7 +479,7 @@
                           Margin="0,26,8,0"
                           VerticalAlignment="Top">
                     <ComboBox ItemsSource="{Binding AvailableVersions}"
-                              SelectedItem="{Binding SelectedVersion, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                              SelectedItem="{Binding SelectedVersion, Mode=TwoWay}"
                               HorizontalAlignment="Stretch"
                               VerticalAlignment="Center"
                               Background="Transparent"

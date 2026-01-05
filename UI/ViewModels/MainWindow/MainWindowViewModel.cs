@@ -1,4 +1,5 @@
-﻿using FactorioModManager.Models;
+﻿using Avalonia.Controls;
+using FactorioModManager.Models;
 using FactorioModManager.Services;
 using FactorioModManager.Services.API;
 using FactorioModManager.Services.Infrastructure;
@@ -13,9 +14,7 @@ using System.Reactive.Disposables;
 using System.Reactive.Disposables.Fluent;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
-using Avalonia.Controls;
 using static FactorioModManager.Constants;
-using System.Threading;
 
 namespace FactorioModManager.ViewModels.MainWindow
 {
@@ -29,6 +28,15 @@ namespace FactorioModManager.ViewModels.MainWindow
         private readonly ObservableCollection<ModViewModel> _filteredMods = [];
         private readonly ObservableCollection<string> _authors = [];
         private readonly ObservableCollection<string> _filteredAuthors = [];
+
+        // Custom mod lists (user snapshots)
+        private ObservableCollection<CustomModList> _modLists = [];
+
+        public ObservableCollection<CustomModList> ModLists
+        {
+            get => _modLists;
+            set => this.RaiseAndSetIfChanged(ref _modLists, value);
+        }
 
         private ObservableCollection<ModGroupViewModel> _groups = [];
         private ObservableCollection<ModViewModel> _selectedMods = [];
@@ -130,6 +138,7 @@ namespace FactorioModManager.ViewModels.MainWindow
         private readonly IFactorioLauncher _factorioLauncher;
         private readonly IThumbnailCache _thumbnailCache;
         private readonly IModFilterService _modFilterService;
+        private readonly IModListService _modListService;
 
         // Expose the concrete DownloadProgressViewModel for XAML binding to presentation properties
         public DownloadProgressViewModel DownloadProgress { get; }
@@ -150,8 +159,10 @@ namespace FactorioModManager.ViewModels.MainWindow
             IFactorioLauncher factorioLauncher,
             IThumbnailCache thumbnailCache,
             IModFilterService modFilterService,
+            IModListService modListService,
             IDownloadProgress downloadProgress)
         {
+            _modListService = modListService;
             _modService = modService;
             _groupService = groupService;
             _apiService = apiService;
@@ -243,6 +254,14 @@ namespace FactorioModManager.ViewModels.MainWindow
 
             SetupReactiveFiltering();
             InitializeCommands();
+
+            // Load saved custom mod lists
+            try
+            {
+                var lists = _modListService.LoadLists();
+                foreach (var l in lists) ModLists.Add(l);
+            }
+            catch { }
 
             _settingsService.FactorioPathChanged += () => DetectFactorioVersionAndDLC();
 
@@ -586,6 +605,14 @@ namespace FactorioModManager.ViewModels.MainWindow
             }
         }
 
+        private CustomModList? _selectedModList;
+
+        public CustomModList? SelectedModList
+        {
+            get => _selectedModList;
+            set => this.RaiseAndSetIfChanged(ref _selectedModList, value);
+        }
+
         /// <summary>
         /// Gets the detected Factorio version
         /// </summary>
@@ -712,6 +739,217 @@ namespace FactorioModManager.ViewModels.MainWindow
         {
             get => _showOnlyPendingUpdates;
             set => this.RaiseAndSetIfChanged(ref _showOnlyPendingUpdates, value);
+        }
+
+        // Create a named snapshot of current mod enabled states
+        private void CreateModList()
+        {
+            var name = $"New List {ModLists.Count + 1}";
+            var list = new CustomModList { Name = name, Description = "Snapshot" };
+            foreach (var m in _allMods)
+            {
+                list.Entries.Add(new ModListEntry { Name = m.Name, Enabled = m.IsEnabled, Version = m.Version });
+            }
+            _modListService.AddList(list);
+            ModLists.Add(list);
+            SetStatus($"Created mod list: {name}");
+        }
+
+        private async Task ApplyModList(string name)
+        {
+            var list = ModLists.FirstOrDefault(l => l.Name == name);
+            if (list == null) return;
+
+            // Build preview items
+            var previewItems = new List<(string Name, string Title, bool CurrentEnabled, bool TargetEnabled, string? CurrentVersion, string? TargetVersion, List<string> InstalledVersions)>();
+            foreach (var vm in _allMods)
+            {
+                var entry = list.Entries.FirstOrDefault(e => e.Name.Equals(vm.Name, StringComparison.OrdinalIgnoreCase));
+                var target = entry?.Enabled ?? false;
+                var targetVersion = entry?.Version;
+                var installedVersions = new List<string>();
+                try { installedVersions = [.. _modVersionManager.GetInstalledVersions(vm.Name)]; } catch { }
+
+                previewItems.Add((vm.Name, vm.Title, vm.IsEnabled, target, vm.Version, targetVersion, installedVersions));
+            }
+
+            // Show preview dialog on UI thread
+            var owner = _uiService.GetMainWindow();
+
+            // Build strongly-typed preview items for UI service
+            var previewModels = new List<ModListPreviewItem>();
+            foreach (var vm in _allMods)
+            {
+                var entry = list.Entries.FirstOrDefault(e => e.Name.Equals(vm.Name, StringComparison.OrdinalIgnoreCase));
+                var target = entry?.Enabled ?? false;
+                var targetVersion = entry?.Version;
+                var installedVersions = new List<string>();
+                try { installedVersions = [.. _modVersionManager.GetInstalledVersions(vm.Name)]; } catch { }
+
+                previewModels.Add(new ModListPreviewItem
+                {
+                    Name = vm.Name,
+                    Title = vm.Title,
+                    CurrentEnabled = vm.IsEnabled,
+                    TargetEnabled = target,
+                    CurrentVersion = vm.Version,
+                    TargetVersion = targetVersion,
+                    InstalledVersions = installedVersions
+                });
+            }
+
+            var result = await _uiService.ShowModListPreviewAsync(previewModels, name, owner);
+            if (result == null) return; // cancelled
+
+            // Prepare activation candidates (name, version) for confirmation UI
+            var activationCandidates = result.Where(r => !string.IsNullOrEmpty(r.ApplyVersion) && r.ApplyEnabled)
+                                             .Select(r => (r.Name, Version: r.ApplyVersion!))
+                                             .ToList();
+
+            var skipActivations = false;
+            HashSet<string>? allowedActivations = null;
+
+            if (activationCandidates.Count > 0)
+            {
+                // If Factorio is running, offer to apply without activations to avoid corrupting active files
+                try
+                {
+                    if (_factorioLauncher != null && _factorioLauncher.IsFactorioRunning())
+                    {
+                        var proceed = await _uiService.ShowConfirmationAsync(
+                            "Factorio is running",
+                            "Factorio appears to be running. Active version changes require Factorio to be closed.\n\nChoose 'Apply without activations' to apply enabled/disabled changes only, or 'Cancel' to abort.",
+                            owner,
+                            yesButtonText: "Apply without activations",
+                            noButtonText: "Cancel",
+                            yesButtonColor: "#FFA000",
+                            noButtonColor: "#3A3A3A");
+
+                        if (!proceed)
+                            return;
+
+                        // User chose to proceed but without activations
+                        skipActivations = true;
+                    }
+                }
+                catch { }
+
+                // If activations are allowed and there are multiple, show detailed checkbox dialog
+                if (!skipActivations && activationCandidates.Count > 1)
+                {
+                    var header = "The following activations will be applied. Uncheck any you don't want to activate:";
+                    var lines = string.Join("\n", activationCandidates.Select(a => $"- {a.Name}@{a.Version}"));
+                    var message = header + "\n\n" + lines;
+
+                    var selected = await _uiService.ShowActivationConfirmationAsync(
+                        "Confirm Activate Versions",
+                        message,
+                        activationCandidates,
+                        owner);
+
+                    if (selected == null)
+                        return; // cancelled
+
+                    allowedActivations = new HashSet<string>(selected.Select(s =>
+                    {
+                        var at = s.IndexOf('@');
+                        return at >= 0 ? s[..at] : s;
+                    }), StringComparer.OrdinalIgnoreCase);
+                }
+                else if (!skipActivations && activationCandidates.Count == 1)
+                {
+                    // Single activation allowed automatically
+                    allowedActivations = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { activationCandidates[0].Name };
+                }
+            }
+
+            // Apply according to user's selections
+            foreach (var r in result)
+            {
+                var vm = _allMods.FirstOrDefault(m => m.Name.Equals(r.Name, StringComparison.OrdinalIgnoreCase));
+                if (vm == null) continue;
+
+                // Apply enabled state
+                if (vm.IsEnabled != r.ApplyEnabled)
+                {
+                    vm.IsEnabled = r.ApplyEnabled;
+                    _modService.ToggleMod(vm.Name, r.ApplyEnabled);
+                }
+
+                // Apply version if requested (and non-null) AND the target is enabled
+                if (!string.IsNullOrEmpty(r.ApplyVersion) && r.ApplyEnabled)
+                {
+                    try
+                    {
+                        // Set SelectedMod so SetActiveVersion operates on correct VM
+                        SelectedMod = vm;
+
+                        // Only persist/apply version if activations aren't skipped and this mod was approved in the activation dialog (if shown)
+                        var shouldApplyVersion = !skipActivations && (allowedActivations == null || allowedActivations.Contains(vm.Name));
+                        if (shouldApplyVersion)
+                        {
+                            _modService.SaveModState(vm.Name, enabled: true, version: r.ApplyVersion);
+
+                            // Activate the selected version (updates FilePath, Version, etc.)
+                            try { await SetActiveVersion(r.ApplyVersion); } catch { }
+                        }
+                    }
+                    catch { }
+                }
+                else if (!string.IsNullOrEmpty(r.ApplyVersion) && !r.ApplyEnabled)
+                {
+                    // If target is disabled but a version was supplied, still persist version if desired
+                    try
+                    {
+                        _modService.SaveModState(vm.Name, enabled: false, version: r.ApplyVersion);
+                    }
+                    catch { }
+                }
+            }
+
+            SetStatus($"Applied mod list: {name}");
+        }
+
+        private void DeleteModList(string name)
+        {
+            _modListService.DeleteList(name);
+            var item = ModLists.FirstOrDefault(l => l.Name == name);
+            if (item != null) ModLists.Remove(item);
+            SetStatus($"Deleted mod list: {name}");
+        }
+
+        private void RenameModList(string oldName, string newName)
+        {
+            var item = ModLists.FirstOrDefault(l => l.Name == oldName);
+            if (item == null) return;
+            var updated = new CustomModList { Name = newName, Description = item.Description, Entries = item.Entries };
+            _modListService.UpdateList(oldName, updated);
+            item.Name = newName;
+            SetStatus($"Renamed mod list from '{oldName}' to '{newName}'");
+        }
+
+        private static void StartRenameModList(CustomModList? list)
+        {
+            if (list == null) return;
+            list.IsRenaming = true;
+            list.EditedName = list.Name;
+        }
+
+        private void ConfirmRenameModList(CustomModList? list)
+        {
+            if (list == null) return;
+            if (string.IsNullOrWhiteSpace(list.EditedName)) return;
+
+            var oldName = list.Name;
+            var newName = list.EditedName.Trim();
+            if (oldName == newName)
+            {
+                list.IsRenaming = false;
+                return;
+            }
+
+            RenameModList(oldName, newName);
+            list.IsRenaming = false;
         }
 
         /// <summary>

@@ -56,6 +56,7 @@ namespace FactorioModManager
                 Resolve<ILogService>()));
 
             RegisterSingleton<IModGroupService>(new ModGroupService(Resolve<ILogService>()));
+            RegisterSingleton<IModListService>(new ModListService(Resolve<ILogService>()));
             RegisterSingleton<IModMetadataService>(new ModMetadataService(Resolve<ILogService>()));
             RegisterSingleton<IThumbnailCache>(new ThumbnailCache(Resolve<ILogService>()));
 
@@ -138,6 +139,7 @@ namespace FactorioModManager
                 Resolve<IFactorioLauncher>(),
                 Resolve<IThumbnailCache>(),
                 Resolve<IModFilterService>(),
+                Resolve<IModListService>(),
                 Resolve<IDownloadProgress>()
             ));
         }

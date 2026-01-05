@@ -1,0 +1,21 @@
+<local:MessageDialogBase xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="using:FactorioModManager.Views.Dialogs"
+        x:Class="FactorioModManager.Views.ModListPreviewDialog"
+        Width="700" Height="500"
+        Title="Preview Mod List Changes">
+  <Grid RowDefinitions="Auto,*,Auto">
+    <TextBlock Text="Preview changes before applying" FontWeight="Bold" FontSize="16" Margin="10" />
+
+    <Border Grid.Row="1" Margin="10" BorderBrush="#333" BorderThickness="1" CornerRadius="6">
+      <ScrollViewer>
+        <StackPanel Name="PreviewPanel" />
+      </ScrollViewer>
+    </Border>
+
+    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="10">
+      <Button Name="CancelBtn" Content="Cancel" Width="100" />
+      <Button Name="ApplyBtn" Content="Apply" Width="100" />
+    </StackPanel>
+  </Grid>
+</local:MessageDialogBase>

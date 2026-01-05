@@ -1,10 +1,14 @@
 ﻿using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Input;
+using Avalonia.Media;
 using Avalonia.Threading;
+using FactorioModManager.Models;
 using FactorioModManager.Services.Settings;
 using FactorioModManager.Views.Dialogs;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -431,6 +435,128 @@ namespace FactorioModManager.Services.Infrastructure
             {
                 return false;
             }
+        }
+
+        public async Task<List<ModListPreviewResult>?> ShowModListPreviewAsync(List<ModListPreviewItem> items, string listName, Window? parentWindow = null)
+        {
+            return await Dispatcher.UIThread.InvokeAsync(async () =>
+            {
+                var owner = parentWindow ?? GetMainWindow();
+                if (owner == null) return null;
+
+                var dialog = new Views.ModListPreviewDialog(items, listName);
+                var res = await dialog.ShowDialog<List<Views.ModListPreviewDialog.PreviewResult>>(owner);
+                if (res == null) return null;
+                return res.Select(r => new ModListPreviewResult { Name = r.Name, ApplyEnabled = r.ApplyEnabled, ApplyVersion = r.ApplyVersion }).ToList();
+            });
+        }
+
+        public async Task<string?> ShowPickModListAsync(List<string> listNames, string? title = null, Window? parentWindow = null)
+        {
+            return await Dispatcher.UIThread.InvokeAsync(async () =>
+            {
+                var owner = parentWindow ?? GetMainWindow();
+                if (owner == null) return null;
+
+                var dlg = new Window { Title = title ?? "Select Mod List", Width = 420, Height = 360 };
+                var root = new Grid { RowDefinitions = new RowDefinitions("*,Auto"), Margin = new Thickness(8) };
+
+                var listBox = new ListBox { ItemsSource = listNames }; // single-click selection supported by default
+                listBox.DoubleTapped += (_, __) => { if (listBox.SelectedItem != null) dlg.Close(); };
+
+                // Support Enter key to accept selection
+                listBox.KeyDown += (s, e) =>
+                {
+                    if (e.Key == Key.Enter && listBox.SelectedItem != null)
+                    {
+                        dlg.Close();
+                    }
+                };
+
+                root.Children.Add(listBox);
+                Grid.SetRow(listBox, 0);
+
+                var panel = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right, Spacing = 8 };
+                var cancel = new Button { Content = "Cancel", Width = 100 };
+                var ok = new Button { Content = "OK", Width = 100 };
+                panel.Children.Add(cancel);
+                panel.Children.Add(ok);
+
+                root.Children.Add(panel);
+                Grid.SetRow(panel, 1);
+
+                var tcs = new TaskCompletionSource<string?>();
+
+                cancel.Click += (_, __) => { tcs.SetResult(null); dlg.Close(); };
+                ok.Click += (_, __) => { tcs.SetResult(listBox.SelectedItem as string); dlg.Close(); };
+
+                // Close also signals selection when user double-clicked or pressed Enter
+                dlg.Closed += (_, __) => { if (!tcs.Task.IsCompleted) tcs.SetResult(listBox.SelectedItem as string); };
+
+                await dlg.ShowDialog(owner);
+                return await tcs.Task;
+            });
+        }
+
+        public async Task<List<string>?> ShowActivationConfirmationAsync(string title, string message, List<(string Name, string Version)> items, Window? parentWindow = null)
+        {
+            return await Dispatcher.UIThread.InvokeAsync(async () =>
+            {
+                var owner = parentWindow ?? GetMainWindow();
+                if (owner == null) return null;
+
+                var dlg = new Window
+                {
+                    Title = title,
+                    Width = 600,
+                    Height = 400
+                };
+
+                var root = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto"), Margin = new Thickness(8) };
+
+                var header = new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(4) };
+                root.Children.Add(header);
+                Grid.SetRow(header, 0);
+
+                var scroll = new ScrollViewer { VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto };
+                var stack = new StackPanel { Spacing = 4 };
+
+                var checkboxes = new List<CheckBox>();
+                foreach (var it in items)
+                {
+                    var cb = new CheckBox { Content = $"{it.Name}@{it.Version}", IsChecked = true };
+                    checkboxes.Add(cb);
+                    stack.Children.Add(cb);
+                }
+
+                scroll.Content = stack;
+                root.Children.Add(scroll);
+                Grid.SetRow(scroll, 1);
+
+                var btnPanel = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right, Spacing = 8 };
+                var cancel = new Button { Content = "Cancel", Width = 100 };
+                var ok = new Button { Content = "Apply", Width = 100, Background = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#D32F2F")), Foreground = Avalonia.Media.Brushes.White };
+                btnPanel.Children.Add(cancel);
+                btnPanel.Children.Add(ok);
+
+                root.Children.Add(btnPanel);
+                Grid.SetRow(btnPanel, 2);
+
+                dlg.Content = root;
+
+                var tcs = new TaskCompletionSource<List<string>?>();
+
+                cancel.Click += (_, __) => { tcs.SetResult(null); dlg.Close(); };
+                ok.Click += (_, __) =>
+                {
+                    var selected = checkboxes.Where(cb => cb.IsChecked == true).Select(cb => cb.Content?.ToString() ?? string.Empty).ToList();
+                    tcs.SetResult(selected);
+                    dlg.Close();
+                };
+
+                await dlg.ShowDialog(owner);
+                return await tcs.Task;
+            });
         }
     }
 }

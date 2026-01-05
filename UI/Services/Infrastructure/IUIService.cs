@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using FactorioModManager.Models;
 
 namespace FactorioModManager.Services.Infrastructure
 {
@@ -99,5 +100,21 @@ namespace FactorioModManager.Services.Infrastructure
         /// Set text to clipboard (platform-specific implementation)
         /// </summary>
         Task SetClipboardTextAsync(string text);
+
+        /// <summary>
+        /// Shows the mod list preview dialog
+        /// </summary>
+        Task<List<ModListPreviewResult>?> ShowModListPreviewAsync(List<ModListPreviewItem> items, string listName, Window? parentWindow = null);
+
+        /// <summary>
+        /// Show a simple picker dialog to choose a mod list by name
+        /// </summary>
+        Task<string?> ShowPickModListAsync(List<string> listNames, string? title = null, Window? parentWindow = null);
+
+        /// <summary>
+        /// Show a dialog that lists activation candidates (mod@version) with checkboxes so the user can uncheck specific activations.
+        /// Returns the list of names the user approved for activation, or null if cancelled.
+        /// </summary>
+        Task<List<string>?> ShowActivationConfirmationAsync(string title, string message, List<(string Name, string Version)> items, Window? parentWindow = null);
     }
 }

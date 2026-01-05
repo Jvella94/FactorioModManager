@@ -1,0 +1,18 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="FactorioModManager.Views.Controls.RenameEditor">
+  <Border x:Name="RootBorder" CornerRadius="6" Padding="8" BorderThickness="1" BorderBrush="Gray" Background="#2A2A2A" ClipToBounds="True">
+    <StackPanel Spacing="6">
+      <TextBox x:Name="EditBox"
+               Watermark="Name"
+               MinWidth="140"
+               HorizontalAlignment="Stretch"
+               VerticalAlignment="Center"
+               Margin="0,4,0,0" />
+      <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Right">
+        <Button Content="Save" x:Name="SaveBtn" Padding="6,4" />
+        <Button Content="Cancel" x:Name="CancelBtn" Padding="6,4" />
+      </StackPanel>
+    </StackPanel>
+  </Border>
+</UserControl>

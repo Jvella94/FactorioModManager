@@ -28,8 +28,7 @@ namespace FMM.Tests
         [Fact]
         public void Dispose_StopsTimer()
         {
-            bool invoked;
-            var helper = new ProgressTimerHelper(TimeSpan.FromMilliseconds(10), () => invoked = true);
+            var helper = new ProgressTimerHelper(TimeSpan.FromMilliseconds(10), () => { });
             helper.Dispose();
             // Scheduling after dispose should not throw
             try

@@ -6,16 +6,18 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using FactorioModManager.Models;
+using FactorioModManager.Services;
 using FactorioModManager.Services.Infrastructure;
+using FactorioModManager.Services.Settings;
 using FactorioModManager.ViewModels;
 using FactorioModManager.ViewModels.MainWindow;
+using FactorioModManager.Views.Controls;
 using System;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Reactive.Linq;
-using FactorioModManager.Services;
-using FactorioModManager.Services.Settings;
 
 namespace FactorioModManager.Views
 {
@@ -196,9 +198,18 @@ namespace FactorioModManager.Views
 
         private void CancelRename(object? sender, RoutedEventArgs e)
         {
-            if (sender is Button button && button.DataContext is ModGroupViewModel group)
+            if (sender is Button button)
             {
-                group.IsRenaming = false;
+                // Support both group and mod-list rename cancel
+                if (button.DataContext is ModGroupViewModel group)
+                {
+                    group.IsRenaming = false;
+                }
+                else if (button.DataContext is CustomModList list)
+                {
+                    list.IsRenaming = false;
+                    list.EditedName = list.Name;
+                }
             }
         }
 
@@ -291,23 +302,29 @@ namespace FactorioModManager.Views
         }
 
         /// <summary>
-        /// Handles focus when renaming groups.
+        /// Handles focus when renaming groups or mod lists.
         /// </summary>
-        /// <param name="sender">The source of the property change event. Must be a StackPanel representing the group edit panel.</param>
-        /// <param name="e">An AvaloniaPropertyChangedEventArgs instance containing information about the changed property, including
-        /// its new value.</param>
         private void GroupEditPanel_OnPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
         {
             if (sender is not StackPanel panel)
                 return;
 
-            if (e.Property == IsVisibleProperty &&
-                e.NewValue is bool isVisible &&
-                isVisible)
+            if (e.Property == IsVisibleProperty && e.NewValue is bool isVisible && isVisible)
             {
                 // Panel just became visible (IsRenaming == true)
                 var textBox = panel.GetVisualDescendants().OfType<TextBox>().FirstOrDefault();
+
                 if (textBox?.DataContext is ModGroupViewModel groupVm && groupVm.IsRenaming)
+                {
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        textBox.Focus();
+                        textBox.SelectAll();
+                    });
+                    return;
+                }
+
+                if (textBox?.DataContext is CustomModList listVm && listVm.IsRenaming)
                 {
                     Dispatcher.UIThread.Post(() =>
                     {
@@ -319,19 +336,26 @@ namespace FactorioModManager.Views
         }
 
         /// <summary>
-        /// Handles focus when creating groups.
+        /// Handles focus when creating groups or editing mod list names (attached to TextBox in XAML).
         /// </summary>
-        /// <param name="sender">The source of the event, expected to be a <see cref="TextBox"/> representing the group name edit box.</param>
-        /// <param name="e">The event data containing information about the visual tree attachment.</param>
         private void GroupNameEditBox_OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
         {
             if (sender is not TextBox textBox)
                 return;
 
-            // DataContext is ModGroupViewModel
+            // DataContext may be ModGroupViewModel or CustomModList
             if (textBox.DataContext is ModGroupViewModel groupVm && groupVm.IsRenaming)
             {
-                // Defer one tick so layout is fully ready
+                Dispatcher.UIThread.Post(() =>
+                {
+                    textBox.Focus();
+                    textBox.SelectAll();
+                });
+                return;
+            }
+
+            if (textBox.DataContext is CustomModList listVm && listVm.IsRenaming)
+            {
                 Dispatcher.UIThread.Post(() =>
                 {
                     textBox.Focus();
@@ -342,37 +366,59 @@ namespace FactorioModManager.Views
 
         private void GroupNameEditBox_OnKeyDown(object? sender, KeyEventArgs e)
         {
-            if (sender is not TextBox textBox ||
-                textBox.DataContext is not ModGroupViewModel groupVm ||
-                DataContext is not MainWindowViewModel mainVm)
+            if (sender is not TextBox textBox || DataContext is not MainWindowViewModel mainVm)
                 return;
 
-            switch (e.Key)
+            // Mod group renaming
+            if (textBox.DataContext is ModGroupViewModel groupVm)
             {
-                case Key.Enter:
-                    // Call ConfirmRenameGroup via its command if you exposed one,
-                    // or directly if it's internal:
-                    mainVm.ConfirmRenameGroupCommand.Execute(groupVm).Subscribe();
-                    e.Handled = true;
-                    break;
+                switch (e.Key)
+                {
+                    case Key.Enter:
+                        mainVm.ConfirmRenameGroupCommand.Execute(groupVm).Subscribe();
+                        e.Handled = true;
+                        break;
 
-                case Key.Escape:
-                    groupVm.IsRenaming = false;
-                    groupVm.EditedName = groupVm.Name; // reset
-                    e.Handled = true;
-                    break;
+                    case Key.Escape:
+                        groupVm.IsRenaming = false;
+                        groupVm.EditedName = groupVm.Name; // reset
+                        e.Handled = true;
+                        break;
+                }
+
+                return;
+            }
+
+            // Mod list renaming
+            if (textBox.DataContext is CustomModList listVm)
+            {
+                switch (e.Key)
+                {
+                    case Key.Enter:
+                        mainVm.ConfirmRenameModListCommand.Execute(listVm).Subscribe();
+                        e.Handled = true;
+                        break;
+
+                    case Key.Escape:
+                        listVm.IsRenaming = false;
+                        listVm.EditedName = listVm.Name;
+                        e.Handled = true;
+                        break;
+                }
             }
         }
 
         private void DeleteGroup_Click(object? sender, RoutedEventArgs e)
         {
-            if (sender is not Button button ||
-                button.DataContext is not ModGroupViewModel groupVm ||
-                DataContext is not MainWindowViewModel mainVm)
+            if (sender is not Button button || DataContext is not MainWindowViewModel mainVm)
                 return;
 
-            var request = new DeleteGroupRequest(groupVm, this);
-            mainVm.DeleteGroupCommand.Execute(request).Subscribe();
+            // Support deleting groups only (mod list delete handled by command binding)
+            if (button.DataContext is ModGroupViewModel groupVm)
+            {
+                var request = new DeleteGroupRequest(groupVm, this);
+                mainVm.DeleteGroupCommand.Execute(request).Subscribe();
+            }
         }
 
         private void GridSplitter_DragDelta(object? sender, VectorEventArgs e)
@@ -412,6 +458,62 @@ namespace FactorioModManager.Views
 
             var item = lb.SelectedItem as ModGroupViewModel;
             vm.ToggleActiveFilter(item);
+        }
+
+        // ----- New: centralized rename helpers and handlers -----
+
+        private void RenameEditor_SaveClicked(object? sender, EventArgs e)
+        {
+            if (sender is RenameEditor editor)
+            {
+                SharedRenameSave(editor);
+            }
+        }
+
+        private void RenameEditor_CancelClicked(object? sender, EventArgs e)
+        {
+            if (sender is RenameEditor editor)
+            {
+                SharedRenameCancel(editor);
+            }
+        }
+
+        private void SharedRenameSave(RenameEditor editor)
+        {
+            // Find nearest DataContext (could be ModGroupViewModel or CustomModList)
+            var vm = editor.DataContext;
+            if (vm == null) return;
+
+            if (vm is ModGroupViewModel groupVm && DataContext is MainWindowViewModel mainVm)
+            {
+                mainVm.ConfirmRenameGroupCommand.Execute(groupVm).Subscribe();
+                // remove visual highlight
+                editor.SetHighlight(false);
+            }
+            else if (vm is CustomModList listVm && DataContext is MainWindowViewModel mm)
+            {
+                mm.ConfirmRenameModListCommand.Execute(listVm).Subscribe();
+                editor.SetHighlight(false);
+            }
+        }
+
+        private static void SharedRenameCancel(RenameEditor editor)
+        {
+            var vm = editor.DataContext;
+            if (vm == null) return;
+
+            if (vm is ModGroupViewModel groupVm)
+            {
+                groupVm.IsRenaming = false;
+                groupVm.EditedName = groupVm.Name;
+                editor.SetHighlight(false);
+            }
+            else if (vm is CustomModList listVm)
+            {
+                listVm.IsRenaming = false;
+                listVm.EditedName = listVm.Name;
+                editor.SetHighlight(false);
+            }
         }
     }
 }
