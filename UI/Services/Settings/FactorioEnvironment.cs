@@ -159,15 +159,11 @@ namespace FactorioModManager.Services.Settings
                         }
 
                         // Ensure the process is not left running
-                        try
+                        if (!proc.HasExited)
                         {
-                            if (!proc.HasExited)
-                            {
-                                proc.Kill(true);
-                                proc.WaitForExit(1000);
-                            }
+                            proc.Kill(true);
+                            proc.WaitForExit(1000);
                         }
-                        catch { }
                     }
                     else
                     {
@@ -193,11 +189,7 @@ namespace FactorioModManager.Services.Settings
             }
             finally
             {
-                try
-                {
-                    proc?.Dispose();
-                }
-                catch { }
+                proc?.Dispose();
             }
 
             return versionResult;

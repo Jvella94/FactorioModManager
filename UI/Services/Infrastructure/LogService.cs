@@ -90,7 +90,7 @@ namespace FactorioModManager.Services.Infrastructure
         {
             var props = properties != null
                 ? new Dictionary<string, object?>(properties)
-                : [];
+                : new Dictionary<string, object?>();
 
             props["event"] = eventName;
             LogInternal($"Event: {eventName}", level, props);
@@ -114,18 +114,14 @@ namespace FactorioModManager.Services.Infrastructure
             // If structured properties provided, include them in the Message as JSON suffix for file logs
             if (properties != null && properties.Count > 0)
             {
-                try
+                var json = System.Text.Json.JsonSerializer.Serialize(properties);
+                // Replace use of 'with' expression (LogEntry isn't a record) with creating a new LogEntry when adding JSON
+                entry = new LogEntry
                 {
-                    var json = System.Text.Json.JsonSerializer.Serialize(properties);
-                    // Replace use of 'with' expression (LogEntry isn't a record) with creating a new LogEntry when adding JSON
-                    entry = new LogEntry
-                    {
-                        Timestamp = entry.Timestamp,
-                        Level = entry.Level,
-                        Message = entry.Message + " | " + json
-                    };
-                }
-                catch { }
+                    Timestamp = entry.Timestamp,
+                    Level = entry.Level,
+                    Message = entry.Message + " | " + json
+                };
             }
 
             _logQueue.Enqueue(entry);
@@ -135,11 +131,7 @@ namespace FactorioModManager.Services.Infrastructure
             }
 
             // Notify subscribers that logs changed
-            try
-            {
-                LogsUpdated?.Invoke(this, EventArgs.Empty);
-            }
-            catch { }
+            LogsUpdated?.Invoke(this, EventArgs.Empty);
 
             try
             {
@@ -153,12 +145,8 @@ namespace FactorioModManager.Services.Infrastructure
                     // Append structured properties as JSON when present
                     if (properties != null && properties.Count > 0)
                     {
-                        try
-                        {
-                            var json = System.Text.Json.JsonSerializer.Serialize(properties);
-                            line += " | " + json;
-                        }
-                        catch { }
+                        var json = System.Text.Json.JsonSerializer.Serialize(properties);
+                        line += " | " + json;
                     }
 
                     _logWriter?.WriteLine(line);
@@ -205,7 +193,7 @@ namespace FactorioModManager.Services.Infrastructure
                 }
 
                 // notify that logs were loaded
-                try { LogsUpdated?.Invoke(this, EventArgs.Empty); } catch { }
+                LogsUpdated?.Invoke(this, EventArgs.Empty);
             }
             catch (Exception ex)
             {
@@ -293,7 +281,7 @@ namespace FactorioModManager.Services.Infrastructure
                     };
                 }
 
-                try { LogsUpdated?.Invoke(this, EventArgs.Empty); } catch { }
+                LogsUpdated?.Invoke(this, EventArgs.Empty);
             }
             catch (Exception ex)
             {
@@ -334,7 +322,7 @@ namespace FactorioModManager.Services.Infrastructure
                     };
                 }
 
-                try { LogsUpdated?.Invoke(this, EventArgs.Empty); } catch { }
+                LogsUpdated?.Invoke(this, EventArgs.Empty);
 
                 Log("Logs archived");
             }
@@ -378,7 +366,7 @@ namespace FactorioModManager.Services.Infrastructure
                     };
                 }
 
-                try { LogsUpdated?.Invoke(this, EventArgs.Empty); } catch { }
+                LogsUpdated?.Invoke(this, EventArgs.Empty);
 
                 Log($"Pruned logs older than {daysToKeep} days");
             }

@@ -122,7 +122,10 @@ namespace FactorioModManager.ViewModels.Dialogs
                 catch (Exception ex)
                 {
                     _logService.LogError($"Failed to open log file: {ex.Message}", ex);
-                    try { await _uiService.ShowMessageAsync("Error", $"Failed to open log file: {ex.Message}"); } catch { }
+                    try { await _uiService.ShowMessageAsync("Error", $"Failed to open log file: {ex.Message}"); } catch (Exception showEx)
+                    {
+                        _logService.LogWarning($"Failed to show error message: {showEx.Message}");
+                    }
                 }
             });
 
@@ -133,7 +136,10 @@ namespace FactorioModManager.ViewModels.Dialogs
                 {
                     await _uiService.SetClipboardTextAsync(text);
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    _logService.LogWarning($"Failed to copy logs to clipboard: {ex.Message}");
+                }
             });
 
             CopySelectedCommand = ReactiveCommand.CreateFromTask<string>(async selectedText =>
@@ -143,7 +149,10 @@ namespace FactorioModManager.ViewModels.Dialogs
                 {
                     await _uiService.SetClipboardTextAsync(selectedText);
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    _logService.LogWarning($"Failed to copy selected text to clipboard: {ex.Message}");
+                }
             });
 
             // Subscribe to LogService updates and debounce to avoid rapid UI refreshes

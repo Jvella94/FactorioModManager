@@ -182,86 +182,57 @@ namespace FactorioModManager.ViewModels.MainWindow
             ModManagement = new ModManagementViewModel();
 
             // Load persisted groups visibility
-            try
-            {
-                AreGroupsVisible = _settingsService.GetShowGroupsPanel();
-                // Load persisted column width
-                GroupsColumnWidth = _settingsService.GetGroupsColumnWidth();
-            }
-            catch { }
+            AreGroupsVisible = _settingsService.GetShowGroupsPanel();
+            // Load persisted column width
+            GroupsColumnWidth = _settingsService.GetGroupsColumnWidth();
 
             // Load persisted column visibility for Category and Size
-            try
-            {
-                ShowCategoryColumn = _settingsService.GetShowCategoryColumn();
-                ShowSizeColumn = _settingsService.GetShowSizeColumn();
-            }
-            catch { }
+            ShowCategoryColumn = _settingsService.GetShowCategoryColumn();
+            ShowSizeColumn = _settingsService.GetShowSizeColumn();
 
             // Watch for settings changes to update visibility
-            try
+            _settingsService.ShowGroupsPanelChanged += () =>
             {
-                _settingsService.ShowGroupsPanelChanged += () =>
-                {
-                    AreGroupsVisible = _settingsService.GetShowGroupsPanel();
-                    // also refresh stored width when settings indicate change
-                    try { GroupsColumnWidth = _settingsService.GetGroupsColumnWidth(); } catch { }
-                };
-            }
-            catch { }
+                AreGroupsVisible = _settingsService.GetShowGroupsPanel();
+                // also refresh stored width when settings indicate change
+                GroupsColumnWidth = _settingsService.GetGroupsColumnWidth();
+            };
 
             // Ensure ShowHiddenDependencies propagates to existing mod VMs
-            try
+            _settingsService.ShowHiddenDependenciesChanged += () =>
             {
-                // Initialize existing mods later when they are created via UpdateModsCache.
-                _settingsService.ShowHiddenDependenciesChanged += () =>
+                var val = _settingsService.GetShowHiddenDependencies();
+                // preserve selection name before changing lists
+                var prevName = SelectedMod?.Name;
+                foreach (var m in _allMods)
                 {
-                    try
+                    m.ShowHiddenDependencies = val;
+                }
+
+                // Reapply filter so selection is restored consistently
+                ScheduleApplyModFilter();
+
+                // If ApplyModFilter didn't restore selection, try to restore from all mods
+                if (!string.IsNullOrEmpty(prevName) && SelectedMod == null)
+                {
+                    var fallback = _allMods.FirstOrDefault(x => x.Name.Equals(prevName, StringComparison.OrdinalIgnoreCase));
+                    if (fallback != null)
                     {
-                        var val = _settingsService.GetShowHiddenDependencies();
-                        // preserve selection name before changing lists
-                        var prevName = SelectedMod?.Name;
-                        foreach (var m in _allMods)
-                        {
-                            m.ShowHiddenDependencies = val;
-                        }
-
-                        // Reapply filter so selection is restored consistently
-                        ScheduleApplyModFilter();
-
-                        // If ApplyModFilter didn't restore selection, try to restore from all mods
-                        if (!string.IsNullOrEmpty(prevName) && SelectedMod == null)
-                        {
-                            var fallback = _allMods.FirstOrDefault(x => x.Name.Equals(prevName, StringComparison.OrdinalIgnoreCase));
-                            if (fallback != null)
-                            {
-                                SelectedMod = fallback;
-                            }
-                        }
+                        SelectedMod = fallback;
                     }
-                    catch { }
-                };
-            }
-            catch { }
+                }
+            };
 
             // Watch for changes to category/size column visibility
-            try
-            {
-                _settingsService.ShowCategoryColumnChanged += () => ShowCategoryColumn = _settingsService.GetShowCategoryColumn();
-                _settingsService.ShowSizeColumnChanged += () => ShowSizeColumn = _settingsService.GetShowSizeColumn();
-            }
-            catch { }
+            _settingsService.ShowCategoryColumnChanged += () => ShowCategoryColumn = _settingsService.GetShowCategoryColumn();
+            _settingsService.ShowSizeColumnChanged += () => ShowSizeColumn = _settingsService.GetShowSizeColumn();
 
             SetupReactiveFiltering();
             InitializeCommands();
 
             // Load saved custom mod lists
-            try
-            {
-                var lists = _modListService.LoadLists();
-                foreach (var l in lists) ModLists.Add(l);
-            }
-            catch { }
+            var lists = _modListService.LoadLists();
+            foreach (var l in lists) ModLists.Add(l);
 
             _settingsService.FactorioPathChanged += () => DetectFactorioVersionAndDLC();
 
@@ -282,12 +253,8 @@ namespace FactorioModManager.ViewModels.MainWindow
         private void ScheduleApplyModFilter()
         {
             _applyFilterPending = true;
-            try
-            {
-                _applyFilterTimerHelper ??= new ProgressTimerHelper(_applyFilterDebounce, FlushApplyFilterToUi);
-                _applyFilterTimerHelper.Schedule();
-            }
-            catch { }
+            _applyFilterTimerHelper ??= new ProgressTimerHelper(_applyFilterDebounce, FlushApplyFilterToUi);
+            _applyFilterTimerHelper.Schedule();
         }
 
         private void FlushApplyFilterToUi()
@@ -296,14 +263,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                 return;
 
             _applyFilterPending = false;
-            _uiService.Post(() =>
-            {
-                try
-                {
-                    ApplyModFilter();
-                }
-                catch { }
-            });
+            _uiService.Post(() => ApplyModFilter());
         }
 
         /// <summary>
@@ -389,15 +349,11 @@ namespace FactorioModManager.ViewModels.MainWindow
                 .ObserveOn(RxApp.MainThreadScheduler)
                 .Subscribe(hasUpdates =>
                 {
-                    try
+                    if (!hasUpdates && ShowOnlyPendingUpdates)
                     {
-                        if (!hasUpdates && ShowOnlyPendingUpdates)
-                        {
-                            ShowOnlyPendingUpdates = false;
-                            SetStatus("No pending updates remain. Pending updates filter cleared.");
-                        }
+                        ShowOnlyPendingUpdates = false;
+                        SetStatus("No pending updates remain. Pending updates filter cleared.");
                     }
-                    catch { }
                 })
                 .DisposeWith(_disposables);
         }
@@ -587,20 +543,16 @@ namespace FactorioModManager.ViewModels.MainWindow
                     // Update SourceUrl using metadata service
                     value.SourceUrl = _metadataService.GetSourceUrl(value.Name);
                     // Populate InstalledDependencies as (Name, InstalledVersion) tuples
-                    try
+                    var installedDeps = new List<(string Name, string? InstalledVersion)>();
+                    foreach (var raw in value.Dependencies)
                     {
-                        var installedDeps = new List<(string Name, string? InstalledVersion)>();
-                        foreach (var raw in value.Dependencies)
-                        {
-                            var name = DependencyHelper.ExtractDependencyName(raw);
-                            if (string.IsNullOrEmpty(name)) continue;
-                            var ver = _modVersionManager?.GetInstalledVersions(name).FirstOrDefault();
-                            if (!string.IsNullOrEmpty(ver))
-                                installedDeps.Add((name, ver));
-                        }
-                        value.InstalledDependencies = installedDeps;
+                        var name = DependencyHelper.ExtractDependencyName(raw);
+                        if (string.IsNullOrEmpty(name)) continue;
+                        var ver = _modVersionManager?.GetInstalledVersions(name).FirstOrDefault();
+                        if (!string.IsNullOrEmpty(ver))
+                            installedDeps.Add((name, ver));
                     }
-                    catch { }
+                    value.InstalledDependencies = installedDeps;
                 }
             }
         }
@@ -656,13 +608,8 @@ namespace FactorioModManager.ViewModels.MainWindow
                 var old = _activeFilterGroup;
                 this.RaiseAndSetIfChanged(ref _activeFilterGroup, value);
 
-                // Update IsActiveFilter flag on groups for UI overlay
-                try
-                {
-                    old?.IsActiveFilter = false;
-                    _activeFilterGroup?.IsActiveFilter = true;
-                }
-                catch { }
+                old?.IsActiveFilter = false;
+                _activeFilterGroup?.IsActiveFilter = true;
 
                 // notify filter change
                 this.RaisePropertyChanged(nameof(ActiveFilterGroup));
@@ -768,8 +715,6 @@ namespace FactorioModManager.ViewModels.MainWindow
                 var target = entry?.Enabled ?? false;
                 var targetVersion = entry?.Version;
                 var installedVersions = new List<string>();
-                try { installedVersions = [.. _modVersionManager.GetInstalledVersions(vm.Name)]; } catch { }
-
                 previewItems.Add((vm.Name, vm.Title, vm.IsEnabled, target, vm.Version, targetVersion, installedVersions));
             }
 
@@ -784,7 +729,6 @@ namespace FactorioModManager.ViewModels.MainWindow
                 var target = entry?.Enabled ?? false;
                 var targetVersion = entry?.Version;
                 var installedVersions = new List<string>();
-                try { installedVersions = [.. _modVersionManager.GetInstalledVersions(vm.Name)]; } catch { }
 
                 previewModels.Add(new ModListPreviewItem
                 {
@@ -812,27 +756,23 @@ namespace FactorioModManager.ViewModels.MainWindow
             if (activationCandidates.Count > 0)
             {
                 // If Factorio is running, offer to apply without activations to avoid corrupting active files
-                try
+                if (_factorioLauncher != null && _factorioLauncher.IsFactorioRunning())
                 {
-                    if (_factorioLauncher != null && _factorioLauncher.IsFactorioRunning())
-                    {
-                        var proceed = await _uiService.ShowConfirmationAsync(
-                            "Factorio is running",
-                            "Factorio appears to be running. Active version changes require Factorio to be closed.\n\nChoose 'Apply without activations' to apply enabled/disabled changes only, or 'Cancel' to abort.",
-                            owner,
-                            yesButtonText: "Apply without activations",
-                            noButtonText: "Cancel",
-                            yesButtonColor: "#FFA000",
-                            noButtonColor: "#3A3A3A");
+                    var proceed = await _uiService.ShowConfirmationAsync(
+                        "Factorio is running",
+                        "Factorio appears to be running. Active version changes require Factorio to be closed.\n\nChoose 'Apply without activations' to apply enabled/disabled changes only, or 'Cancel' to abort.",
+                        owner,
+                        yesButtonText: "Apply without activations",
+                        noButtonText: "Cancel",
+                        yesButtonColor: "#FFA000",
+                        noButtonColor: "#3A3A3A");
 
-                        if (!proceed)
-                            return;
+                    if (!proceed)
+                        return;
 
-                        // User chose to proceed but without activations
-                        skipActivations = true;
-                    }
+                    // User chose to proceed but without activations
+                    skipActivations = true;
                 }
-                catch { }
 
                 // If activations are allowed and there are multiple, show detailed checkbox dialog
                 if (!skipActivations && activationCandidates.Count > 1)
@@ -891,10 +831,14 @@ namespace FactorioModManager.ViewModels.MainWindow
                             _modService.SaveModState(vm.Name, enabled: true, version: r.ApplyVersion);
 
                             // Activate the selected version (updates FilePath, Version, etc.)
-                            try { await SetActiveVersion(r.ApplyVersion); } catch { }
+                            await SetActiveVersion(r.ApplyVersion);
                         }
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        // Preserve behavior: log and continue
+                        _logService.LogError($"Failed to apply version for {vm.Name}: {ex.Message}", ex);
+                    }
                 }
                 else if (!string.IsNullOrEmpty(r.ApplyVersion) && !r.ApplyEnabled)
                 {
@@ -903,7 +847,10 @@ namespace FactorioModManager.ViewModels.MainWindow
                     {
                         _modService.SaveModState(vm.Name, enabled: false, version: r.ApplyVersion);
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        _logService.LogError($"Failed to save mod state for {vm.Name}: {ex.Message}", ex);
+                    }
                 }
             }
 
@@ -983,7 +930,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                 _allMods.Clear();
                 _filteredMods.Clear();
 
-                try { _applyFilterTimerHelper?.Dispose(); } catch { }
+                _applyFilterTimerHelper?.Dispose();
 
                 foreach (var group in Groups)
                 {

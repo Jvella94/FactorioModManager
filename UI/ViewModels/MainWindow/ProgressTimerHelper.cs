@@ -22,26 +22,26 @@ namespace FactorioModManager.ViewModels.MainWindow
             {
                 if (!_pending) return;
                 _pending = false;
-                try { _onElapsed(); } catch { }
+                _onElapsed();
             }, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
         }
 
         public void Schedule()
         {
             _pending = true;
-            try { _timer.Change(_throttle, Timeout.InfiniteTimeSpan); } catch { }
+            _timer.Change(_throttle, Timeout.InfiniteTimeSpan);
         }
 
         public void FlushIfPending()
         {
             if (!_pending) return;
             _pending = false;
-            try { _onElapsed(); } catch { }
+            _onElapsed();
         }
 
         public void Dispose()
         {
-            try { _timer.Dispose(); } catch { }
+            _timer.Dispose();
         }
     }
 }
