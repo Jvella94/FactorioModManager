@@ -1,5 +1,6 @@
 ﻿using FactorioModManager.Models;
 using FactorioModManager.Services;
+using FactorioModManager.ViewModels.MainWindow.UpdateHandlers;
 using ReactiveUI;
 using System;
 using System.Collections.Concurrent;
@@ -18,42 +19,23 @@ namespace FactorioModManager.ViewModels.MainWindow
         private bool _isUpdatingAll;
 
         private bool _isDownloadProgressVisible;
-
         private int _downloadProgressTotal;
         private int _downloadProgressCompleted;
 
         // Throttle interval for batching progress UI updates
         private static readonly TimeSpan _updateProgressUiThrottle = TimeSpan.FromMilliseconds(250);
 
-        private Timer? _updateAllProgressTimer;
-        private volatile bool _updateAllProgressPending = false;
-
         // Debounced targeted refresh state for affected mods to reduce UI churn
         private readonly Lock _refreshAffectedLock = new();
 
         private readonly HashSet<string> _refreshAffectedNames = new(StringComparer.OrdinalIgnoreCase);
 
-        // Schedule a batched UI update for Download progress
-        private void ScheduleUpdateAllProgressUiUpdate()
-        {
-            _updateAllProgressPending = true;
-            try
-            {
-                _updateAllProgressTimer?.Change(_updateProgressUiThrottle, Timeout.InfiniteTimeSpan);
-            }
-            catch (Exception ex)
-            {
-                _logService.LogDebug($"Failed to schedule progress timer: {ex.Message}");
-            }
-        }
+        // Updates host instance
+        private IUpdateHost? _updatesHost;
 
-        // Flush pending progress update to UI thread
-        private void FlushUpdateAllProgressToUi()
+        // Apply any batched progress to the UI. Intended for use by UpdatesHost when its timer fires.
+        internal void ApplyBatchedProgressToUi()
         {
-            if (!_updateAllProgressPending)
-                return;
-
-            _updateAllProgressPending = false;
             _uiService.Post(() =>
             {
                 // Set the UI-bound property once (triggers UpdateProgressText which will start animation)
@@ -117,6 +99,74 @@ namespace FactorioModManager.ViewModels.MainWindow
             try { DownloadProgress.UpdateProgressText(text); } catch (Exception ex) { _logService.LogDebug($"UpdateProgressText failed: {ex.Message}"); }
         }
 
+        // Helper to begin a single-download progress UI (used by single-mod install/update flows)
+        internal async Task BeginSingleDownloadProgressAsync()
+        {
+            try
+            {
+                await _uiService.InvokeAsync(() =>
+                {
+                    DownloadProgressTotal = 1;
+                    DownloadProgressCompleted = 0;
+                    IsDownloadProgressVisible = true;
+                });
+            }
+            catch (Exception ex)
+            {
+                _logService.LogDebug($"BeginSingleDownloadProgressAsync failed: {ex.Message}");
+            }
+        }
+
+        // Helper to end a single-download progress UI. If 'minimal' is true, perform a quick teardown used by lightweight installs.
+        internal async Task EndSingleDownloadProgressAsync(bool minimal = false)
+        {
+            try
+            {
+                // Timer and scheduling are owned by the host now; nothing to flush/dispose here.
+
+                if (!minimal)
+                {
+                    try { GetOrCreateDownloadProgressHelper().StopAndSetPercent(100.0); } catch (Exception ex) { _logService.LogDebug($"StopAndSetPercent final failed: {ex.Message}"); }
+                    try { await Task.Delay(400); } catch { }
+                    try { DownloadProgress.UpdateSpeedText(null); } catch { }
+                    try { DownloadProgress.UpdateProgressText(string.Empty); } catch { }
+                }
+
+                await _uiService.InvokeAsync(() =>
+                {
+                    if (minimal)
+                    {
+                        DownloadProgressCompleted = 1;
+                        IsDownloadProgressVisible = false;
+                        DownloadProgressTotal = 0;
+                        DownloadProgressCompleted = 0;
+                        try { DownloadProgress.UpdateSpeedText(null); } catch { }
+                        try { DownloadProgress.UpdateProgressPercent(0.0); } catch { }
+                    }
+                    else
+                    {
+                        IsDownloadProgressVisible = false;
+                        Interlocked.Exchange(ref _downloadProgressCompleted, 0);
+                        DownloadProgressCompleted = 0;
+                        DownloadProgressTotal = 0;
+                        try { DownloadProgress.UpdateProgressPercent(0.0); } catch { }
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _logService.LogDebug($"EndSingleDownloadProgressAsync failed: {ex.Message}");
+            }
+        }
+
+        // Wrapper to update a single mod using the new core flow
+        private async Task UpdateSingleAsync(ModViewModel? mod)
+        {
+            if (mod == null) return;
+            var host = EnsureUpdatesHost();
+            await host.UpdateSingleAsync(mod);
+        }
+
         /// <summary>
         /// Update all mods that currently have pending updates. Processes mods with limited concurrency
         /// and will attempt to auto-install missing dependencies if user confirms.
@@ -126,776 +176,25 @@ namespace FactorioModManager.ViewModels.MainWindow
             // Begin aggregating candidate dependency names for a single targeted recompute at the end
             StartCandidateAggregation();
 
-            var modsToUpdate = _allMods
-                .Where(m => m.HasUpdate && !string.IsNullOrEmpty(m.LatestVersion))
-                .ToList();
+            var host = EnsureUpdatesHost();
+            await host.UpdateAllAsync();
 
-            if (modsToUpdate.Count == 0)
-            {
-                await _uiService.InvokeAsync(() => SetStatus("No pending updates to apply."));
-                return;
-            }
+            // Host performs refreshes; finalize VM aggregation state
+            EndCandidateAggregationAndRecompute();
 
-            // Build a map of planned updates so dependency resolution can consider other updates as already applied
-            var plannedUpdates = modsToUpdate
-                .Where(m => !string.IsNullOrEmpty(m.LatestVersion))
-                .ToDictionary(m => m.Name, m => m.LatestVersion!, StringComparer.OrdinalIgnoreCase);
-
-            // Confirm with user
-            var confirmAll = await _uiService.ShowConfirmationAsync(
-                "Update All Mods",
-                $"This will download and install updates for {modsToUpdate.Count} mod(s). Continue?",
-                null,
-                "Yes",
-                "No");
-
-            if (!confirmAll)
-            {
-                _logService.LogDebug("UpdateAll cancelled by user");
-                await _uiService.InvokeAsync(() => SetStatus("Update cancelled."));
-                return;
-            }
-
-            // ------------------
-            // Step 1: aggregate missing dependencies across all mods
-            // ------------------
-            var aggregatedMissing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var combinedEnable = new Dictionary<string, ModViewModel>(StringComparer.OrdinalIgnoreCase);
-            var combinedDisable = new Dictionary<string, ModViewModel>(StringComparer.OrdinalIgnoreCase);
-
-            var updateResolutions = new List<(ModViewModel Target, Services.Mods.DependencyResolution Resolution)>();
-
-            // First pass: gather missing deps and enable/disable decisions (do not apply yet)
-            foreach (var mod in modsToUpdate)
-            {
-                var resolution = await _dependencyFlow.ResolveForUpdateAsync(mod.Name, mod.LatestVersion!, _allMods, plannedUpdates);
-                if (!resolution.Proceed)
-                {
-                    _logService.LogDebug($"UpdateAll cancelled by user while resolving dependencies for {mod.Name}");
-                    await _uiService.InvokeAsync(() => SetStatus("Update cancelled."));
-                    return;
-                }
-
-                updateResolutions.Add((mod, resolution));
-
-                // Only auto-enable dependencies for mods that are currently enabled. If the target mod is disabled,
-                // we should not enable its dependencies automatically — only install missing dependencies.
-                if (mod.IsEnabled)
-                {
-                    foreach (var toEnable in resolution.ModsToEnable)
-                    {
-                        if (!combinedEnable.ContainsKey(toEnable.Name))
-                            combinedEnable[toEnable.Name] = toEnable;
-                    }
-                }
-
-                foreach (var toDisable in resolution.ModsToDisable)
-                {
-                    if (!combinedDisable.ContainsKey(toDisable.Name))
-                        combinedDisable[toDisable.Name] = toDisable;
-                }
-
-                foreach (var missing in resolution.MissingDependenciesToInstall)
-                {
-                    aggregatedMissing.Add(missing);
-                }
-            }
-
-            // If there are aggregated missing dependencies, build a combined preview message using DependencyFlow
-            var depsToInstall = new List<string>();
-            if (aggregatedMissing.Count > 0)
-            {
-                var previewBuilder = new System.Text.StringBuilder();
-                // Build a preview per target mod update (version-aware) so constraints are visible
-                foreach (var (targetMod, resolution) in updateResolutions)
-                {
-                    var (updateRes, message) = await _dependencyFlow.BuildUpdatePreviewAsync(targetMod.Name, targetMod.LatestVersion!, _allMods, plannedUpdates);
-                    // BuildUpdatePreviewAsync already includes a header with current -> target versions; append its full message
-                    previewBuilder.AppendLine(message);
-                    previewBuilder.AppendLine();
-
-                    // Merge enable/disable suggestions from the per-update resolution as well
-                    // Only merge enable suggestions if the target mod is currently enabled
-                    if (targetMod.IsEnabled)
-                    {
-                        foreach (var e in updateRes.ModsToEnable)
-                            if (!combinedEnable.ContainsKey(e.Name)) combinedEnable[e.Name] = e;
-                    }
-                    foreach (var d in updateRes.ModsToDisable)
-                        if (!combinedDisable.ContainsKey(d.Name)) combinedDisable[d.Name] = d;
-
-                    // Merge missing deps discovered by the update preview
-                    foreach (var missing in updateRes.MissingDependenciesToInstall)
-                        aggregatedMissing.Add(missing);
-                }
-
-                var combinedMessage = previewBuilder.ToString();
-                var confirmDeps = await _uiService.ShowConfirmationAsync(
-                    "Install Missing Dependencies",
-                    combinedMessage,
-                    null,
-                    "Install",
-                    "Skip");
-
-                if (!confirmDeps)
-                {
-                    await _uiService.InvokeAsync(() => SetStatus("Update cancelled: missing dependencies not installed", LogLevel.Warning));
-                    return;
-                }
-
-                // Apply enable/disable decisions now
-                await _uiService.InvokeAsync(() =>
-                {
-                    foreach (var kv in combinedEnable.Values)
-                    {
-                        var vm = _allMods.FirstOrDefault(m => m.Name == kv.Name);
-                        if (vm != null && !vm.IsEnabled)
-                        {
-                            vm.IsEnabled = true;
-                            _modService.ToggleMod(vm.Name, true);
-                        }
-                    }
-
-                    foreach (var kv in combinedDisable.Values)
-                    {
-                        var vm = _allMods.FirstOrDefault(m => m.Name == kv.Name);
-                        if (vm != null && vm.IsEnabled)
-                        {
-                            vm.IsEnabled = false;
-                            _modService.ToggleMod(vm.Name, false);
-                        }
-                    }
-                });
-
-                // Determine actual dependencies that need installing (not already installed)
-                depsToInstall = [.. aggregatedMissing.Where(d => FindModByName(d) == null).Distinct(StringComparer.OrdinalIgnoreCase)];
-
-                // Include dependency installs in the overall progress total on UI thread
-                try { await _uiService.InvokeAsync(() => DownloadProgressTotal = modsToUpdate.Count + depsToInstall.Count); } catch (Exception ex) { _logService.LogDebug($"Setting DownloadProgressTotal failed: {ex.Message}"); }
-
-                // Install aggregated dependencies sequentially
-                foreach (var depName in depsToInstall)
-                {
-                    var installResult = await InstallMod(depName);
-                    if (!installResult.Success)
-                    {
-                        _logService.LogWarning($"Failed to install aggregated dependency {depName}: {installResult.Error}");
-                        await _uiService.InvokeAsync(() => SetStatus($"Failed to install dependency {depName}: {installResult.Error}", LogLevel.Warning));
-                        return; // Abort the whole Update All
-                    }
-
-                    // Reflect dependency completion in the aggregated progress
-                    Interlocked.Increment(ref _downloadProgressCompleted);
-                    ScheduleUpdateAllProgressUiUpdate();
-
-                    await Task.Delay(200);
-                }
-
-                // Refresh mods so parallel updates see the new installs (force immediate refresh)
-                try { await ForceRefreshAffectedModsAsync(depsToInstall); } catch (Exception ex) { _logService.LogDebug($"ForceRefreshAffectedModsAsync failed: {ex.Message}"); }
-            }
-
-            // ------------------
-            // Step 2: run parallel updates with concurrency control
-            // ------------------
-            // Initialize progress
-            // Dispose and reset any previous timers/state to avoid stale values from prior runs
-            try { _updateAllProgressTimer?.Dispose(); } catch (Exception ex) { _logService.LogDebug($"Disposing progress timer failed: {ex.Message}"); }
-            _updateAllProgressTimer = null;
-            _updateAllProgressPending = false;
-            try { DownloadProgress.UpdateSpeedText(null); } catch (Exception ex) { _logService.LogDebug($"UpdateSpeedText failed: {ex.Message}"); }
-            try { GetOrCreateDownloadProgressHelper().StopAndSetPercent(DownloadProgress.ProgressPercent); } catch (Exception ex) { _logService.LogDebug($"StopAndSetPercent failed: {ex.Message}"); }
-
-            // Reset counters (use Interlocked to reset backing field used by concurrent increments)
-            Interlocked.Exchange(ref _downloadProgressCompleted, 0);
-            if (DownloadProgressTotal <= 0)
-            {
-                // If no dependencies were included earlier, default the total to the number of mods to update
-                try { await _uiService.InvokeAsync(() => DownloadProgressTotal = modsToUpdate.Count); } catch (Exception ex) { _logService.LogDebug($"Setting DownloadProgressTotal failed: {ex.Message}"); }
-            }
-            try { await _uiService.InvokeAsync(() => DownloadProgressCompleted = 0); } catch (Exception ex) { _logService.LogDebug($"Setting DownloadProgressCompleted failed: {ex.Message}"); }
-            // Ensure UI-visible flag is set on UI thread
-            await _uiService.InvokeAsync(() => IsDownloadProgressVisible = true);
-
-            // Create a single-shot timer used to batch progress UI updates. Timer callback will flush to UI.
-            _updateAllProgressTimer = new Timer(_ => FlushUpdateAllProgressToUi(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
-
-            await _uiService.InvokeAsync(() => SetStatus($"Starting update of {modsToUpdate.Count} mod(s)..."));
-
-            var concurrency = _settingsService.GetUpdateConcurrency();
-            if (concurrency <= 0) concurrency = 3;
-            var semaphore = new SemaphoreSlim(concurrency);
-            var tasks = new List<Task>();
-            var results = new ConcurrentBag<(string Mod, bool Success, string Message)>();
-
-            Exception? _updateAllException = null;
+            // If there are no updates remaining, clear the Pending Updates filter so the list doesn't remain empty
             try
             {
-                foreach (var mod in modsToUpdate)
-                {
-                    var localMod = mod;
-                    tasks.Add(Task.Run(async () =>
-                    {
-                        await semaphore.WaitAsync();
-                        try
-                        {
-                            await _uiService.InvokeAsync(() => SetStatus($"Updating {localMod.Title}..."));
-
-                            // Ensure dependencies still satisfied (version-aware) before updating
-                            var resolutionNow = await _dependencyFlow.ResolveForUpdateAsync(localMod.Name, localMod.LatestVersion ?? string.Empty, _allMods, plannedUpdates);
-                            if (!resolutionNow.Proceed)
-                            {
-                                results.Add((localMod.Title, false, "Skipped - user declined dependency changes"));
-                                await _uiService.InvokeAsync(() => SetStatus($"Skipping {localMod.Title}: dependency resolution declined", LogLevel.Warning));
-                                return;
-                            }
-
-                            // If resolver still reports missing dependencies, skip
-                            if (resolutionNow.MissingDependenciesToInstall.Count > 0)
-                            {
-                                results.Add((localMod.Title, false, "Skipped - missing/unsatisfied dependencies after install stage"));
-                                await _uiService.InvokeAsync(() => SetStatus($"Skipping {localMod.Title}: missing/unsatisfied dependencies", LogLevel.Warning));
-                                return;
-                            }
-
-                            try
-                            {
-                                await DownloadUpdateAsync(localMod);
-                                results.Add((localMod.Title, true, "Updated"));
-                            }
-                            catch (Exception ex)
-                            {
-                                _logService.LogError($"Error updating {localMod.Name} in UpdateAll parallel task: {ex.Message}", ex);
-                                await _uiService.InvokeAsync(() => SetStatus($"Error updating {localMod.Title}: {ex.Message}", LogLevel.Error));
-                                results.Add((localMod.Title, false, $"Error: {ex.Message}"));
-                            }
-                        }
-                        finally
-                        {
-                            Interlocked.Increment(ref _downloadProgressCompleted);
-                            // Schedule a batched UI update instead of updating per-increment to reduce UI churn
-                            ScheduleUpdateAllProgressUiUpdate();
-                            semaphore.Release();
-                        }
-                    }));
-                }
-
-                await Task.WhenAll(tasks);
-
-                // Ensure any pending progress update is flushed to UI before finishing
-                FlushUpdateAllProgressToUi();
-                try { _updateAllProgressTimer?.Dispose(); } catch (Exception ex) { _logService.LogDebug($"Disposing progress timer failed: {ex.Message}"); }
-                _updateAllProgressTimer = null;
-
                 await _uiService.InvokeAsync(() =>
                 {
-                    SetStatus("Update all complete. Preparing summary...");
-                    this.RaisePropertyChanged(nameof(EnabledCountText));
-                });
-
-                // Build summary message
-                var resultList = results.ToList();
-                var successCount = resultList.Count(r => r.Success);
-                var failedCount = resultList.Count - successCount;
-
-                var summary = $"Update All finished. {successCount} succeeded, {failedCount} failed or skipped." + Environment.NewLine + Environment.NewLine;
-                foreach (var (Mod, Success, Message) in resultList.OrderByDescending(r => r.Success))
-                {
-                    summary += $"- {Mod}: {(Success ? "Success" : Message)}" + Environment.NewLine;
-                }
-
-                // Show summary dialog
-                await _uiService.ShowMessageAsync("Update All Summary", summary);
-
-                // Refresh mods once more
-                // Refresh only affected mods (updated targets, enabled/disabled suggestions, and installed deps)
-                var affected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                foreach (var m in modsToUpdate) affected.Add(m.Name);
-                foreach (var kv in combinedEnable.Keys) affected.Add(kv);
-                foreach (var kv in combinedDisable.Keys) affected.Add(kv);
-                foreach (var d in depsToInstall) affected.Add(d);
-
-                try { await ForceRefreshAffectedModsAsync(affected); } catch (Exception ex) { _logService.LogDebug($"ForceRefreshAffectedModsAsync failed: {ex.Message}"); }
-
-                // End batch aggregation and recompute unused-internal flags for collected candidates
-                EndCandidateAggregationAndRecompute();
-
-                // If there are no updates remaining, clear the Pending Updates filter so the list doesn't remain empty
-                try
-                {
-                    await _uiService.InvokeAsync(() =>
+                    if (!HasUpdates && ShowOnlyPendingUpdates)
                     {
-                        if (!HasUpdates && ShowOnlyPendingUpdates)
-                        {
-                            ShowOnlyPendingUpdates = false;
-                            SetStatus("All updates applied. Pending updates filter cleared.");
-                        }
-                    });
-                }
-                catch (Exception ex) { _logService.LogDebug($"Clearing pending updates filter failed: {ex.Message}"); }
-            }
-            catch (Exception _ex)
-            {
-                // Capture for logging in finally and rethrow so caller still sees the error
-                _updateAllException = _ex;
-                throw;
-            }
-            finally
-            {
-                // If we captured an exception, log it with context and prepare an error summary for the user.
-                if (_updateAllException != null)
-                {
-                    try
-                    {
-                        var targetNames = plannedUpdates.Keys.Take(20).ToList();
-                        var targetList = string.Join(", ", targetNames);
-                        if (plannedUpdates.Count > 20) targetList += ", ...";
-
-                        var contextInfo = $"ModsToUpdateCount={modsToUpdate.Count}; Targets=[{targetList}]";
-                        _logService.LogError($"UpdateAll failed. {contextInfo}", _updateAllException);
-
-                        // Show a concise error to the user containing exception message and some context
-                        var userMessage = "Update All failed while applying updates.\n\n" +
-                                          "Context:\n" + contextInfo + "\n\n" +
-                                          "Error:\n" + _updateAllException.ToString() + "\n\n" +
-                                          "See logs for full details.";
-
-                        try
-                        {
-                            await _uiService.ShowMessageAsync("Update All Error", userMessage);
-                        }
-                        catch { /* swallow UI errors */ }
-                    }
-                    catch { /* swallow logging errors to ensure cleanup continues */ }
-                }
-
-                // Ensure UI animation/timers are cleaned up and progress UI is hidden even on error
-                try { FlushUpdateAllProgressToUi(); } catch (Exception ex) { _logService.LogDebug($"FlushUpdateAllProgressToUi failed: {ex.Message}"); }
-                try { _updateAllProgressTimer?.Dispose(); } catch (Exception ex) { _logService.LogDebug($"Disposing progress timer in finally failed: {ex.Message}"); }
-                _updateAllProgressTimer = null;
-
-                // Stop/flush the progress animation and set to final value (100%)
-                try { GetOrCreateDownloadProgressHelper().StopAndSetPercent(100.0); } catch (Exception ex) { _logService.LogDebug($"StopAndSetPercent final failed: {ex.Message}"); }
-
-                // Briefly show 100% to indicate completion, then hide after a short delay
-                try { await Task.Delay(400); } catch (Exception ex) { _logService.LogDebug($"Final delay failed: {ex.Message}"); }
-
-                // Clear speed and text to hide UI quickly
-                try { DownloadProgress.UpdateSpeedText(null); } catch (Exception ex) { _logService.LogDebug($"UpdateSpeedText clear failed: {ex.Message}"); }
-                try { DownloadProgress.UpdateProgressText(string.Empty); } catch (Exception ex) { _logService.LogDebug($"UpdateProgressText clear failed: {ex.Message}"); }
-
-                // Hide the progress UI and reset counters
-                try
-                {
-                    await _uiService.InvokeAsync(() =>
-                    {
-                        IsDownloadProgressVisible = false;
-                        Interlocked.Exchange(ref _downloadProgressCompleted, 0);
-                        DownloadProgressCompleted = 0;
-                        DownloadProgressTotal = 0;
-                        DownloadProgress.UpdateProgressPercent(0.0);
-                    });
-                }
-                catch (Exception ex) { _logService.LogDebug($"Hiding progress UI failed: {ex.Message}"); }
-            }
-        }
-
-        /// <summary>
-        /// Checks if mods marked as having updates already have the latest version downloaded
-        /// </summary>
-        internal async Task CheckForAlreadyDownloadedUpdatesAsync()
-        {
-            await Task.Run(() =>
-            {
-                try
-                {
-                    _logService.Log("Checking for already-downloaded updates...");
-                    var modsDirectory = FolderPathHelper.GetModsDirectory();
-
-                    var modsWithUpdates = _allMods
-                        .Where(m => m.HasUpdate && !string.IsNullOrEmpty(m.LatestVersion))
-                        .ToList();
-
-                    if (modsWithUpdates.Count == 0)
-                        return;
-
-                    var clearedCount = 0;
-                    foreach (var mod in modsWithUpdates)
-                    {
-                        var latestVersionFileName = $"{mod.Name}_{mod.LatestVersion}.zip";
-                        var latestVersionPath = Path.Combine(modsDirectory, latestVersionFileName);
-
-                        if (File.Exists(latestVersionPath))
-                        {
-                            _logService.Log($"Found already-downloaded update for {mod.Title}: {mod.LatestVersion}");
-                            _metadataService.ClearModUpdateInfo(mod.Name);
-                            _uiService.Post(() =>
-                            {
-                                mod.HasUpdate = false;
-                                mod.LatestVersion = null;
-                            });
-                            clearedCount++;
-                        }
-                    }
-
-                    if (clearedCount > 0)
-                    {
-                        _logService.Log($"Cleared update flags for {clearedCount} already-downloaded mod(s)");
-                        _uiService.Post(() =>
-                        {
-                            this.RaisePropertyChanged(nameof(EnabledCountText));
-                            SetStatus($"Found {clearedCount} already-downloaded update(s)");
-                        });
-                    }
-                }
-                catch (Exception ex)
-                {
-                    HandleError(ex, $"Error checking for already-downloaded updates: {ex.Message}");
-                }
-            });
-        }
-
-        /// <summary>
-        /// Downloads an update for a mod
-        /// </summary>
-        private async Task DownloadUpdateAsync(ModViewModel? mod)
-        {
-            if (mod == null || !mod.HasUpdate || string.IsNullOrEmpty(mod.LatestVersion))
-                return;
-
-            bool singleProgress = false;
-            if (!IsDownloadProgressVisible)
-            {
-                singleProgress = true;
-                await _uiService.InvokeAsync(() =>
-                {
-                    DownloadProgressTotal = 1;
-                    DownloadProgressCompleted = 0;
-                    IsDownloadProgressVisible = true;
-                });
-            }
-
-            // Use DependencyFlow to resolve update-time dependencies and prompt the user if needed
-            // Track dependencies and toggled mods in outer scope so final refresh can reference them
-            var installedDepsDuringUpdate = new List<string>();
-            var toggledModsDuringUpdate = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var refreshedNamesDuringResolution = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            try
-            {
-                // Treat this single update as a planned update so version checks consider the target version
-                var planned = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-                {
-                    { mod.Name, mod.LatestVersion! }
-                };
-
-                var updateResolution = await _dependencyFlow.ResolveForUpdateAsync(mod.Name, mod.LatestVersion!, _allMods, planned);
-                if (!updateResolution.Proceed)
-                {
-                    _logService.LogDebug($"Update cancelled by user during dependency resolution for {mod.Name}");
-                    await _uiService.InvokeAsync(() => SetStatus("Update cancelled."));
-                    return;
-                }
-
-                // Apply enable/disable decisions returned by resolver before installing deps
-                // Only auto-enable dependencies if the target mod itself is enabled. If the user has the mod disabled,
-                // do not enable its dependencies automatically — still allow disabling incompatible mods.
-                await _uiService.InvokeAsync(() =>
-                {
-                    if (mod.IsEnabled)
-                    {
-                        foreach (var toEnable in updateResolution.ModsToEnable)
-                        {
-                            var vm = _allMods.FirstOrDefault(m => m.Name == toEnable.Name);
-                            if (vm != null && !vm.IsEnabled)
-                            {
-                                vm.IsEnabled = true;
-                                _modService.ToggleMod(vm.Name, true);
-                                toggledModsDuringUpdate.Add(vm.Name);
-                            }
-                        }
-                    }
-
-                    // Always apply disable suggestions to avoid incompatible enabled mods
-                    foreach (var toDisable in updateResolution.ModsToDisable)
-                    {
-                        var vm = _allMods.FirstOrDefault(m => m.Name == toDisable.Name);
-                        if (vm != null && vm.IsEnabled)
-                        {
-                            vm.IsEnabled = false;
-                            _modService.ToggleMod(vm.Name, false);
-                            toggledModsDuringUpdate.Add(vm.Name);
-                        }
-                    }
-                });
-
-                // If there are missing dependencies, build a version-aware preview for the update (single dialog)
-                if (updateResolution.MissingDependenciesToInstall.Count > 0)
-                {
-                    var (previewResolution, previewMessage) = await _dependencyFlow.BuildUpdatePreviewAsync(mod.Name, mod.LatestVersion!, _allMods, planned);
-
-                    var confirmDeps = await _uiService.ShowConfirmationAsync(
-                        "Install Missing Dependencies",
-                        previewMessage,
-                        null,
-                        "Install",
-                        "Skip");
-
-                    if (!confirmDeps)
-                    {
-                        _logService.LogDebug($"User declined to install missing dependencies for update of {mod.Name}");
-                        await _uiService.InvokeAsync(() => SetStatus("Update cancelled: missing dependencies not installed", LogLevel.Warning));
-                        return;
-                    }
-
-                    // Apply enable/disable decisions from the preview resolution
-                    await _uiService.InvokeAsync(() =>
-                    {
-                        foreach (var toEnable in previewResolution.ModsToEnable)
-                        {
-                            var vm = _allMods.FirstOrDefault(m => m.Name == toEnable.Name);
-                            if (vm != null && !vm.IsEnabled)
-                            {
-                                vm.IsEnabled = true;
-                                _modService.ToggleMod(vm.Name, true);
-                                toggledModsDuringUpdate.Add(vm.Name);
-                            }
-                        }
-
-                        foreach (var toDisable in previewResolution.ModsToDisable)
-                        {
-                            var vm = _allMods.FirstOrDefault(m => m.Name == toDisable.Name);
-                            if (vm != null && vm.IsEnabled)
-                            {
-                                vm.IsEnabled = false;
-                                _modService.ToggleMod(vm.Name, false);
-                                toggledModsDuringUpdate.Add(vm.Name);
-                            }
-                        }
-                    });
-
-                    // If singleProgress mode, expand total to include dependency downloads
-                    if (singleProgress && previewResolution.MissingDependenciesToInstall.Count > 0)
-                    {
-                        try { await _uiService.InvokeAsync(() => DownloadProgressTotal += previewResolution.MissingDependenciesToInstall.Distinct(StringComparer.OrdinalIgnoreCase).Count()); } catch (Exception ex) { _logService.LogDebug($"Setting DownloadProgressTotal failed: {ex.Message}"); }
-                    }
-
-                    // Install aggregated dependencies sequentially
-                    foreach (var depName in previewResolution.MissingDependenciesToInstall.Distinct(StringComparer.OrdinalIgnoreCase))
-                    {
-                        if (FindModByName(depName) != null)
-                            continue;
-
-                        var installResult = await InstallMod(depName);
-                        if (!installResult.Success)
-                        {
-                            _logService.LogWarning($"Failed to install dependency {depName}: {installResult.Error}");
-                            await _uiService.InvokeAsync(() => SetStatus($"Failed to install dependency {depName}: {installResult.Error}", LogLevel.Warning));
-                            return;
-                        }
-
-                        // record for later targeted refresh
-                        installedDepsDuringUpdate.Add(depName);
-
-                        // If running as part of UpdateAll (not singleProgress), these were already counted earlier; reflect completion
-                        if (!singleProgress)
-                        {
-                            Interlocked.Increment(ref _downloadProgressCompleted);
-                            ScheduleUpdateAllProgressUiUpdate();
-                        }
-
-                        await Task.Delay(200);
-                    }
-
-                    await Task.Delay(500);
-
-                    // Refresh only affected VMs (installed deps + mods toggled by preview).
-                    // Track which names were refreshed during the resolution step to avoid duplicating
-                    // the same targeted refresh after the final install.
-                    var affectedDeps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                    foreach (var d in installedDepsDuringUpdate) affectedDeps.Add(d);
-                    foreach (var e in previewResolution.ModsToEnable) affectedDeps.Add(e.Name);
-                    foreach (var d in previewResolution.ModsToDisable) affectedDeps.Add(d.Name);
-                    // include target mod so version lists are accurate
-                    affectedDeps.Add(mod.Name);
-
-                    try
-                    {
-                        if (!singleProgress)
-                        {
-                            await ForceRefreshAffectedModsAsync(affectedDeps);
-                            // remember these names were refreshed already
-                            foreach (var n in affectedDeps) refreshedNamesDuringResolution.Add(n);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logService.LogDebug($"Ignored error refreshing affected mods during resolution: {ex.Message}");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logService.LogError($"Error resolving dependencies for update of {mod.Name}: {ex.Message}", ex);
-                await _uiService.InvokeAsync(() => SetStatus($"Error resolving dependencies: {ex.Message}", LogLevel.Error));
-                return;
-            }
-            var modName = mod.Name;
-            try
-            {
-                _logService.Log($"Starting update for {mod.Title} from {mod.Version} to {mod.LatestVersion}");
-
-                await _uiService.InvokeAsync(() =>
-                {
-                    mod.IsDownloading = true;
-                    mod.HasDownloadProgress = false;
-                    mod.DownloadStatusText = $"Preparing download for {mod.Title}...";
-                    SetStatus($"Downloading update for {mod.Title}...");
-                });
-
-                var modDetails = await _apiService.GetModDetailsAsync(mod.Name);
-                if (modDetails?.Releases == null)
-                {
-                    _logService.Log($"Failed to fetch release details for {mod.Name}", LogLevel.Error);
-                    _uiService.Post(() =>
-                    {
-                        mod.IsDownloading = false;
-                        SetStatus($"Failed to fetch update details for {mod.Title}", LogLevel.Error);
-                    });
-                    return;
-                }
-
-                var latestRelease = modDetails.Releases
-                    .OrderByDescending(r => r.ReleasedAt)
-                    .FirstOrDefault();
-
-                if (latestRelease == null || string.IsNullOrEmpty(latestRelease.DownloadUrl))
-                {
-                    _logService.Log($"No download URL found for {mod.Name}", LogLevel.Error);
-                    _uiService.Post(() =>
-                    {
-                        mod.IsDownloading = false;
-                        SetStatus($"No download URL available for {mod.Title}", LogLevel.Error);
-                    });
-                    return;
-                }
-
-                var result = await DownloadModFromPortalAsync(
-                    mod.Name,
-                    mod.Title,
-                    latestRelease.Version,
-                    latestRelease.DownloadUrl,
-                    mod
-                );
-
-                if (!result.Success || !result.Value)
-                {
-                    return;
-                }
-
-                var modsDirectory = FolderPathHelper.GetModsDirectory();
-                var newFilePath = Path.Combine(modsDirectory, $"{mod.Name}_{latestRelease.Version}.zip");
-                _downloadService.DeleteOldVersions(mod.Name, newFilePath);
-
-                _logService.Log($"Successfully updated {mod.Title} to version {latestRelease.Version}");
-                _metadataService.UpdateLatestVersion(mod.Name, latestRelease.Version, hasUpdate: false);
-
-                _uiService.Post(() =>
-                {
-                    mod.IsDownloading = false;
-                    mod.DownloadStatusText = "Update complete!";
-                    SetStatus($"Update complete for {mod.Title}. Refreshing...");
-                });
-
-                await Task.Delay(500);
-                // Refresh only affected mods (target mod, any installed dependencies, and any mods toggled during resolution).
-                try
-                {
-                    var affected = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { mod.Name };
-                    foreach (var d in installedDepsDuringUpdate) affected.Add(d);
-                    foreach (var t in toggledModsDuringUpdate) affected.Add(t);
-
-                    // Remove any names already refreshed during the resolution step to avoid duplicate work
-                    affected.ExceptWith(refreshedNamesDuringResolution);
-
-                    if (affected.Count > 0)
-                    {
-                        try
-                        {
-                            await ForceRefreshAffectedModsAsync(affected);
-                        }
-                        catch (Exception ex)
-                        {
-                            _logService.LogDebug($"Ignored error refreshing affected mods after install: {ex.Message}");
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logService.LogDebug($"Error preparing targeted refresh set: {ex.Message}");
-                }
-
-                await _uiService.InvokeAsync(() =>
-                {
-                    var updatedMod = _allMods.FirstOrDefault(m => m.Name == modName);
-                    if (updatedMod != null)
-                    {
-                        updatedMod.SelectedVersion = updatedMod.Version;
-                        SelectedMod = updatedMod;
-                        SetStatus($"Successfully updated {updatedMod.Title} to {updatedMod.Version}");
-                        _logService.Log($"Reselected updated mod: {updatedMod.Title}");
-                    }
-                    else
-                    {
-                        SetStatus($"Update complete but could not find mod {modName}", LogLevel.Warning);
-                        _logService.Log($"Warning: Could not find mod {modName} after refresh", LogLevel.Warning);
+                        ShowOnlyPendingUpdates = false;
+                        SetStatus("All updates applied. Pending updates filter cleared.");
                     }
                 });
             }
-            catch (Exception ex)
-            {
-                _logService.LogError($"Update error details: {ex.Message}", ex);
-                _uiService.Post(() =>
-                {
-                    if (mod != null)
-                    {
-                        mod.IsDownloading = false;
-                        mod.DownloadStatusText = $"Error: {ex.Message}";
-                    }
-                    SetStatus($"Error updating {mod?.Title}: {ex.Message}", LogLevel.Error);
-                });
-            }
-            finally
-            {
-                if (singleProgress)
-                {
-                    // Ensure any pending batched UI updates are applied
-                    try { FlushUpdateAllProgressToUi(); } catch (Exception ex) { _logService.LogDebug($"FlushUpdateAllProgressToUi failed: {ex.Message}"); }
-                    try { _updateAllProgressTimer?.Dispose(); } catch (Exception ex) { _logService.LogDebug($"Disposing progress timer failed: {ex.Message}"); }
-                    _updateAllProgressTimer = null;
-
-                    // Show 100% and then hide the UI similar to UpdateAll flow
-                    try { GetOrCreateDownloadProgressHelper().StopAndSetPercent(100.0); } catch (Exception ex) { _logService.LogDebug($"StopAndSetPercent final failed: {ex.Message}"); }
-                    try { await Task.Delay(400); } catch (Exception ex) { _logService.LogDebug($"Final delay failed: {ex.Message}"); }
-
-                    // Clear speed and text to hide UI quickly
-                    try { DownloadProgress.UpdateSpeedText(null); } catch (Exception ex) { _logService.LogDebug($"UpdateSpeedText clear failed: {ex.Message}"); }
-                    try { DownloadProgress.UpdateProgressText(string.Empty); } catch (Exception ex) { _logService.LogDebug($"UpdateProgressText clear failed: {ex.Message}"); }
-
-                    // Reset counters and hide UI on UI thread
-                    try
-                    {
-                        await _uiService.InvokeAsync(() =>
-                        {
-                            IsDownloadProgressVisible = false;
-                            Interlocked.Exchange(ref _downloadProgressCompleted, 0);
-                            DownloadProgressCompleted = 0;
-                            DownloadProgressTotal = 0;
-                            DownloadProgress.UpdateProgressPercent(0.0);
-                        });
-                    }
-                    catch (Exception ex) { _logService.LogDebug($"Hiding progress UI failed: {ex.Message}"); }
-                }
-            }
+            catch (Exception ex) { _logService.LogDebug($"Clearing pending updates filter failed: {ex.Message}"); }
         }
 
         /// <summary>
@@ -1147,6 +446,109 @@ namespace FactorioModManager.ViewModels.MainWindow
                 if (ShowOnlyPendingUpdates)
                     ApplyModFilter();
             });
+        }
+
+        private Task<bool> ConfirmDependencyInstallAsync(
+            bool suppress,
+            string title,
+            string message,
+            string confirmText,
+            string cancelText)
+        {
+            if (suppress)
+                return Task.FromResult(true);
+
+            return _uiService.ShowConfirmationAsync(title, message, null, confirmText, cancelText);
+        }
+
+        /// <summary>
+        /// Checks if mods marked as having updates already have the latest version downloaded
+        /// </summary>
+        internal async Task CheckForAlreadyDownloadedUpdatesAsync()
+        {
+            await Task.Run(() =>
+            {
+                try
+                {
+                    _logService.Log("Checking for already-downloaded updates...");
+                    var modsDirectory = FolderPathHelper.GetModsDirectory();
+
+                    var modsWithUpdates = _allMods
+                        .Where(m => m.HasUpdate && !string.IsNullOrEmpty(m.LatestVersion))
+                        .ToList();
+
+                    if (modsWithUpdates.Count == 0)
+                        return;
+
+                    var clearedCount = 0;
+                    foreach (var mod in modsWithUpdates)
+                    {
+                        // Use LatestVersion when building expected filename for the update zip
+                        var latestVersionFileName = $"{mod.Name}_{mod.LatestVersion}.zip";
+                        var latestVersionPath = Path.Combine(modsDirectory, latestVersionFileName);
+
+                        if (File.Exists(latestVersionPath))
+                        {
+                            _logService.Log($"Found already-downloaded update for {mod.Title}: {mod.LatestVersion}");
+                            _metadataService.ClearModUpdateInfo(mod.Name);
+                            _uiService.Post(() =>
+                            {
+                                mod.HasUpdate = false;
+                                mod.LatestVersion = null;
+                            });
+                            clearedCount++;
+                        }
+                    }
+
+                    if (clearedCount > 0)
+                    {
+                        _logService.Log($"Cleared update flags for {clearedCount} already-downloaded mod(s)");
+                        _uiService.Post(() =>
+                        {
+                            this.RaisePropertyChanged(nameof(EnabledCountText));
+                            SetStatus($"Found {clearedCount} already-downloaded update(s)");
+                        });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    HandleError(ex, $"Error checking for already-downloaded updates: {ex.Message}");
+                }
+            });
+        }
+
+        // Ensure a single UpdatesHost is created with injected services and delegates
+        private IUpdateHost EnsureUpdatesHost()
+        {
+            if (_updatesHost != null) return _updatesHost;
+
+            _updatesHost = new UpdatesHost(
+                allMods: _allMods,
+                dependencyFlow: _dependencyFlow,
+                modService: _modService,
+                logService: _logService,
+                uiService: _uiService,
+                downloadService: _downloadService,
+                apiService: _apiService,
+                settingsService: _settingsService,
+                metadataService: _metadataService,
+                forceRefreshAffectedModsAsync: ForceRefreshAffectedModsAsync,
+                beginSingleDownloadProgressAsync: BeginSingleDownloadProgressAsync,
+                endSingleDownloadProgressAsync: EndSingleDownloadProgressAsync,
+                incrementBatchCompleted: () => Interlocked.Increment(ref _downloadProgressCompleted),
+                setStatusAsync: (msg, lvl) => _uiService.InvokeAsync(() => SetStatus(msg, lvl)),
+                confirmDependencyInstallAsync: ConfirmDependencyInstallAsync,
+                // new progress delegates
+                setDownloadProgressTotal: total => _uiService.Post(() => { DownloadProgressTotal = total; }),
+                setDownloadProgressCompleted: completed => _uiService.Post(() => { Interlocked.Exchange(ref _downloadProgressCompleted, completed); DownloadProgressCompleted = completed; }),
+                // increment delegate should ONLY increment; host will schedule UI update
+                incrementDownloadProgressCompleted: () => Interlocked.Increment(ref _downloadProgressCompleted),
+                setDownloadProgressVisible: visible => _uiService.Post(() => IsDownloadProgressVisible = visible),
+                // pass VM flush delegate for host timer to call
+                onApplyBatchedProgress: ApplyBatchedProgressToUi
+             );
+
+            return _updatesHost!;
         }
     }
 }

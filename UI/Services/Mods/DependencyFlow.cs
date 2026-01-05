@@ -20,6 +20,13 @@ namespace FactorioModManager.Services.Mods
         public List<string> MissingDependenciesToInstall { get; } = [];
     }
 
+    public sealed record CombinedDependencyResolution(
+        HashSet<string> MissingDependencies,
+        Dictionary<string, ModViewModel> ModsToEnable,
+        Dictionary<string, ModViewModel> ModsToDisable,
+        List<HashSet<string>> StronglyConnectedComponents
+    );
+
     public interface IDependencyFlow
     {
         Task<DependencyResolution> ResolveForInstallAsync(string modName, IEnumerable<ModViewModel> installedMods);
@@ -40,6 +47,9 @@ namespace FactorioModManager.Services.Mods
         Task<(DependencyResolution Resolution, string Message)> BuildInstallPreviewAsync(string modName, IEnumerable<ModViewModel> installedMods);
 
         Task<(DependencyResolution Resolution, string Message)> BuildUpdatePreviewAsync(string modName, string version, IEnumerable<ModViewModel> installedMods, IDictionary<string, string>? plannedUpdates = null);
+
+        // New: combined preview that collapses cycles (SCCs) and returns a combined resolution and message
+        Task<(CombinedDependencyResolution Combined, string Message)> BuildCombinedUpdatePreviewAsync(IEnumerable<(string Name, string? TargetVersion, bool WillBeEnabled)> plannedTargets, IEnumerable<ModViewModel> installedMods);
     }
 
     // Centralized dependency resolution and helper service
@@ -581,6 +591,163 @@ namespace FactorioModManager.Services.Mods
             {
                 _logService.LogError($"DependencyFlow: error resolving dependencies for {modName}: {ex.Message}", ex);
                 result.Proceed = false;
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Build a combined preview for multiple planned targets. Detects strongly-connected components
+        /// (cycles) and returns a combined resolution and human-readable message. Uses per-target
+        /// BuildUpdatePreviewAsync internally and collapses results into SCCs.
+        /// </summary>
+        public async Task<(CombinedDependencyResolution Combined, string Message)> BuildCombinedUpdatePreviewAsync(IEnumerable<(string Name, string? TargetVersion, bool WillBeEnabled)> plannedTargets, IEnumerable<ModViewModel> installedMods)
+        {
+            // Normalize input
+            var plannedList = plannedTargets?.ToList() ?? new List<(string, string?, bool)>();
+            var installedList = installedMods.ToList();
+
+            // Collect per-target previews
+            var perTargetMessages = new List<string>();
+            var combinedMissing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var combinedEnable = new Dictionary<string, ModViewModel>(StringComparer.OrdinalIgnoreCase);
+            var combinedDisable = new Dictionary<string, ModViewModel>(StringComparer.OrdinalIgnoreCase);
+
+            // Build a directed graph among discovered nodes (edges: X -> Y when X requires Y)
+            var graph = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var (Name, TargetVersion, WillBeEnabled) in plannedList)
+            {
+                // Use existing single-target preview to gather detailed info
+                var (res, msg) = await BuildUpdatePreviewAsync(Name, TargetVersion ?? string.Empty, installedList, plannedUpdates: plannedList.ToDictionary(p => p.Name, p => p.TargetVersion ?? string.Empty, StringComparer.OrdinalIgnoreCase));
+                perTargetMessages.Add(msg);
+
+                // Merge missing deps
+                foreach (var m in res.MissingDependenciesToInstall)
+                {
+                    combinedMissing.Add(m);
+                    // add edge Name -> m
+                    if (!graph.TryGetValue(Name, out var edges))
+                    {
+                        edges = [];
+                        graph[Name] = edges;
+                    }
+                    if (!edges.Contains(m, StringComparer.OrdinalIgnoreCase))
+                        edges.Add(m);
+                }
+
+                // Merge enable suggestions only when the planned target intends to be enabled
+                if (WillBeEnabled)
+                {
+                    foreach (var e in res.ModsToEnable)
+                    {
+                        if (!combinedEnable.ContainsKey(e.Name))
+                            combinedEnable[e.Name] = e;
+                    }
+                }
+
+                // Always merge disable suggestions (caller/UI will confirm)
+                foreach (var d in res.ModsToDisable)
+                {
+                    if (!combinedDisable.ContainsKey(d.Name))
+                        combinedDisable[d.Name] = d;
+                }
+
+                // Ensure nodes exist for planned targets
+                if (!graph.ContainsKey(Name))
+                    graph[Name] = [];
+
+                // Ensure nodes exist for each discovered missing dep so Tarjan can include them
+                foreach (var m in res.MissingDependenciesToInstall)
+                {
+                    if (!graph.ContainsKey(m))
+                        graph[m] = [];
+                }
+            }
+
+            // Run SCC detection
+            var sccs = TarjanSCC(graph);
+
+            // Build a combined human-readable message: include per-target messages and then SCC summary if cycles found
+            var sb = new StringBuilder();
+            sb.AppendLine("Combined Preview for planned updates:");
+            sb.AppendLine();
+            foreach (var m in perTargetMessages)
+            {
+                sb.AppendLine(m);
+                sb.AppendLine();
+            }
+
+            // If cycles detected (SCCs with >1 node), append explanation
+            var cycles = sccs.Where(s => s.Count > 1 || (s.Count == 1 && graph[s.First()].Contains(s.First()))).ToList();
+            if (cycles.Count > 0)
+            {
+                sb.AppendLine("Detected mutually-dependent groups (will be installed/updated together):");
+                foreach (var group in cycles)
+                {
+                    sb.AppendLine("- " + string.Join(", ", group));
+                }
+                sb.AppendLine();
+            }
+
+            var combined = new CombinedDependencyResolution(combinedMissing, combinedEnable, combinedDisable, sccs);
+            return (combined, sb.ToString());
+        }
+
+        // Tarjan's algorithm for strongly connected components
+        private static List<HashSet<string>> TarjanSCC(Dictionary<string, List<string>> graph)
+        {
+            var index = 0;
+            var indices = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            var lowlink = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            var onStack = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var stack = new Stack<string>();
+            var result = new List<HashSet<string>>();
+
+            void StrongConnect(string v)
+            {
+                indices[v] = index;
+                lowlink[v] = index;
+                index++;
+                stack.Push(v);
+                onStack.Add(v);
+
+                if (graph.TryGetValue(v, out var edges))
+                {
+                    foreach (var w in edges)
+                    {
+                        if (!indices.TryGetValue(w, out int value))
+                        {
+                            StrongConnect(w);
+                            lowlink[v] = Math.Min(lowlink[v], lowlink[w]);
+                        }
+                        else if (onStack.Contains(w))
+                        {
+                            lowlink[v] = Math.Min(lowlink[v], value);
+                        }
+                    }
+                }
+
+                if (lowlink[v] == indices[v])
+                {
+                    var component = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    string w;
+                    do
+                    {
+                        w = stack.Pop();
+                        onStack.Remove(w);
+                        component.Add(w);
+                    } while (!string.Equals(w, v, StringComparison.OrdinalIgnoreCase));
+
+                    result.Add(component);
+                }
+            }
+
+            // Ensure all nodes are present in indices before traversal
+            foreach (var node in graph.Keys)
+            {
+                if (!indices.ContainsKey(node))
+                    StrongConnect(node);
             }
 
             return result;

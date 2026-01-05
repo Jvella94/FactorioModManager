@@ -51,7 +51,7 @@ namespace FactorioModManager.ViewModels.MainWindow
         // Debounce for ApplyModFilter to avoid frequent re-filtering under heavy updates
         private static readonly TimeSpan _applyFilterDebounce = TimeSpan.FromMilliseconds(150);
 
-        private Timer? _applyFilterTimer;
+        private ProgressTimerHelper? _applyFilterTimerHelper;
         private volatile bool _applyFilterPending = false;
 
         public bool ShowCategoryColumn
@@ -265,8 +265,8 @@ namespace FactorioModManager.ViewModels.MainWindow
             _applyFilterPending = true;
             try
             {
-                _applyFilterTimer ??= new Timer(_ => FlushApplyFilterToUi(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
-                _applyFilterTimer.Change(_applyFilterDebounce, Timeout.InfiniteTimeSpan);
+                _applyFilterTimerHelper ??= new ProgressTimerHelper(_applyFilterDebounce, FlushApplyFilterToUi);
+                _applyFilterTimerHelper.Schedule();
             }
             catch { }
         }
@@ -467,12 +467,6 @@ namespace FactorioModManager.ViewModels.MainWindow
             {
                 _filteredAuthors.Add(author);
             }
-        }
-
-        private static string ExtractAuthorName(string authorFilter)
-        {
-            var parenIndex = authorFilter.IndexOf('(');
-            return parenIndex > 0 ? authorFilter[..parenIndex].Trim() : authorFilter.Trim();
         }
 
         public async void InitializeStartupTasks()
@@ -751,7 +745,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                 _allMods.Clear();
                 _filteredMods.Clear();
 
-                try { _applyFilterTimer?.Dispose(); } catch { }
+                try { _applyFilterTimerHelper?.Dispose(); } catch { }
 
                 foreach (var group in Groups)
                 {

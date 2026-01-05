@@ -2,7 +2,7 @@ using FactorioModManager.Services.API;
 using FactorioModManager.Services.Infrastructure;
 using Moq;
 
-namespace Tests.ServicesTests
+namespace FMM.Tests.ServicesTests
 {
     public class FactorioApiServiceTests
     {

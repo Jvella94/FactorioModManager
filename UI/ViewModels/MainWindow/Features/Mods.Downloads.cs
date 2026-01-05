@@ -1,7 +1,5 @@
-﻿using FactorioModManager.Models;
-using FactorioModManager.Services;
+﻿using FactorioModManager.Services;
 using System;
-using System.Threading.Tasks;
 
 namespace FactorioModManager.ViewModels.MainWindow
 {
@@ -29,102 +27,6 @@ namespace FactorioModManager.ViewModels.MainWindow
 
             _downloadProgressHelper = singleton;
             return _downloadProgressHelper;
-        }
-
-        /// <summary>
-        /// Downloads a mod from the portal with progress reporting
-        /// </summary>
-        private async Task<Result<bool>> DownloadModFromPortalAsync(
-            string modName,
-            string modTitle,
-            string version,
-            string downloadUrl,
-            ModViewModel? modForProgress = null)
-        {
-            try
-            {
-                // Setup progress reporting using shared helper
-                var helper = GetOrCreateDownloadProgressHelper();
-                IProgress<(long bytesDownloaded, long? totalBytes)>? progress = null;
-
-                if (modForProgress != null)
-                {
-                    // Per-mod progress: update mod UI and forward to a single global reporter for this download
-                    var globalReporter = helper.CreateGlobalDownloadProgressReporter();
-                    progress = new Progress<(long bytesDownloaded, long? totalBytes)>(p =>
-                    {
-                        _uiService.Post(() =>
-                        {
-                            modForProgress.HasDownloadProgress = p.totalBytes.HasValue && p.totalBytes.Value > 0;
-                            if (p.totalBytes.HasValue && p.totalBytes.Value > 0)
-                            {
-                                var progressPercent = (double)p.bytesDownloaded / p.totalBytes.Value * 100;
-                                modForProgress.DownloadProgress = progressPercent;
-                                // show simple per-mod status; global helper shows speed/aggregate
-                                if (p.totalBytes.HasValue && p.totalBytes.Value > 0)
-                                    modForProgress.DownloadStatusText = $"Downloading... {progressPercent:F0}%";
-                            }
-                            else
-                            {
-                                var mbDownloaded = p.bytesDownloaded / 1024.0 / 1024.0;
-                                modForProgress.DownloadStatusText = $"Downloading... {mbDownloaded:F2} MB";
-                            }
-                        });
-
-                        // Report to the single global reporter for this download (prevents spurious spikes)
-                        try { globalReporter.Report(p); } catch { }
-                    });
-                }
-                else
-                {
-                    // No per-mod UI; use global helper directly
-                    progress = helper.CreateGlobalDownloadProgressReporter();
-                }
-
-                // Download using service
-                var result = await _downloadService.DownloadModAsync(
-                    modName,
-                    modTitle,
-                    version,
-                    downloadUrl,
-                    progress);
-
-                // Handle result
-                if (!result.Success)
-                {
-                    await _uiService.InvokeAsync(() =>
-                    {
-                        SetStatus($"Download failed for {modTitle}: {result.Error}", LogLevel.Error);
-
-                        modForProgress?.DownloadStatusText = $"Failed: {result.Error}";
-                    });
-                }
-                else
-                {
-                    // If running batch progress, increment completed count when this download finishes
-                    if (IsDownloadProgressVisible)
-                    {
-                        var newVal = System.Threading.Interlocked.Increment(ref _downloadProgressCompleted);
-                        // Schedule a batched UI update instead of immediate per-increment updates
-                        ScheduleUpdateAllProgressUiUpdate();
-                    }
-                }
-
-                return result;
-            }
-            catch (Exception ex)
-            {
-                HandleError(ex, $"Error downloading {modTitle}: {ex.Message}");
-
-                await _uiService.InvokeAsync(() =>
-                {
-                    SetStatus($"Error downloading {modTitle}: {ex.Message}", LogLevel.Error);
-
-                    modForProgress?.DownloadStatusText = $"Error: {ex.Message}";
-                });
-
-                return Result<bool>.Fail(ex.Message, ErrorCode.DownloadFailed);
-            }
         }
 
         /// <summary>

@@ -350,7 +350,7 @@
                                   Width="110"
                                   Tag="SizeColumn" />
 
-              <DataGridTemplateColumn Header="Last Updated" Width="120" Tag="LastUpdatedColumn">
+              <DataGridTemplateColumn Header="Last Updated" Width="120" Tag="LastUpdatedColumn" SortMemberPath="LastUpdated">
                 <DataGridTemplateColumn.CellTemplate>
                   <DataTemplate>
                     <TextBlock Text="{Binding LastUpdatedText}" VerticalAlignment="Center" Margin="8,0,8,0" />

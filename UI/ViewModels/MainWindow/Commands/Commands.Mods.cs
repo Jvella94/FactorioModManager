@@ -4,7 +4,6 @@ using ReactiveUI;
 using System;
 using System.Linq;
 using System.Reactive;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace FactorioModManager.ViewModels.MainWindow
@@ -48,7 +47,7 @@ namespace FactorioModManager.ViewModels.MainWindow
             OpenChangelogCommand = ReactiveCommand.CreateFromTask(OpenChangelogAsync);
             OpenVersionHistoryCommand = ReactiveCommand.CreateFromTask(OpenVersionHistoryAsync);
             CheckUpdatesCustomCommand = ReactiveCommand.CreateFromTask(CheckUpdatesCustomAsync);
-            DownloadUpdateCommand = ReactiveCommand.CreateFromTask<ModViewModel>(DownloadUpdateAsync);
+            DownloadUpdateCommand = ReactiveCommand.CreateFromTask<ModViewModel>(mod => UpdateSingleAsync(mod));
 
             // Changed: accept version string (CommandParameter="{Binding SelectedVersion}")
             DeleteOldVersionCommand = ReactiveCommand.Create<string>(DeleteOldVersion);
@@ -60,7 +59,7 @@ namespace FactorioModManager.ViewModels.MainWindow
             RefreshSelectedModCommand = ReactiveCommand.CreateFromTask(RefreshSelectedModAsync);
             ViewDependentsCommand = ReactiveCommand.CreateFromTask<ModViewModel>(ViewDependentsAsync);
             LaunchFactorioCommand = ReactiveCommand.Create(LaunchFactorio);
-            CheckForAppUpdatesCommand = ReactiveCommand.CreateFromTask(CheckForAppUpdatesCustomAsync);
+            CheckForAppUpdatesCommand = ReactiveCommand.CreateFromTask(CheckForAppUpdatesAsync);
 
             // Initialize new UpdateAllCommand
             UpdateAllCommand = ReactiveCommand.CreateFromTask(UpdateAllAsync);
@@ -170,9 +169,58 @@ namespace FactorioModManager.ViewModels.MainWindow
         /// <summary>
         /// Installs a mod from a local file
         /// </summary>
-        private async Task<Models.Result<bool>> InstallModFromFileAsync(string filePath)
+        private async Task<Result<bool>> InstallModFromFileAsync(string filePath)
         {
-            return await _downloadService.InstallFromLocalFileAsync(filePath);
+            try
+            {
+                var modInfo = _modService.ReadModInfo(filePath);
+                if (modInfo == null || string.IsNullOrEmpty(modInfo.Name))
+                {
+                    await _uiService.InvokeAsync(() => SetStatus("Failed to read mod info from file", LogLevel.Error));
+                    return Result<bool>.Fail("Invalid mod file: missing info.json", ErrorCode.InvalidModFormat);
+                }
+
+                var modName = modInfo.Name;
+                var host = EnsureUpdatesHost();
+                await host.SetStatusAsync($"Preparing to install {modName} from file...");
+
+                // Ensure we have a host to orchestrate dependency resolution and installs
+                // Delegate that performs the actual local-file installation and maps Result<bool> -> Result
+                async Task<Result> InstallMainAsync()
+                {
+                    var installResult = await _downloadService.InstallFromLocalFileAsync(filePath);
+                    if (installResult.Success)
+                        return Result.Ok();
+                    return Result.Fail(installResult.Error ?? "Install failed", installResult.Code);
+                }
+
+                var hostResult = await host.RunInstallWithDependenciesAsync(modName, InstallMainAsync);
+
+                if (!hostResult.Success)
+                {
+                    // Host already sets informative status; mirror error in VM UI if needed
+                    await host.SetStatusAsync(hostResult.Error ?? "Installation failed", LogLevel.Error);
+                    return Result<bool>.Fail(hostResult.Error ?? "Installation failed", hostResult.Code);
+                }
+
+                // Refresh mods and select installed mod if present (host refreshed affected mods but do full refresh for VM state)
+                await RefreshModsAsync();
+                var installedMain = _allMods.FirstOrDefault(m => m.Name == modName);
+                await _uiService.InvokeAsync(() =>
+                {
+                    if (installedMain != null)
+                    {
+                        SelectedMod = installedMain;
+                    }
+                });
+
+                return Result<bool>.Ok(true);
+            }
+            catch (Exception ex)
+            {
+                await _uiService.InvokeAsync(() => HandleError(ex, $"Error installing mod from file {filePath}"));
+                return Result<bool>.Fail(ex.Message, ErrorCode.UnexpectedError);
+            }
         }
 
         /// <summary>
@@ -223,133 +271,28 @@ namespace FactorioModManager.ViewModels.MainWindow
                     return Result.Fail("Invalid URL format", ErrorCode.InvalidInput);
                 }
 
+                var host = EnsureUpdatesHost();
+                await host.SetStatusAsync($"Fetching {modName} from mod portal...");
+
+                // Main install delegate uses existing InstallMod which downloads the latest release
+                Task<Result> MainInstall() => InstallMod(modName);
+
+                var hostResult = await host.RunInstallWithDependenciesAsync(modName, MainInstall);
+
+                if (!hostResult.Success)
+                {
+                    await host.SetStatusAsync(hostResult.Error ?? "Installation failed", LogLevel.Error);
+                    return hostResult;
+                }
+
+                // After host completed, refresh and select installed mod
+                await RefreshModsAsync();
+                var installedMain = _allMods.FirstOrDefault(m => m.Name == modName);
                 await _uiService.InvokeAsync(() =>
                 {
-                    SetStatus($"Fetching {modName} from mod portal...");
+                    if (installedMain != null)
+                        SelectedMod = installedMain;
                 });
-
-                var resolution = await _dependencyFlow.ResolveForInstallAsync(modName, _allMods);
-                if (!resolution.Proceed)
-                    return Result.Fail("Installation cancelled by user due to dependencies.", ErrorCode.OperationCancelled);
-
-                // If there are missing dependencies to install, include them in the overall progress
-                var startedBatch = false;
-                if (!IsDownloadProgressVisible)
-                {
-                    startedBatch = true;
-                    var totalToInstall = resolution.MissingDependenciesToInstall.Count + 1; // deps + main
-                    await _uiService.InvokeAsync(() =>
-                    {
-                        // reset internal counters and show UI
-                        Interlocked.Exchange(ref _downloadProgressCompleted, 0);
-                        DownloadProgressTotal = totalToInstall;
-                        DownloadProgressCompleted = 0;
-                        IsDownloadProgressVisible = true;
-                    });
-                }
-
-                await _uiService.InvokeAsync(() =>
-                {
-                    // apply enable/disable decisions
-                    foreach (var toEnable in resolution.ModsToEnable)
-                    {
-                        var vm = _allMods.FirstOrDefault(m => m.Name == toEnable.Name);
-                        if (vm != null && !vm.IsEnabled)
-                        {
-                            vm.IsEnabled = true;
-                            _modService.ToggleMod(vm.Name, true);
-                        }
-                    }
-
-                    foreach (var toDisable in resolution.ModsToDisable)
-                    {
-                        var vm = _allMods.FirstOrDefault(m => m.Name == toDisable.Name);
-                        if (vm != null && vm.IsEnabled)
-                        {
-                            vm.IsEnabled = false;
-                            _modService.ToggleMod(vm.Name, false);
-                        }
-                    }
-                });
-
-                try
-                {
-                    foreach (var mod in resolution.MissingDependenciesToInstall)
-                    {
-                        var result = await InstallMod(mod);
-                        if (!result.Success)
-                        {
-                            await _uiService.InvokeAsync(() =>
-                            {
-                                SetStatus($"Failed to install dependency {modName}: {result.Error}", LogLevel.Warning);
-                            });
-                            return result;
-                        }
-                        // Increment batch progress for each dependency installed
-                        if (IsDownloadProgressVisible)
-                        {
-                            var newVal = System.Threading.Interlocked.Increment(ref _downloadProgressCompleted);
-                            await _uiService.InvokeAsync(() => DownloadProgressCompleted = newVal);
-                        }
-                    }
-
-                    await InstallMod(modName);
-                    if (IsDownloadProgressVisible)
-                    {
-                        var newVal = System.Threading.Interlocked.Increment(ref _downloadProgressCompleted);
-                        await _uiService.InvokeAsync(() => DownloadProgressCompleted = newVal);
-                    }
-                    await RefreshModsAsync();
-                    var installedMain = _allMods.FirstOrDefault(m => m.Name == modName);
-                    await _uiService.InvokeAsync(() =>
-                    {
-                        if (installedMain != null)
-                        {
-                            installedMain.IsEnabled = resolution.InstallEnabled;
-
-                            _modService.ToggleMod(installedMain.Name, resolution.InstallEnabled);
-
-                            SelectedMod = installedMain;
-                            SetStatus(
-                                resolution.InstallEnabled
-                                    ? $"Successfully installed and enabled {installedMain.Title}."
-                                    : $"Successfully installed {installedMain.Title} (disabled).");
-                        }
-                        else
-                        {
-                            SetStatus($"Successfully downloaded {modName}, but it was not found after refresh.", LogLevel.Warning);
-                        }
-                    });
-                }
-                finally
-                {
-                    if (startedBatch)
-                    {
-                        try
-                        {
-                            // ensure counters cleared and UI hidden
-                            Interlocked.Exchange(ref _downloadProgressCompleted, 0);
-                            await _uiService.InvokeAsync(() =>
-                            {
-                                DownloadProgressCompleted = 0;
-                                DownloadProgressTotal = 0;
-                                try { DownloadProgress.UpdateSpeedText(null); } catch { }
-                                try { DownloadProgress.UpdateProgressPercent(0.0); } catch { }
-                                IsDownloadProgressVisible = false;
-                            });
-                        }
-                        catch
-                        {
-                            // best-effort
-                            Interlocked.Exchange(ref _downloadProgressCompleted, 0);
-                            DownloadProgressCompleted = 0;
-                            DownloadProgressTotal = 0;
-                            try { DownloadProgress.UpdateSpeedText(null); } catch { }
-                            try { DownloadProgress.UpdateProgressPercent(0.0); } catch { }
-                            IsDownloadProgressVisible = false;
-                        }
-                    }
-                }
 
                 return Result.Ok();
             }
@@ -365,94 +308,15 @@ namespace FactorioModManager.ViewModels.MainWindow
 
         private async Task<Result> InstallMod(string modName)
         {
-            // If not already running batch update UI, use the global Download progress UI for single installs
-            var singleProgress = false;
-            if (!IsDownloadProgressVisible)
-            {
-                singleProgress = true;
-                await _uiService.InvokeAsync(() =>
-                {
-                    DownloadProgressTotal = 1;
-                    DownloadProgressCompleted = 0;
-                    IsDownloadProgressVisible = true;
-                });
-            }
-
             try
             {
-                var modDetails = await _apiService.GetModDetailsAsync(modName);
-                if (modDetails?.Releases == null || modDetails.Releases.Count == 0)
-                {
-                    _logService.LogWarning($"Failed to fetch release details for {modName}");
-                    await _uiService.InvokeAsync(() =>
-                    {
-                        SetStatus($"Failed to fetch mod details for {modName}", LogLevel.Error);
-                    });
-                    return Result.Fail("No release information found", ErrorCode.ApiRequestFailed);
-                }
-
-                var latestRelease = modDetails.Releases
-                    .OrderByDescending(r => r.ReleasedAt)
-                    .FirstOrDefault();
-
-                if (latestRelease == null || string.IsNullOrEmpty(latestRelease.DownloadUrl))
-                {
-                    _logService.LogWarning($"No download URL found for {modName}");
-                    await _uiService.InvokeAsync(() =>
-                    {
-                        SetStatus($"No download URL available for {modName}", LogLevel.Error);
-                    });
-                    return Result.Fail("No download URL", ErrorCode.ApiRequestFailed);
-                }
-
-                var modTitle = modDetails.Title ?? modName;
-                await _uiService.InvokeAsync(() =>
-                {
-                    SetStatus($"Downloading {modTitle}...");
-                });
-
-                var downloadResult = await _downloadService.DownloadModAsync(
-                    modName,
-                    modTitle,
-                    latestRelease.Version,
-                    latestRelease.DownloadUrl);
-
-                if (!downloadResult.Success)
-                    return downloadResult;
-
-                // At this point the mod zip exists locally; get its ModInfo
-                var modsDirectory = FolderPathHelper.GetModsDirectory();
-                var downloadedPath = System.IO.Path.Combine(
-                    modsDirectory,
-                    $"{modName}_{latestRelease.Version}.zip");
-
-                var modInfo = _modService.ReadModInfo(downloadedPath);
-                if (modInfo == null)
-                {
-                    await _uiService.InvokeAsync(() =>
-                    {
-                        SetStatus($"Installed {modTitle}, but could not read info.json for dependency checks.", LogLevel.Warning);
-                    });
-                    return downloadResult;
-                }
-
-                return Result.Ok();
+                var host = EnsureUpdatesHost();
+                return await host.InstallModAsync(modName);
             }
-            finally
+            catch (Exception ex)
             {
-                if (singleProgress)
-                {
-                    // mark complete and clear UI
-                    await _uiService.InvokeAsync(() =>
-                    {
-                        DownloadProgressCompleted = 1;
-                        IsDownloadProgressVisible = false;
-                        DownloadProgressTotal = 0;
-                        DownloadProgressCompleted = 0;
-                        try { DownloadProgress.UpdateSpeedText(null); } catch { }
-                        try { DownloadProgress.UpdateProgressPercent(0.0); } catch { }
-                    });
-                }
+                HandleError(ex, $"Error installing mod {modName}");
+                return Result.Fail(ex.Message, ErrorCode.UnexpectedError);
             }
         }
 
@@ -659,11 +523,6 @@ namespace FactorioModManager.ViewModels.MainWindow
             {
                 HandleError(ex, "Failed to launch Factorio");
             }
-        }
-
-        private async Task CheckForAppUpdatesCustomAsync()
-        {
-            await CheckForAppUpdatesAsync();
         }
     }
 }

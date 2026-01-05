@@ -1,6 +1,6 @@
 using FactorioModManager;
 
-namespace Tests.ServicesTests
+namespace FMM.Tests.ServicesTests
 {
     public class ServiceContainerTests
     {

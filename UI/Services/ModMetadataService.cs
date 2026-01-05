@@ -274,6 +274,7 @@ namespace FactorioModManager.Services
                 };
                 var json = JsonSerializer.Serialize(collection, Constants.JsonOptions.ModMetaData);
                 File.WriteAllText(_metadataPath, json);
+                _logService.LogDebug("Mod metadata saved.");
             }
             catch (Exception ex)
             {
