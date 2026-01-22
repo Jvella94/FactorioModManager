@@ -93,10 +93,40 @@ namespace FactorioModManager.Views
                         // Subscribe to changes for live updates
                         _settingsService.ShowCategoryColumnChanged += () => ApplyColumnVisibility(modGrid, _settingsService.GetShowCategoryColumn(), _settingsService.GetShowSizeColumn());
                         _settingsService.ShowSizeColumnChanged += () => ApplyColumnVisibility(modGrid, _settingsService.GetShowCategoryColumn(), _settingsService.GetShowSizeColumn());
+
+                        // Attach keydown handler to support toggling selected mods with Space
+                        modGrid.KeyDown += ModGrid_OnKeyDown;
                     }
                 }
                 catch { }
             }
+        }
+
+        private void ModGrid_OnKeyDown(object? sender, KeyEventArgs e)
+        {
+            if (e.Key != Key.Space) return;
+
+            if (DataContext is not MainWindowViewModel vm) return;
+            if (sender is not DataGrid grid) return;
+
+            // Toggle enabled state for all selected mods
+            var selected = grid.SelectedItems?.OfType<ModViewModel>().ToList();
+            if (selected == null || selected.Count == 0) return;
+
+            foreach (var mod in selected)
+            {
+                try
+                {
+                    // Toggle the UI-bound property first so ToggleMod sees the new target state
+                    mod.IsEnabled = !mod.IsEnabled;
+
+                    // Use the VM command to ensure proper checks and UI flow
+                    vm.ToggleModCommand.Execute(mod).Subscribe();
+                }
+                catch { }
+            }
+
+            e.Handled = true;
         }
 
         private void ApplyColumnVisibility(DataGrid modGrid, bool showCategory, bool showSize)

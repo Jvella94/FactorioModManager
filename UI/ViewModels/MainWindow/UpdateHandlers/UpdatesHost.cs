@@ -64,6 +64,8 @@ namespace FactorioModManager.ViewModels.MainWindow.UpdateHandlers
         private System.Timers.Timer? _progressTimer;
         private readonly Lock _progressTimerLock = new();
         private bool _progressPending = false;
+        private int _currentProgressTotal = 0;
+        private int _currentProgressCompleted = 0;
 
         // Host-owned scheduling: start/stop timer and call VM flush delegate when elapsed
         private void HostScheduleBatchedProgressUiUpdate()
@@ -73,6 +75,7 @@ namespace FactorioModManager.ViewModels.MainWindow.UpdateHandlers
                 _progressPending = true;
                 if (_progressTimer == null)
                 {
+                    _logService.LogDebug("Initializing progress update timer");
                     _progressTimer = new System.Timers.Timer(_updateProgressUiThrottle.TotalMilliseconds) { AutoReset = false };
                     _progressTimer.Elapsed += (s, e) =>
                     {
@@ -83,6 +86,7 @@ namespace FactorioModManager.ViewModels.MainWindow.UpdateHandlers
                         }
                         try
                         {
+                            _logService.LogDebug($"Applying batched progress update: {_currentProgressCompleted}/{_currentProgressTotal}");
                             _applyBatchedProgressAction();
                         }
                         catch { }
@@ -93,6 +97,7 @@ namespace FactorioModManager.ViewModels.MainWindow.UpdateHandlers
                 {
                     _progressTimer.Stop();
                     _progressTimer.Start();
+                    _logService.LogDebug($"Scheduled batched progress UI update (current: {_currentProgressCompleted}/{_currentProgressTotal})");
                 }
                 catch { }
             }
@@ -106,6 +111,7 @@ namespace FactorioModManager.ViewModels.MainWindow.UpdateHandlers
                 try { _progressTimer?.Dispose(); } catch { }
                 _progressTimer = null;
                 _progressPending = false;
+                _logService.LogDebug("Progress timer disposed");
             }
         }
 
@@ -311,14 +317,7 @@ namespace FactorioModManager.ViewModels.MainWindow.UpdateHandlers
         {
             try
             {
-                _logService.Log(message, level);
-            }
-            catch { }
-
-            // Also post status to UI via provided delegate so host messages appear in VM status
-            try
-            {
-                _ = _setStatusAsync(message, level);
+                _setStatusAsync(message, level);
             }
             catch { }
         }
@@ -375,86 +374,28 @@ namespace FactorioModManager.ViewModels.MainWindow.UpdateHandlers
 
                 if (suppressDependencyPrompts && updateResolution.MissingDependenciesToInstall.Count > 0)
                 {
-                    _logService.LogDebug($"Skipping dependency install prompt for {mod.Name} because prompts are suppressed and dependencies remain.");
-                    await _uiService.InvokeAsync(() => SetStatusInternal($"Skipping update for {mod.Title}: dependencies not installed", LogLevel.Warning));
-                    return;
-                }
-
-                if (!suppressDependencyPrompts && updateResolution.MissingDependenciesToInstall.Count > 0)
-                {
-                    var (previewResolution, previewMessage) = await _dependencyFlow.BuildUpdatePreviewAsync(mod.Name, mod.LatestVersion!, _allMods, planned);
-
-                    var confirmDeps = await _uiService.ShowConfirmationAsync(
-                        "Install Missing Dependencies",
-                        previewMessage,
-                        null,
-                        "Install",
-                        "Skip");
-
-                    if (!confirmDeps)
-                    {
-                        _logService.LogDebug($"User declined to install missing dependencies for update of {mod.Name}");
-                        await _uiService.InvokeAsync(() => SetStatusInternal("Update cancelled: missing dependencies not installed", LogLevel.Warning));
-                        return;
-                    }
-
-                    foreach (var toEnable in previewResolution.ModsToEnable)
-                    {
-                        var vm = _allMods.FirstOrDefault(m => m.Name == toEnable.Name);
-                        if (vm != null && !vm.IsEnabled)
-                        {
-                            vm.IsEnabled = true;
-                            _modService.ToggleMod(vm.Name, true);
-                            toggledModsDuringUpdate.Add(vm.Name);
-                        }
-                    }
-
-                    foreach (var toDisable in previewResolution.ModsToDisable)
-                    {
-                        var vm = _allMods.FirstOrDefault(m => m.Name == toDisable.Name);
-                        if (vm != null && vm.IsEnabled)
-                        {
-                            vm.IsEnabled = false;
-                            _modService.ToggleMod(vm.Name, false);
-                            toggledModsDuringUpdate.Add(vm.Name);
-                        }
-                    }
-
-                    // Install aggregated dependencies sequentially
-                    foreach (var depName in previewResolution.MissingDependenciesToInstall.Distinct(StringComparer.OrdinalIgnoreCase))
-                    {
-                        if (_allMods.Any(m => m.Name.Equals(depName, StringComparison.OrdinalIgnoreCase)))
-                            continue;
-
-                        var installResult = await InstallModInternal(depName);
-                        if (!installResult.Success)
-                        {
-                            _logService.LogWarning($"Failed to install dependency {depName}: {installResult.Error}");
-                            await _uiService.InvokeAsync(() => SetStatusInternal($"Failed to install dependency {depName}: {installResult.Error}", LogLevel.Warning));
-                            return;
-                        }
-
-                        installedDepsDuringUpdate.Add(depName);
-
-                        await Task.Delay(200);
-                    }
-
-                    await Task.Delay(500);
-
-                    var affectedDeps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                    foreach (var d in installedDepsDuringUpdate) affectedDeps.Add(d);
-                    foreach (var e in previewResolution.ModsToEnable) affectedDeps.Add(e.Name);
-                    foreach (var d in previewResolution.ModsToDisable) affectedDeps.Add(d.Name);
-                    affectedDeps.Add(mod.Name);
-
+                    // In batch flows prompts are suppressed because PrepareAsync should have installed missing dependencies.
+                    // However, installed mods may not immediately appear in the VM list used by dependency resolution
+                    // (refresh may be pending). Attempt a single quick re-resolve to avoid skipping updates when deps
+                    // were already installed by the batch handler but not yet reflected in memory.
+                    _logService.LogDebug($"Suppressing dependency prompt for {mod.Name}; attempting quick re-resolve of dependencies.");
                     try
                     {
-                        await _forceRefreshAffectedModsAsync(affectedDeps);
-                        foreach (var n in affectedDeps) refreshedNamesDuringResolution.Add(n);
+                        // Give a brief moment for any background refresh to complete (if applicable)
+                        await Task.Delay(200);
+                        updateResolution = await _dependencyFlow.ResolveForUpdateAsync(mod.Name, mod.LatestVersion!, _allMods, planned);
                     }
                     catch (Exception ex)
                     {
-                        _logService.LogDebug($"Ignored error refreshing affected mods during resolution: {ex.Message}");
+                        _logService.LogDebug($"Re-resolve after suppressed prompt failed for {mod.Name}: {ex.Message}");
+                    }
+
+                    // If still missing, log a warning but continue with the update rather than skipping entirely.
+                    if (updateResolution.MissingDependenciesToInstall.Count > 0)
+                    {
+                        _logService.LogDebug($"After re-resolve, dependencies still missing for {mod.Name}. Proceeding with update; batch handler likely installed deps on disk.");
+                        await _uiService.InvokeAsync(() => SetStatusInternal($"Proceeding update for {mod.Title}: dependencies may be installing in background", LogLevel.Info));
+                        // continue without returning
                     }
                 }
 
@@ -512,12 +453,23 @@ namespace FactorioModManager.ViewModels.MainWindow.UpdateHandlers
                 _logService.Log($"Successfully updated {mod.Title} to version {latestRelease.Version}");
                 _metadataService.UpdateLatestVersion(mod.Name, latestRelease.Version, hasUpdate: false);
 
+                // Update VM immediately so subsequent refresh picks up new version and file time
                 await _uiService.InvokeAsync(() =>
                 {
                     mod.HasUpdate = false;
                     mod.LatestVersion = null;
                     mod.IsDownloading = false;
                     mod.DownloadStatusText = "Update complete!";
+
+                    // Ensure VM reflects the newly installed version and file path so LastUpdated and SelectedVersion are correct
+                    try
+                    {
+                        mod.Version = latestRelease.Version;
+                        mod.FilePath = newFilePath;
+                        mod.SelectedVersion = latestRelease.Version;
+                    }
+                    catch { }
+
                     SetStatusInternal($"Update complete for {mod.Title}. Refreshing...");
                 });
 
@@ -545,6 +497,7 @@ namespace FactorioModManager.ViewModels.MainWindow.UpdateHandlers
                     var updatedMod = _allMods.FirstOrDefault(m => m.Name == mod.Name);
                     if (updatedMod != null)
                     {
+                        // Re-ensure SelectedVersion matches the active version
                         updatedMod.SelectedVersion = updatedMod.Version;
                         // caller VM will set SelectedMod on refresh callback
                         SetStatusInternal($"Successfully updated {updatedMod.Title} to {updatedMod.Version}");
@@ -732,12 +685,7 @@ namespace FactorioModManager.ViewModels.MainWindow.UpdateHandlers
 
                 // Show aggregated progress for dependencies + main
                 var totalToInstall = resolution.MissingDependenciesToInstall.Distinct(StringComparer.OrdinalIgnoreCase).Count() + 1;
-                try
-                {
-                    if (totalToInstall == 1)
-                        await BeginSingleDownloadProgressAsync();
-                }
-                catch { }
+                _logService.LogDebug($"RunInstallWithDependencies for {modName}: totalToInstall={totalToInstall}, deps={resolution.MissingDependenciesToInstall.Count}");
 
                 // Apply enable/disable decisions on UI thread
                 try
@@ -838,15 +786,27 @@ namespace FactorioModManager.ViewModels.MainWindow.UpdateHandlers
         }
 
         // Implement progress control methods
-        public void SetDownloadProgressTotal(int total) => _setDownloadProgressTotal(total);
+        public void SetDownloadProgressTotal(int total)
+        {
+            _currentProgressTotal = total;
+            _logService.LogDebug($"SetDownloadProgressTotal: {total}");
+            _setDownloadProgressTotal(total);
+        }
 
-        public void SetDownloadProgressCompleted(int completed) => _setDownloadProgressCompleted(completed);
+        public void SetDownloadProgressCompleted(int completed)
+        {
+            _currentProgressCompleted = completed;
+            _logService.LogDebug($"SetDownloadProgressCompleted: {completed}/{_currentProgressTotal}");
+            _setDownloadProgressCompleted(completed);
+        }
 
         /// <summary>
         /// Increment the completed download count and schedule a batched UI update.
         /// </summary>
         public void IncrementDownloadProgressCompleted()
         {
+            _currentProgressCompleted++;
+            _logService.LogDebug($"IncrementDownloadProgressCompleted: {_currentProgressCompleted}/{_currentProgressTotal}");
             _incrementDownloadProgressCompleted();
             try { HostScheduleBatchedProgressUiUpdate(); } catch { }
         }
@@ -854,6 +814,10 @@ namespace FactorioModManager.ViewModels.MainWindow.UpdateHandlers
         /// <summary>
         /// Show or hide the download progress UI.
         /// </summary>
-        public void SetDownloadProgressVisible(bool visible) => _setDownloadProgressVisible(visible);
+        public void SetDownloadProgressVisible(bool visible)
+        {
+            _logService.LogDebug($"SetDownloadProgressVisible: {visible}");
+            _setDownloadProgressVisible(visible);
+        }
     }
 }

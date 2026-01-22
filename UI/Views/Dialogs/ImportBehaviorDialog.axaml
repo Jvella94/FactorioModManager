@@ -1,0 +1,69 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        x:Class="FactorioModManager.Views.Dialogs.ImportBehaviorDialog"
+        Title="Import Behavior"
+        Width="520" Height="520">
+  <Grid RowDefinitions="Auto,*,Auto" Margin="12">
+    <TextBlock Text="Import Options" FontWeight="Bold" FontSize="16" />
+
+    <Grid Grid.Row="1">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="*" />
+      </Grid.RowDefinitions>
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="2*" />
+        <ColumnDefinition Width="3*" />
+      </Grid.ColumnDefinitions>
+
+      <!-- Description spans the top of the inner grid -->
+      <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Text="Choose how to handle conflicts when importing a mod list that has the same name as an existing saved list." TextWrapping="Wrap" Margin="0,8,0,12" />
+
+      <!-- Choices in the second row, left column -->
+      <StackPanel Grid.Row="1" Grid.Column="0" Orientation="Vertical" Spacing="12" Margin="0,0,12,0">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <!-- use numeric character reference for glyph so it renders correctly -->
+          <TextBlock Text="&#xE946;" FontSize="16" VerticalAlignment="Center" Margin="0,0,4,0" />
+          <StackPanel>
+            <RadioButton x:Name="KeepRadio" Content="Import as new list (keep both)" IsChecked="True" />
+            <TextBlock Text="Adds the imported list. If a list with the same name exists, the imported list will be renamed (eg. 'Name (1)')" TextWrapping="Wrap" Opacity="0.8" Margin="4,0,0,0" />
+          </StackPanel>
+        </StackPanel>
+
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <TextBlock Text="&#xE911;" FontSize="16" VerticalAlignment="Center" Margin="0,0,4,0" />
+          <StackPanel>
+            <RadioButton x:Name="OverwriteRadio" Content="Overwrite existing list" />
+            <TextBlock Text="Replaces the existing saved list with the imported content. Use with caution." TextWrapping="Wrap" Opacity="0.8" Margin="4,0,0,0" />
+          </StackPanel>
+        </StackPanel>
+
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <TextBlock Text="&#xE8FB;" FontSize="16" VerticalAlignment="Center" Margin="0,0,4,0" />
+          <StackPanel>
+            <RadioButton x:Name="MergeRadio" Content="Merge entries into existing list" />
+            <TextBlock Text="Combine entries; imported entries will replace entries with the same mod name in the existing list." TextWrapping="Wrap" Opacity="0.8" Margin="4,0,0,0" />
+          </StackPanel>
+        </StackPanel>
+      </StackPanel>
+
+      <!-- Right column blank in this row to keep choices left-aligned -->
+
+      <!-- Preview moved to the third row and spans both columns -->
+      <StackPanel Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,12,0,0">
+        <TextBlock Text="Preview of imported list:" FontWeight="SemiBold" />
+        <Border BorderBrush="#DDD" BorderThickness="1" CornerRadius="4" Padding="6" Margin="0,8,0,0">
+          <ListBox x:Name="PreviewList" Height="360" />
+        </Border>
+      </StackPanel>
+    </Grid>
+
+    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,12,0,0">
+      <Button x:Name="CancelBtn" Content="Cancel" Width="100" />
+      <Button x:Name="OkBtn" Content="OK" Width="100" />
+    </StackPanel>
+  </Grid>
+</Window>

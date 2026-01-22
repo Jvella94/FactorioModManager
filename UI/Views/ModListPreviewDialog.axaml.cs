@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Avalonia.Media;
 using FactorioModManager.Models;
 using System.Collections.Generic;
 using System.Linq;
@@ -30,42 +31,74 @@ namespace FactorioModManager.Views
             {
                 Name = i.Name,
                 Title = i.Title,
-                CurrentEnabled = i.CurrentEnabled,
-                ApplyEnabled = i.TargetEnabled,
+                CurrentEnabled = i.CurrentStatus,
+                ApplyEnabled = i.NewStatus,
                 CurrentVersion = i.CurrentVersion,
-                ApplyVersion = i.TargetVersion,
+                ApplyVersion = i.ListedVersion,
                 AvailableVersions = i.InstalledVersions ?? []
             })];
+
+            // Header row
+            var headerGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("3*,80,80,100,150"), Margin = new Thickness(6, 6, 6, 0) };
+            var hdrTitle = new TextBlock { Text = "Title", FontWeight = FontWeight.Bold, VerticalAlignment = VerticalAlignment.Center };
+            var hdrCurrent = new TextBlock { Text = "Current", FontWeight = FontWeight.Bold, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+            var hdrNew = new TextBlock { Text = "New", FontWeight = FontWeight.Bold, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+            var hdrExpected = new TextBlock { Text = "Expected Version", FontWeight = FontWeight.Bold, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+            var hdrInstalled = new TextBlock { Text = "Installed Version(s)", FontWeight = FontWeight.Bold, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+
+            Grid.SetColumn(hdrTitle, 0);
+            Grid.SetColumn(hdrCurrent, 1);
+            Grid.SetColumn(hdrNew, 2);
+            Grid.SetColumn(hdrExpected, 3);
+            Grid.SetColumn(hdrInstalled, 4);
+
+            headerGrid.Children.Add(hdrTitle);
+            headerGrid.Children.Add(hdrCurrent);
+            headerGrid.Children.Add(hdrNew);
+            headerGrid.Children.Add(hdrExpected);
+            headerGrid.Children.Add(hdrInstalled);
+
+            PreviewPanel.Children.Add(headerGrid);
 
             // Manually build UI rows into PreviewPanel
             foreach (var it in _items)
             {
-                var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("2*,2*,80,80,100,150"), Margin = new Thickness(6) };
+                // Columns: Title, CurrentEnabled, ApplyEnabled, CurrentVersion, VersionSelector
+                var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("3*,80,80,100,150"), Margin = new Thickness(6) };
 
-                var name = new TextBlock { Text = it.Name, VerticalAlignment = VerticalAlignment.Center };
                 var title = new TextBlock { Text = it.Title, VerticalAlignment = VerticalAlignment.Center };
                 var current = new CheckBox { IsChecked = it.CurrentEnabled, IsEnabled = false, HorizontalAlignment = HorizontalAlignment.Center };
                 var apply = new CheckBox { IsChecked = it.ApplyEnabled, HorizontalAlignment = HorizontalAlignment.Center };
                 var currVer = new TextBlock { Text = it.CurrentVersion ?? string.Empty, VerticalAlignment = VerticalAlignment.Center };
-                var combo = new ComboBox { ItemsSource = it.AvailableVersions, SelectedItem = it.ApplyVersion };
 
-                Grid.SetColumn(name, 0);
-                Grid.SetColumn(title, 1);
-                Grid.SetColumn(current, 2);
-                Grid.SetColumn(apply, 3);
-                Grid.SetColumn(currVer, 4);
-                Grid.SetColumn(combo, 5);
+                Grid.SetColumn(title, 0);
+                Grid.SetColumn(current, 1);
+                Grid.SetColumn(apply, 2);
+                Grid.SetColumn(currVer, 3);
 
-                grid.Children.Add(name);
                 grid.Children.Add(title);
                 grid.Children.Add(current);
                 grid.Children.Add(apply);
                 grid.Children.Add(currVer);
-                grid.Children.Add(combo);
+
+                // Version selector: show ComboBox only if multiple versions available, otherwise static text
+                if (it.AvailableVersions != null && it.AvailableVersions.Count > 1)
+                {
+                    var combo = new ComboBox { ItemsSource = it.AvailableVersions, SelectedItem = it.ApplyVersion };
+                    Grid.SetColumn(combo, 4);
+                    grid.Children.Add(combo);
+                    it.ApplyCombo = combo;
+                }
+                else
+                {
+                    var verText = new TextBlock { Text = it.ApplyVersion ?? (it.AvailableVersions?.FirstOrDefault() ?? string.Empty), VerticalAlignment = VerticalAlignment.Center };
+                    Grid.SetColumn(verText, 4);
+                    grid.Children.Add(verText);
+                    // Keep ApplyCombo null when static
+                }
 
                 // store references
                 it.ApplyCheck = apply;
-                it.ApplyCombo = combo;
 
                 PreviewPanel.Children.Add(grid);
             }
@@ -73,7 +106,7 @@ namespace FactorioModManager.Views
             CancelBtn.Click += (_, __) => Close(null);
             ApplyBtn.Click += (_, __) =>
             {
-                var res = _items.Select(v => new PreviewResult(v.Name, v.ApplyCheck.IsChecked == true, v.ApplyCombo.SelectedItem as string)).ToList();
+                var res = _items.Select(v => new PreviewResult(v.Name, v.ApplyCheck.IsChecked == true, v.ApplyCombo?.SelectedItem as string ?? v.ApplyVersion)).ToList();
                 Close(res);
             };
         }
@@ -91,7 +124,7 @@ namespace FactorioModManager.Views
             // UI refs
             public CheckBox ApplyCheck { get; set; } = null!;
 
-            public ComboBox ApplyCombo { get; set; } = null!;
+            public ComboBox? ApplyCombo { get; set; }
         }
     }
 }

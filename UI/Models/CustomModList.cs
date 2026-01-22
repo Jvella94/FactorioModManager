@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
@@ -11,6 +12,7 @@ namespace FactorioModManager.Models
         private string? _description;
         private bool _isRenaming;
         private string _editedName = string.Empty;
+        private DateTime _createdAt = DateTime.UtcNow;
 
         [JsonPropertyName("name")]
         public string Name
@@ -24,6 +26,14 @@ namespace FactorioModManager.Models
         {
             get => _description;
             set => SetField(ref _description, value);
+        }
+
+        // Creation timestamp for the list (UTC)
+        [JsonPropertyName("createdAt")]
+        public DateTime CreatedAt
+        {
+            get => _createdAt;
+            set => SetField(ref _createdAt, value);
         }
 
         // Reuse ModListEntry for name/enabled/version if needed

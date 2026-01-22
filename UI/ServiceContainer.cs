@@ -31,6 +31,7 @@ namespace FactorioModManager
             RegisterSingleton<IErrorMapper>(new ErrorMapper());
             RegisterSingleton<ILogService>(new LogService(Resolve<IErrorMessageService>()));
             RegisterSingleton<IUIService>(new AvaloniaUIService(Resolve<ILogService>()));
+            RegisterSingleton<INotificationService>(new NotificationService(Resolve<IUIService>()));
 
             // Register a singleton DownloadProgressViewModel so it is shared application-wide
             var downloadProgressSingleton = new DownloadProgressViewModel(Resolve<IUIService>());

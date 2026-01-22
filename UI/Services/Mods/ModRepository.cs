@@ -94,6 +94,7 @@ namespace FactorioModManager.Services.Mods
                 }
             }
 
+            mods = [.. mods.OrderBy(m => m.Info.Name, StringComparer.OrdinalIgnoreCase)];
             _logService.Log($"Loaded {mods.Count} total mods");
             return mods;
         }

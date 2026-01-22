@@ -1,3 +1,4 @@
+using FactorioModManager;
 using FactorioModManager.Models;
 using FactorioModManager.Services;
 using FactorioModManager.Services.API;
@@ -32,7 +33,11 @@ namespace FMM.Tests.ViewModelTests
             var mockListService = new Mock<IModListService>();
             var mockDownloadProgress = new Mock<IDownloadProgress>();
 
-            // Create sample mod VMs by constructing ModViewModel via factory method in MainWindowViewModel (not public) — instead we'll create lightweight fake ModViewModel objects
+            // Register a concrete DownloadProgressViewModel in the service container so MainWindowViewModel can cast
+            var dpvm = new DownloadProgressViewModel(Mock.Of<IUIService>());
+            ServiceContainer.Instance.RegisterSingleton<IDownloadProgress>(dpvm);
+
+            // Create sample mod VMs
             var vm1 = new FactorioModManager.ViewModels.ModViewModel(mockSettings.Object) { Name = "modA", Title = "Mod A", Version = "1.0", IsEnabled = true };
             var vm2 = new FactorioModManager.ViewModels.ModViewModel(mockSettings.Object) { Name = "modB", Title = "Mod B", Version = "1.0", IsEnabled = true };
 
@@ -61,11 +66,9 @@ namespace FMM.Tests.ViewModelTests
                 mockListService.Object,
                 mockDownloadProgress.Object);
 
-            // Inject our sample mods into private field via reflection
             var allModsField = typeof(MainWindowViewModel).GetField("_allMods", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance) ?? throw new InvalidOperationException("Could not find backing field '_allMods' on MainWindowViewModel (reflection failed in test setup).");
             allModsField.SetValue(vm, new System.Collections.ObjectModel.ObservableCollection<FactorioModManager.ViewModels.ModViewModel> { vm1, vm2 });
 
-            // Prepare list to apply: enable both and set specific versions
             var list = new CustomModList { Name = "list1" };
             list.Entries.Add(new ModListEntry { Name = "modA", Enabled = true, Version = "0.9" });
             list.Entries.Add(new ModListEntry { Name = "modB", Enabled = true, Version = "1.0" });
@@ -74,7 +77,6 @@ namespace FMM.Tests.ViewModelTests
 
             vm.ModLists.Add(list);
 
-            // Execute command (ReactiveCommand returns IObservable<Unit>, subscribe to completion)
             var obs = vm.ApplyModListCommand.Execute(list.Name);
             var tcs = new TaskCompletionSource<bool>();
             obs.Subscribe(_ => tcs.SetResult(true));

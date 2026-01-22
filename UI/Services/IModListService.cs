@@ -14,5 +14,13 @@ namespace FactorioModManager.Services
         void UpdateList(string oldName, CustomModList updated);
 
         void DeleteList(string name);
+
+        // Export/import helpers
+        bool ExportList(string name, string destinationPath, bool overwrite = false);
+
+        CustomModList? ImportListFromFile(string sourcePath);
+
+        // Returns the on-disk file path for a named list, or null if not found
+        string? GetListFilePath(string name);
     }
 }

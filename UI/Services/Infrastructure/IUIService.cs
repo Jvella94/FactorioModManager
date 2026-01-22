@@ -112,9 +112,8 @@ namespace FactorioModManager.Services.Infrastructure
         Task<string?> ShowPickModListAsync(List<string> listNames, string? title = null, Window? parentWindow = null);
 
         /// <summary>
-        /// Show a dialog that lists activation candidates (mod@version) with checkboxes so the user can uncheck specific activations.
-        /// Returns the list of names the user approved for activation, or null if cancelled.
+        /// Show import behavior dialog to choose keep/overwrite/merge and preview candidate entries
         /// </summary>
-        Task<List<string>?> ShowActivationConfirmationAsync(string title, string message, List<(string Name, string Version)> items, Window? parentWindow = null);
+        Task<ImportBehavior?> ShowImportBehaviorDialogAsync(CustomModList candidate, Window? parent = null);
     }
 }

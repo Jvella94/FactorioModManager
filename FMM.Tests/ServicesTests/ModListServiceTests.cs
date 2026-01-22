@@ -10,12 +10,11 @@ namespace FMM.Tests.ServicesTests
         [Fact]
         public void SaveAndLoadLists_Roundtrip()
         {
-            var temp = Path.Combine(Path.GetTempPath(), $"modlists_test_{Path.GetRandomFileName()}");
-            Directory.CreateDirectory(Path.GetDirectoryName(temp) ?? Path.GetTempPath());
-            var file = Path.Combine(Path.GetTempPath(), $"modlists_{Path.GetRandomFileName()}.json");
+            var folder = Path.Combine(Path.GetTempPath(), $"modlists_test_{Path.GetRandomFileName()}");
+            Directory.CreateDirectory(folder);
 
             var mockLog = new Mock<ILogService>();
-            var svc = new ModListService(mockLog.Object, file);
+            var svc = new ModListService(mockLog.Object, folder);
 
             var lists = new List<CustomModList>
             {
@@ -28,15 +27,19 @@ namespace FMM.Tests.ServicesTests
 
             Assert.Equal(2, loaded.Count);
             Assert.Contains(loaded, l => l.Name == "list1" && l.Entries.Any(e => e.Name == "a"));
-            File.Delete(file);
+
+            // Cleanup folder
+            try { Directory.Delete(folder, recursive: true); } catch { }
         }
 
         [Fact]
         public void AddUpdateDelete_Workflow()
         {
-            var file = Path.Combine(Path.GetTempPath(), $"modlists_{Path.GetRandomFileName()}.json");
+            var folder = Path.Combine(Path.GetTempPath(), $"modlists_{Path.GetRandomFileName()}");
+            Directory.CreateDirectory(folder);
+
             var mockLog = new Mock<ILogService>();
-            var svc = new ModListService(mockLog.Object, file);
+            var svc = new ModListService(mockLog.Object, folder);
 
             var list = new CustomModList { Name = "test", Description = "d", Entries = [] };
             svc.AddList(list);
@@ -53,7 +56,7 @@ namespace FMM.Tests.ServicesTests
             loaded = svc.LoadLists();
             Assert.Empty(loaded);
 
-            File.Delete(file);
+            try { Directory.Delete(folder, recursive: true); } catch { }
         }
     }
 }

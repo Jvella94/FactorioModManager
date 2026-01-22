@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using FactorioModManager.Models;
 
 namespace FactorioModManager.ViewModels.MainWindow.UpdateHandlers
 {
@@ -6,6 +7,7 @@ namespace FactorioModManager.ViewModels.MainWindow.UpdateHandlers
     {
         public async Task BeginAsync(int total)
         {
+            try { await host.SetStatusAsync($"ProgressReporter: Begin single total={total}", LogLevel.Debug); } catch { }
             try { host.SetDownloadProgressTotal(total); } catch { }
             try { host.SetDownloadProgressCompleted(0); } catch { }
             try { await host.BeginSingleDownloadProgressAsync(); } catch { }
@@ -16,16 +18,21 @@ namespace FactorioModManager.ViewModels.MainWindow.UpdateHandlers
             try { host.IncrementDownloadProgressCompleted(); } catch { }
         }
 
-        public async Task EndAsync(bool minimal) => await host.EndSingleDownloadProgressAsync(minimal);
+        public async Task EndAsync(bool minimal)
+        {
+            try { await host.SetStatusAsync($"ProgressReporter: End single minimal={minimal}", LogLevel.Debug); } catch { }
+            await host.EndSingleDownloadProgressAsync(minimal);
+        }
     }
 
     internal sealed class BatchProgressReporter(IUpdateHost host) : IProgressReporter
     {
         public async Task BeginAsync(int total)
         {
+            try { await host.SetStatusAsync($"ProgressReporter: Begin batch total={total}", LogLevel.Debug); } catch { }
             try { host.SetDownloadProgressTotal(total); } catch { }
             try { host.SetDownloadProgressCompleted(0); } catch { }
-            try { await host.BeginSingleDownloadProgressAsync(); } catch { }
+            try { host.SetDownloadProgressVisible(true); } catch { }
         }
 
         public void Increment()

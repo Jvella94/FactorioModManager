@@ -3,7 +3,6 @@ using FactorioModManager.Services;
 using FactorioModManager.ViewModels.MainWindow.UpdateHandlers;
 using ReactiveUI;
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -21,9 +20,6 @@ namespace FactorioModManager.ViewModels.MainWindow
         private bool _isDownloadProgressVisible;
         private int _downloadProgressTotal;
         private int _downloadProgressCompleted;
-
-        // Throttle interval for batching progress UI updates
-        private static readonly TimeSpan _updateProgressUiThrottle = TimeSpan.FromMilliseconds(250);
 
         // Debounced targeted refresh state for affected mods to reduce UI churn
         private readonly Lock _refreshAffectedLock = new();
@@ -179,7 +175,7 @@ namespace FactorioModManager.ViewModels.MainWindow
             var host = EnsureUpdatesHost();
             await host.UpdateAllAsync();
 
-            // Host performs refreshes; finalize VM aggregation state
+            // Host performs refreshs; finalize VM aggregation state
             EndCandidateAggregationAndRecompute();
 
             // If there are no updates remaining, clear the Pending Updates filter so the list doesn't remain empty
@@ -431,6 +427,26 @@ namespace FactorioModManager.ViewModels.MainWindow
                         }
                         catch (Exception ex) { _logService.LogDebug($"Applying metadata failed for {name}: {ex.Message}"); }
 
+                        // Update LastUpdated timestamp from disk so sorting reflects recent updates
+                        try
+                        {
+                            if (!string.IsNullOrEmpty(vm.FilePath))
+                            {
+                                if (File.Exists(vm.FilePath))
+                                {
+                                    vm.LastUpdated = File.GetLastWriteTime(vm.FilePath);
+                                }
+                                else if (Directory.Exists(vm.FilePath))
+                                {
+                                    vm.LastUpdated = Directory.GetLastWriteTime(vm.FilePath);
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logService.LogDebug($"Failed to refresh LastUpdated for {name}: {ex.Message}");
+                        }
+
                         // Rely on property setters to raise most notifications; raise dependent computed properties explicitly
                         vm.RaisePropertyChanged(nameof(vm.HasMultipleVersions));
                         vm.RaisePropertyChanged(nameof(vm.UpdateText));
@@ -443,8 +459,9 @@ namespace FactorioModManager.ViewModels.MainWindow
                 this.RaisePropertyChanged(nameof(UpdatesAvailableCount));
                 this.RaisePropertyChanged(nameof(HasUpdates));
                 this.RaisePropertyChanged(nameof(UpdatesCountText));
-                if (ShowOnlyPendingUpdates)
-                    ApplyModFilter();
+
+                // Always reapply filter so updated mods are resorted (e.g. move to top by LastUpdated)
+                ApplyModFilter();
             });
         }
 

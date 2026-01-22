@@ -89,7 +89,7 @@ namespace FactorioModManager.ViewModels.MainWindow.UpdateHandlers
                     return false;
                 }
 
-                // Apply enable/disable decisions now
+                // Apply enable/disable decisions now for already-known mods
                 foreach (var kv in combinedEnable.Values)
                 {
                     var vm = host.AllMods.FirstOrDefault(m => m.Name == kv.Name);
@@ -128,7 +128,23 @@ namespace FactorioModManager.ViewModels.MainWindow.UpdateHandlers
                     await Task.Delay(200);
                 }
 
+                // Refresh so the newly installed mods appear in host.AllMods
                 try { await host.ForceRefreshAffectedModsAsync(depsToInstall); } catch (Exception ex) { host.LogService.LogDebug($"ForceRefreshAffectedModsAsync failed: {ex.Message}"); }
+
+                // Ensure installed dependencies are enabled only if at least one enabled parent requested them.
+                // Otherwise keep them disabled after installation.
+                foreach (var depName in depsToInstall)
+                {
+                    var vm = host.AllMods.FirstOrDefault(m => m.Name.Equals(depName, StringComparison.OrdinalIgnoreCase));
+                    if (vm == null) continue;
+
+                    var shouldEnable = combinedEnable.ContainsKey(depName);
+                    if (vm.IsEnabled != shouldEnable)
+                    {
+                        vm.IsEnabled = shouldEnable;
+                        host.ToggleMod(vm.Name, shouldEnable);
+                    }
+                }
 
                 return true;
             }

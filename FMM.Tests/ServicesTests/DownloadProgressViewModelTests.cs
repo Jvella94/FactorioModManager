@@ -73,6 +73,12 @@ namespace FMM.Tests.ServicesTests
             foreach (var it in items) list.Add($"{it.Name}@{it.Version}");
             return Task.FromResult<System.Collections.Generic.List<string>?>(list);
         }
+
+        // New: return default ImportBehavior.Keep for tests
+        public Task<ImportBehavior?> ShowImportBehaviorDialogAsync(FactorioModManager.Models.CustomModList? candidate, Avalonia.Controls.Window? parent = null)
+        {
+            return Task.FromResult<ImportBehavior?>(ImportBehavior.Keep);
+        }
     }
 
     public class DownloadProgressViewModelTests

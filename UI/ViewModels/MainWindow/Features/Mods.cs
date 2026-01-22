@@ -72,9 +72,36 @@ namespace FactorioModManager.ViewModels.MainWindow
                         SetStatus($"Loaded {AllModsCount} unique mods and {Groups.Count} groups");
                     });
 
-                    await CheckForAlreadyDownloadedUpdatesAsync();
-                    await FetchMissingMetadataAsync();
-                    await CheckForUpdatesIfNeededAsync();
+                    // Start background work for metadata and update checks so UI is not blocked.
+                    // Use candidate aggregation to coalesce any small recomputations caused by background changes.
+                    StartCandidateAggregation();
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await CheckForAlreadyDownloadedUpdatesAsync();
+                            await FetchMissingMetadataAsync();
+                            await CheckForUpdatesIfNeededAsync();
+                        }
+                        catch (Exception ex)
+                        {
+                            _logService.LogError($"Background metadata/check task failed: {ex.Message}", ex);
+                        }
+                        finally
+                        {
+                            try
+                            {
+                                // Finalize aggregation on UI thread to update any dependent computed flags once.
+                                await _uiService.InvokeAsync(() => EndCandidateAggregationAndRecompute());
+                            }
+                            catch (Exception ex)
+                            {
+                                _logService.LogDebug($"EndCandidateAggregationAndRecompute failed: {ex.Message}");
+                            }
+                        }
+                    });
+
+                    // Return early from main refresh — background tasks will update VMs as they complete.
                 }
                 catch (Exception ex)
                 {
@@ -85,8 +112,9 @@ namespace FactorioModManager.ViewModels.MainWindow
                 }
                 finally
                 {
+                    // Mark refresh finished so UI is responsive; background metadata runs independently.
                     IsRefreshing = false;
-                    _logService.LogDebug("=== RefreshModsAsync completed ===");
+                    _logService.LogDebug("=== RefreshModsAsync initial refresh completed ===");
                 }
             });
         }

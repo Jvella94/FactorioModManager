@@ -123,6 +123,11 @@ namespace FactorioModManager.ViewModels.MainWindow
 
         public bool HasSelectedMod => SelectedMod != null;
 
+        // Combined detail slot: prefer the preview mod when present, otherwise use the selected mod
+        public ModViewModel? DetailMod => PreviewMod ?? SelectedMod;
+
+        public bool HasDetailMod => DetailMod != null;
+
         private readonly IModService _modService;
         private readonly IModGroupService _groupService;
         private readonly IFactorioApiService _apiService;
@@ -296,6 +301,16 @@ namespace FactorioModManager.ViewModels.MainWindow
                 .Subscribe(_ => this.RaisePropertyChanged(nameof(HasSelectedMod)))
                 .DisposeWith(_disposables);
 
+            // Raise DetailMod/HasDetailMod when either SelectedMod or PreviewMod changes
+            this.WhenAnyValue(x => x.SelectedMod, x => x.PreviewMod)
+                .ObserveOn(RxApp.MainThreadScheduler)
+                .Subscribe(_ =>
+                {
+                    this.RaisePropertyChanged(nameof(DetailMod));
+                    this.RaisePropertyChanged(nameof(HasDetailMod));
+                })
+                .DisposeWith(_disposables);
+
             // Sync author search with selected author
             this.WhenAnyValue(x => x.SelectedAuthorFilter)
                 .ObserveOn(RxApp.MainThreadScheduler)
@@ -353,6 +368,20 @@ namespace FactorioModManager.ViewModels.MainWindow
                     {
                         ShowOnlyPendingUpdates = false;
                         SetStatus("No pending updates remain. Pending updates filter cleared.");
+                    }
+                })
+                .DisposeWith(_disposables);
+
+            // If there are no unused internal mods left while the Unused Internals filter is active, clear it
+            this.WhenAnyValue(x => x.HasUnusedInternals)
+                .Throttle(TimeSpan.FromMilliseconds(50))
+                .ObserveOn(RxApp.MainThreadScheduler)
+                .Subscribe(hasUnused =>
+                {
+                    if (!hasUnused && ShowOnlyUnusedInternals)
+                    {
+                        ShowOnlyUnusedInternals = false;
+                        SetStatus("No unused internal dependencies remain. Unused internals filter cleared.");
                     }
                 })
                 .DisposeWith(_disposables);
@@ -535,6 +564,12 @@ namespace FactorioModManager.ViewModels.MainWindow
             {
                 var oldMod = _selectedMod;
                 this.RaiseAndSetIfChanged(ref _selectedMod, value);
+                // When a real selection is made, dismiss any transient preview
+                if (value != null)
+                {
+                    try { PreviewMod = null; } catch { }
+                }
+
                 if (value != null && oldMod != value)
                 {
                     OnModSelected(value);
@@ -693,7 +728,7 @@ namespace FactorioModManager.ViewModels.MainWindow
         {
             var name = $"New List {ModLists.Count + 1}";
             var list = new CustomModList { Name = name, Description = "Snapshot" };
-            foreach (var m in _allMods)
+            foreach (var m in _allMods.Where(m => m.IsEnabled))
             {
                 list.Entries.Add(new ModListEntry { Name = m.Name, Enabled = m.IsEnabled, Version = m.Version });
             }
@@ -728,27 +763,39 @@ namespace FactorioModManager.ViewModels.MainWindow
                 var entry = list.Entries.FirstOrDefault(e => e.Name.Equals(vm.Name, StringComparison.OrdinalIgnoreCase));
                 var target = entry?.Enabled ?? false;
                 var targetVersion = entry?.Version;
-                var installedVersions = new List<string>();
+
+                // Populate installed versions using ModVersionManager so preview can show dropdowns
+                List<string> installedVersions = [];
+                try
+                {
+                    var installed = _modVersionManager?.GetInstalledVersions(vm.Name);
+                    if (installed != null)
+                        installedVersions = installed;
+                }
+                catch (Exception ex)
+                {
+                    _logService.LogError($"Failed to get installed versions for {vm.Name}: {ex.Message}", ex);
+                }
 
                 previewModels.Add(new ModListPreviewItem
                 {
                     Name = vm.Name,
                     Title = vm.Title,
-                    CurrentEnabled = vm.IsEnabled,
-                    TargetEnabled = target,
+                    CurrentStatus = vm.IsEnabled,
+                    NewStatus = target,
                     CurrentVersion = vm.Version,
-                    TargetVersion = targetVersion,
+                    ListedVersion = targetVersion,
                     InstalledVersions = installedVersions
                 });
             }
-
+            previewModels = [.. previewModels.OrderBy(m => !m.NewStatus)];
             var result = await _uiService.ShowModListPreviewAsync(previewModels, name, owner);
             if (result == null) return; // cancelled
 
-            // Prepare activation candidates (name, version) for confirmation UI
-            var activationCandidates = result.Where(r => !string.IsNullOrEmpty(r.ApplyVersion) && r.ApplyEnabled)
-                                             .Select(r => (r.Name, Version: r.ApplyVersion!))
-                                             .ToList();
+            // Prepare activation candidates (name, version) directly from the preview dialog results.
+            var activationCandidates = result.Where(r => !string.IsNullOrEmpty(r.Version) && r.Enabled)
+                                     .Select(r => (r.Name, Version: r.Version!))
+                                     .ToList();
 
             var skipActivations = false;
             HashSet<string>? allowedActivations = null;
@@ -774,32 +821,12 @@ namespace FactorioModManager.ViewModels.MainWindow
                     skipActivations = true;
                 }
 
-                // If activations are allowed and there are multiple, show detailed checkbox dialog
-                if (!skipActivations && activationCandidates.Count > 1)
+                // Use the preview dialog's selections as the authoritative activation list.
+                // All activation candidates returned by the preview are treated as allowed activations
+                // unless activations were skipped due to Factorio running.
+                if (!skipActivations)
                 {
-                    var header = "The following activations will be applied. Uncheck any you don't want to activate:";
-                    var lines = string.Join("\n", activationCandidates.Select(a => $"- {a.Name}@{a.Version}"));
-                    var message = header + "\n\n" + lines;
-
-                    var selected = await _uiService.ShowActivationConfirmationAsync(
-                        "Confirm Activate Versions",
-                        message,
-                        activationCandidates,
-                        owner);
-
-                    if (selected == null)
-                        return; // cancelled
-
-                    allowedActivations = new HashSet<string>(selected.Select(s =>
-                    {
-                        var at = s.IndexOf('@');
-                        return at >= 0 ? s[..at] : s;
-                    }), StringComparer.OrdinalIgnoreCase);
-                }
-                else if (!skipActivations && activationCandidates.Count == 1)
-                {
-                    // Single activation allowed automatically
-                    allowedActivations = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { activationCandidates[0].Name };
+                    allowedActivations = new HashSet<string>(activationCandidates.Select(a => a.Name), StringComparer.OrdinalIgnoreCase);
                 }
             }
 
@@ -810,14 +837,14 @@ namespace FactorioModManager.ViewModels.MainWindow
                 if (vm == null) continue;
 
                 // Apply enabled state
-                if (vm.IsEnabled != r.ApplyEnabled)
+                if (vm.IsEnabled != r.Enabled)
                 {
-                    vm.IsEnabled = r.ApplyEnabled;
-                    _modService.ToggleMod(vm.Name, r.ApplyEnabled);
+                    vm.IsEnabled = r.Enabled;
+                    _modService.ToggleMod(vm.Name, r.Enabled);
                 }
 
                 // Apply version if requested (and non-null) AND the target is enabled
-                if (!string.IsNullOrEmpty(r.ApplyVersion) && r.ApplyEnabled)
+                if (!string.IsNullOrEmpty(r.Version) && r.Enabled)
                 {
                     try
                     {
@@ -828,10 +855,10 @@ namespace FactorioModManager.ViewModels.MainWindow
                         var shouldApplyVersion = !skipActivations && (allowedActivations == null || allowedActivations.Contains(vm.Name));
                         if (shouldApplyVersion)
                         {
-                            _modService.SaveModState(vm.Name, enabled: true, version: r.ApplyVersion);
+                            _modService.SaveModState(vm.Name, enabled: true, version: r.Version);
 
                             // Activate the selected version (updates FilePath, Version, etc.)
-                            await SetActiveVersion(r.ApplyVersion);
+                            await SetActiveVersion(r.Version);
                         }
                     }
                     catch (Exception ex)
@@ -840,12 +867,12 @@ namespace FactorioModManager.ViewModels.MainWindow
                         _logService.LogError($"Failed to apply version for {vm.Name}: {ex.Message}", ex);
                     }
                 }
-                else if (!string.IsNullOrEmpty(r.ApplyVersion) && !r.ApplyEnabled)
+                else if (!string.IsNullOrEmpty(r.Version) && !r.Enabled)
                 {
                     // If target is disabled but a version was supplied, still persist version if desired
                     try
                     {
-                        _modService.SaveModState(vm.Name, enabled: false, version: r.ApplyVersion);
+                        _modService.SaveModState(vm.Name, enabled: false, version: r.Version);
                     }
                     catch (Exception ex)
                     {

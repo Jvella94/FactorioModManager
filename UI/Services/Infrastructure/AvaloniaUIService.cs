@@ -2,9 +2,9 @@
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input;
-using Avalonia.Media;
 using Avalonia.Threading;
 using FactorioModManager.Models;
+using FactorioModManager.Models.DTO;
 using FactorioModManager.Services.Settings;
 using FactorioModManager.Views.Dialogs;
 using System;
@@ -344,7 +344,7 @@ namespace FactorioModManager.Services.Infrastructure
         }
 
         public async Task ShowVersionHistoryAsync(string modTitle, string modName,
-            System.Collections.Generic.List<Models.DTO.ShortReleaseDTO> releases)
+            List<ShortReleaseDTO> releases)
         {
             await Dispatcher.UIThread.InvokeAsync(async () =>
             {
@@ -447,7 +447,7 @@ namespace FactorioModManager.Services.Infrastructure
                 var dialog = new Views.ModListPreviewDialog(items, listName);
                 var res = await dialog.ShowDialog<List<Views.ModListPreviewDialog.PreviewResult>>(owner);
                 if (res == null) return null;
-                return res.Select(r => new ModListPreviewResult { Name = r.Name, ApplyEnabled = r.ApplyEnabled, ApplyVersion = r.ApplyVersion }).ToList();
+                return res.Select(r => new ModListPreviewResult { Name = r.Name, Enabled = r.ApplyEnabled, Version = r.ApplyVersion }).ToList();
             });
         }
 
@@ -498,64 +498,16 @@ namespace FactorioModManager.Services.Infrastructure
             });
         }
 
-        public async Task<List<string>?> ShowActivationConfirmationAsync(string title, string message, List<(string Name, string Version)> items, Window? parentWindow = null)
+        public async Task<ImportBehavior?> ShowImportBehaviorDialogAsync(CustomModList candidate, Window? parent = null)
         {
             return await Dispatcher.UIThread.InvokeAsync(async () =>
             {
-                var owner = parentWindow ?? GetMainWindow();
+                var owner = parent ?? GetMainWindow();
                 if (owner == null) return null;
 
-                var dlg = new Window
-                {
-                    Title = title,
-                    Width = 600,
-                    Height = 400
-                };
-
-                var root = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto"), Margin = new Thickness(8) };
-
-                var header = new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(4) };
-                root.Children.Add(header);
-                Grid.SetRow(header, 0);
-
-                var scroll = new ScrollViewer { VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto };
-                var stack = new StackPanel { Spacing = 4 };
-
-                var checkboxes = new List<CheckBox>();
-                foreach (var it in items)
-                {
-                    var cb = new CheckBox { Content = $"{it.Name}@{it.Version}", IsChecked = true };
-                    checkboxes.Add(cb);
-                    stack.Children.Add(cb);
-                }
-
-                scroll.Content = stack;
-                root.Children.Add(scroll);
-                Grid.SetRow(scroll, 1);
-
-                var btnPanel = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right, Spacing = 8 };
-                var cancel = new Button { Content = "Cancel", Width = 100 };
-                var ok = new Button { Content = "Apply", Width = 100, Background = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#D32F2F")), Foreground = Avalonia.Media.Brushes.White };
-                btnPanel.Children.Add(cancel);
-                btnPanel.Children.Add(ok);
-
-                root.Children.Add(btnPanel);
-                Grid.SetRow(btnPanel, 2);
-
-                dlg.Content = root;
-
-                var tcs = new TaskCompletionSource<List<string>?>();
-
-                cancel.Click += (_, __) => { tcs.SetResult(null); dlg.Close(); };
-                ok.Click += (_, __) =>
-                {
-                    var selected = checkboxes.Where(cb => cb.IsChecked == true).Select(cb => cb.Content?.ToString() ?? string.Empty).ToList();
-                    tcs.SetResult(selected);
-                    dlg.Close();
-                };
-
-                await dlg.ShowDialog(owner);
-                return await tcs.Task;
+                var dlg = new ImportBehaviorDialog(candidate);
+                var res = await dlg.ShowDialog<ImportBehavior?>(owner);
+                return res;
             });
         }
     }

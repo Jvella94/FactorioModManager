@@ -1,0 +1,13 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="FactorioModManager.Views.Controls.NotificationOverlay">
+  <Grid>
+    <StackPanel x:Name="ToastPanel"
+                Orientation="Vertical"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Bottom"
+                Margin="16"
+                Spacing="8"
+                MaxWidth="900" />
+  </Grid>
+</UserControl>

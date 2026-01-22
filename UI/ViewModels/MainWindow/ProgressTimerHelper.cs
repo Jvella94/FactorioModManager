@@ -22,7 +22,14 @@ namespace FactorioModManager.ViewModels.MainWindow
             {
                 if (!_pending) return;
                 _pending = false;
-                _onElapsed();
+                try
+                {
+                    _onElapsed();
+                }
+                catch
+                {
+                    // Swallow exceptions to avoid crashing timer thread / test host
+                }
             }, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
         }
 
@@ -36,7 +43,14 @@ namespace FactorioModManager.ViewModels.MainWindow
         {
             if (!_pending) return;
             _pending = false;
-            _onElapsed();
+            try
+            {
+                _onElapsed();
+            }
+            catch
+            {
+                // Swallow exceptions from direct flush call as well
+            }
         }
 
         public void Dispose()

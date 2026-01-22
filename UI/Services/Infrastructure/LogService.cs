@@ -90,13 +90,13 @@ namespace FactorioModManager.Services.Infrastructure
         {
             var props = properties != null
                 ? new Dictionary<string, object?>(properties)
-                : new Dictionary<string, object?>();
+                : [];
 
             props["event"] = eventName;
             LogInternal($"Event: {eventName}", level, props);
         }
 
-        private void LogInternal(string message, LogLevel level, IDictionary<string, object?>? properties)
+        private void LogInternal(string message, LogLevel level, Dictionary<string, object?>? properties)
         {
             if (_disposed) return;
 
@@ -230,7 +230,7 @@ namespace FactorioModManager.Services.Infrastructure
                 var pipeIndex = message.IndexOf('|');
                 if (pipeIndex != -1)
                 {
-                    var msgPart = message.Substring(0, pipeIndex).Trim();
+                    var msgPart = message[..pipeIndex].Trim();
                     // leave JSON part out of in-memory Message to keep UI concise
                     message = msgPart;
                 }
