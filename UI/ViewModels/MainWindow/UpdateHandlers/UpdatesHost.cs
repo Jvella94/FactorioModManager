@@ -60,6 +60,12 @@ namespace FactorioModManager.ViewModels.MainWindow.UpdateHandlers
         // guard to avoid double-starting progress when main install delegate calls back into host.InstallModAsync
         private volatile bool _runInstallFlowActive = false;
 
+        // Add this new flag to track batch update context
+        private volatile bool _isBatchUpdateInProgress = false;
+
+        // Add this flag to track batch dependency installation context
+        private volatile bool _isBatchDependencyInstallInProgress = false;
+
         private readonly TimeSpan _updateProgressUiThrottle = TimeSpan.FromMilliseconds(250);
         private System.Timers.Timer? _progressTimer;
         private readonly Lock _progressTimerLock = new();
@@ -177,76 +183,88 @@ namespace FactorioModManager.ViewModels.MainWindow.UpdateHandlers
                 return;
             }
 
-            // Ensure we have reasonable concurrency
-            if (concurrency <= 0) concurrency = 1;
-            var semaphore = new SemaphoreSlim(concurrency);
-            var tasks = new List<Task>();
-            var results = new ConcurrentBag<(string Mod, bool Success, String Message)>();
+            // Set batch context flag
+            _isBatchUpdateInProgress = true;
 
             try
             {
-                foreach (var mod in modsToUpdate)
-                {
-                    var localMod = mod;
-                    tasks.Add(Task.Run(async () =>
-                    {
-                        await semaphore.WaitAsync();
-                        try
-                        {
-                            await _uiService.InvokeAsync(() => SetStatusInternal($"Updating {localMod.Title}..."));
+                // Ensure we have reasonable concurrency
+                if (concurrency <= 0) concurrency = 1;
+                var semaphore = new SemaphoreSlim(concurrency);
+                var tasks = new List<Task>();
+                var results = new ConcurrentBag<(string Mod, bool Success, String Message)>();
 
+                try
+                {
+                    foreach (var mod in modsToUpdate)
+                    {
+                        var localMod = mod;
+                        tasks.Add(Task.Run(async () =>
+                        {
+                            await semaphore.WaitAsync();
                             try
                             {
-                                var beforeHasUpdate = localMod.HasUpdate;
-                                // delegate to host download/update flow
-                                await DownloadUpdateInternal(localMod, suppressDependencyPrompts: dependencyHandler.SuppressDependencyPrompts);
-                                var updated = beforeHasUpdate && !localMod.HasUpdate;
-                                results.Add((localMod.Title, updated, updated ? "Updated" : "Skipped - update not applied"));
+                                await _uiService.InvokeAsync(() => SetStatusInternal($"Updating {localMod.Title}..."));
+
+                                try
+                                {
+                                    var beforeHasUpdate = localMod.HasUpdate;
+                                    // delegate to host download/update flow
+                                    await DownloadUpdateInternal(localMod, suppressDependencyPrompts: dependencyHandler.SuppressDependencyPrompts);
+                                    var updated = beforeHasUpdate && !localMod.HasUpdate;
+                                    results.Add((localMod.Title, updated, updated ? "Updated" : "Skipped - update not applied"));
+                                }
+                                catch (Exception ex)
+                                {
+                                    _logService.LogError($"Error updating {localMod.Name} in parallel task: {ex.Message}", ex);
+                                    await _uiService.InvokeAsync(() => SetStatusInternal($"Error updating {localMod.Title}: {ex.Message}", LogLevel.Error));
+                                    results.Add((localMod.Title, false, $"Error: {ex.Message}"));
+                                }
                             }
-                            catch (Exception ex)
+                            finally
                             {
-                                _logService.LogError($"Error updating {localMod.Name} in parallel task: {ex.Message}", ex);
-                                await _uiService.InvokeAsync(() => SetStatusInternal($"Error updating {localMod.Title}: {ex.Message}", LogLevel.Error));
-                                results.Add((localMod.Title, false, $"Error: {ex.Message}"));
+                                // reflect progress
+                                try { progressReporter.Increment(); } catch { }
+                                semaphore.Release();
                             }
-                        }
-                        finally
-                        {
-                            // reflect progress
-                            try { progressReporter.Increment(); } catch { }
-                            semaphore.Release();
-                        }
-                    }));
+                        }));
+                    }
+
+                    await Task.WhenAll(tasks);
+
+                    // Build and show summary
+                    await _uiService.InvokeAsync(() =>
+                    {
+                        SetStatusInternal("Update run complete. Preparing summary...");
+                        // Host cannot raise VM property changed; consumer should update UI as needed after refresh
+                    });
+
+                    var resultList = results.ToList();
+                    var successCount = resultList.Count(r => r.Success);
+                    var failedCount = resultList.Count - successCount;
+
+                    var summary = $"Update finished. {successCount} succeeded, {failedCount} failed or skipped." + Environment.NewLine + Environment.NewLine;
+                    foreach (var (Mod, Success, Message) in resultList.OrderByDescending(r => r.Success))
+                    {
+                        summary += $"- {Mod}: {(Success ? "Success" : Message)}" + Environment.NewLine;
+                    }
+
+                    await _uiService.ShowMessageAsync("Update Summary", summary);
                 }
-
-                await Task.WhenAll(tasks);
-
-                // Build and show summary
-                await _uiService.InvokeAsync(() =>
+                catch (Exception)
                 {
-                    SetStatusInternal("Update run complete. Preparing summary...");
-                    // Host cannot raise VM property changed; consumer should update UI as needed after refresh
-                });
-
-                var resultList = results.ToList();
-                var successCount = resultList.Count(r => r.Success);
-                var failedCount = resultList.Count - successCount;
-
-                var summary = $"Update finished. {successCount} succeeded, {failedCount} failed or skipped." + Environment.NewLine + Environment.NewLine;
-                foreach (var (Mod, Success, Message) in resultList.OrderByDescending(r => r.Success))
-                {
-                    summary += $"- {Mod}: {(Success ? "Success" : Message)}" + Environment.NewLine;
+                    throw;
                 }
-
-                await _uiService.ShowMessageAsync("Update Summary", summary);
-            }
-            catch (Exception)
-            {
-                throw;
+                finally
+                {
+                    _isBatchUpdateInProgress = false;
+                    try { await progressReporter.EndAsync(minimal: true); } catch { }
+                    try { await _uiService.InvokeAsync(() => SetStatusInternal("")); } catch { }
+                }
             }
             finally
             {
-                try { await _uiService.InvokeAsync(() => SetStatusInternal("")); } catch { }
+                _isBatchUpdateInProgress = false;
             }
         }
 
@@ -322,7 +340,7 @@ namespace FactorioModManager.ViewModels.MainWindow.UpdateHandlers
             catch { }
         }
 
-        // Internal implementation of downloading/updating a single mod (moved into host)
+        // Internal implementation of downloading/update a single mod (moved into host)
         private async Task DownloadUpdateInternal(ModViewModel? mod, bool suppressDependencyPrompts = false)
         {
             if (mod == null || !mod.HasUpdate || string.IsNullOrEmpty(mod.LatestVersion))
@@ -411,10 +429,14 @@ namespace FactorioModManager.ViewModels.MainWindow.UpdateHandlers
                 });
 
                 // Begin single-download progress UI if available
+                // Skip during batch flows where BatchProgressReporter handles aggregated visibility
                 try
                 {
-                    await BeginSingleDownloadProgressAsync();
-                    singleProgress = true;
+                    if (!_isBatchUpdateInProgress)
+                    {
+                        await BeginSingleDownloadProgressAsync();
+                        singleProgress = true;
+                    }
                 }
                 catch { }
 
@@ -630,11 +652,10 @@ namespace FactorioModManager.ViewModels.MainWindow.UpdateHandlers
                 await _uiService.InvokeAsync(() => SetStatusInternal($"Downloading {modName}..."));
 
                 // Begin single-download progress UI if available
+                // Skip if in batch mode or batch dependency installation (those handle aggregated visibility)
                 try
                 {
-                    // If we're running as the main install inside RunInstallWithDependenciesAsync, the host may have already
-                    // started the single-download progress UI. Avoid double-starting by checking guard flag.
-                    if (!_runInstallFlowActive)
+                    if (!_runInstallFlowActive && !_isBatchUpdateInProgress && !_isBatchDependencyInstallInProgress)
                     {
                         await BeginSingleDownloadProgressAsync();
                         singleProgress = true;
@@ -687,6 +708,19 @@ namespace FactorioModManager.ViewModels.MainWindow.UpdateHandlers
                 var totalToInstall = resolution.MissingDependenciesToInstall.Distinct(StringComparer.OrdinalIgnoreCase).Count() + 1;
                 _logService.LogDebug($"RunInstallWithDependencies for {modName}: totalToInstall={totalToInstall}, deps={resolution.MissingDependenciesToInstall.Count}");
 
+                // If there are dependencies to install, use aggregated progress UI instead of single-file progress
+                var hasDepencies = totalToInstall > 1;
+                if (hasDepencies)
+                {
+                    try
+                    {
+                        SetDownloadProgressTotal(totalToInstall);
+                        SetDownloadProgressCompleted(0);
+                        SetDownloadProgressVisible(true);
+                    }
+                    catch { }
+                }
+
                 // Apply enable/disable decisions on UI thread
                 try
                 {
@@ -720,24 +754,35 @@ namespace FactorioModManager.ViewModels.MainWindow.UpdateHandlers
                 try
                 {
                     // Install dependencies sequentially
-                    foreach (var dep in resolution.MissingDependenciesToInstall.Distinct(StringComparer.OrdinalIgnoreCase))
+                    try
                     {
-                        // Skip if already installed during resolution or present in _allMods
-                        if (_allMods.Any(m => m.Name.Equals(dep, StringComparison.OrdinalIgnoreCase)))
-                            continue;
-
-                        var depResult = await InstallModAsync(dep);
-                        if (!depResult.Success)
+                        _isBatchDependencyInstallInProgress = hasDepencies;
+                        foreach (var dep in resolution.MissingDependenciesToInstall.Distinct(StringComparer.OrdinalIgnoreCase))
                         {
-                            try { await _setStatusAsync($"Failed to install dependency {dep}: {depResult.Error}", LogLevel.Warning); } catch { }
-                            return Result.Fail(depResult.Error ?? "Dependency install failed", depResult.Code);
+                            // Skip if already installed during resolution or present in _allMods
+                            if (_allMods.Any(m => m.Name.Equals(dep, StringComparison.OrdinalIgnoreCase)))
+                                continue;
+
+                            var depResult = await InstallModAsync(dep);
+                            if (!depResult.Success)
+                            {
+                                try { await _setStatusAsync($"Failed to install dependency {dep}: {depResult.Error}", LogLevel.Warning); } catch { }
+                                return Result.Fail(depResult.Error ?? "Dependency install failed", depResult.Code);
+                            }
+
+                            installedDeps.Add(dep);
+
+                            // reflect progress in aggregated mode
+                            if (hasDepencies)
+                            {
+                                try { IncrementDownloadProgressCompleted(); } catch { }
+                                try { HostScheduleBatchedProgressUiUpdate(); } catch { }
+                            }
                         }
-
-                        installedDeps.Add(dep);
-
-                        // reflect progress in batch mode
-                        try { IncrementDownloadProgressCompleted(); } catch { }
-                        // ScheduleUpdateAllProgressUiUpdate is now handled by the host delegate
+                    }
+                    finally
+                    {
+                        _isBatchDependencyInstallInProgress = false;
                     }
 
                     // Install main mod via provided delegate
@@ -756,8 +801,11 @@ namespace FactorioModManager.ViewModels.MainWindow.UpdateHandlers
                         return Result.Fail(mainResult.Error ?? "Main install failed", mainResult.Code);
 
                     // reflect completion for main
-                    try { IncrementDownloadProgressCompleted(); } catch { }
-                    // ScheduleUpdateAllProgressUiUpdate is handled in the host delegate
+                    if (hasDepencies)
+                    {
+                        try { IncrementDownloadProgressCompleted(); } catch { }
+                        try { HostScheduleBatchedProgressUiUpdate(); } catch { }
+                    }
 
                     // Refresh affected mods (installed deps + enabled/disabled toggles + main)
                     var affected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -775,7 +823,14 @@ namespace FactorioModManager.ViewModels.MainWindow.UpdateHandlers
                 }
                 finally
                 {
-                    try { await EndSingleDownloadProgressAsync(minimal: true); } catch { }
+                    if (hasDepencies)
+                    {
+                        try { SetDownloadProgressVisible(false); } catch { }
+                    }
+                    else
+                    {
+                        try { await EndSingleDownloadProgressAsync(minimal: true); } catch { }
+                    }
                 }
             }
             catch (Exception ex)
@@ -818,6 +873,15 @@ namespace FactorioModManager.ViewModels.MainWindow.UpdateHandlers
         {
             _logService.LogDebug($"SetDownloadProgressVisible: {visible}");
             _setDownloadProgressVisible(visible);
+        }
+
+        /// <summary>
+        /// Set the batch dependency installation flag to suppress single-download progress UI during dependency installs.
+        /// </summary>
+        public void SetBatchDependencyInstallInProgress(bool inProgress)
+        {
+            _isBatchDependencyInstallInProgress = inProgress;
+            _logService.LogDebug($"SetBatchDependencyInstallInProgress: {inProgress}");
         }
     }
 }

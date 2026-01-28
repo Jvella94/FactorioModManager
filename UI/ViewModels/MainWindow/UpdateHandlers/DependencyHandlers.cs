@@ -114,18 +114,26 @@ namespace FactorioModManager.ViewModels.MainWindow.UpdateHandlers
 
                 try { await progress.BeginAsync(mods.Count + depsToInstall.Count); } catch { await progress.BeginAsync(mods.Count); }
 
-                foreach (var depName in depsToInstall)
+                try
                 {
-                    var installResult = await host.InstallModAsync(depName);
-                    if (!installResult.Success)
+                    host.SetBatchDependencyInstallInProgress(true);
+                    foreach (var depName in depsToInstall)
                     {
-                        host.LogService.LogWarning($"Failed to install dependency {depName}: {installResult.Error}");
-                        await host.SetStatusAsync($"Failed to install dependency {depName}: {installResult.Error}", LogLevel.Warning);
-                        return false; // Abort the whole Update All
-                    }
+                        var installResult = await host.InstallModAsync(depName);
+                        if (!installResult.Success)
+                        {
+                            host.LogService.LogWarning($"Failed to install dependency {depName}: {installResult.Error}");
+                            await host.SetStatusAsync($"Failed to install dependency {depName}: {installResult.Error}", LogLevel.Warning);
+                            return false; // Abort the whole Update All
+                        }
 
-                    progress.Increment();
-                    await Task.Delay(200);
+                        progress.Increment();
+                        await Task.Delay(200);
+                    }
+                }
+                finally
+                {
+                    host.SetBatchDependencyInstallInProgress(false);
                 }
 
                 // Refresh so the newly installed mods appear in host.AllMods

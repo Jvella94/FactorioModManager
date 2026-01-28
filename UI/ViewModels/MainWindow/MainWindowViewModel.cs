@@ -411,33 +411,23 @@ namespace FactorioModManager.ViewModels.MainWindow
                 _filteredMods.Add(mod);
             }
 
-            // Try to restore selection by name
+            // Restore selection
             if (!string.IsNullOrEmpty(previousSelectedName))
             {
                 var newSelected = _filteredMods.FirstOrDefault(m => m.Name.Equals(previousSelectedName, StringComparison.OrdinalIgnoreCase));
                 if (newSelected != null)
                 {
-                    // Use property setter so side-effects (OnModSelected, thumbnail load) run
                     SelectedMod = newSelected;
-                    // Ensure thumbnail load is triggered even if setter didn't (defensive)
                     _ = LoadThumbnailAsync(newSelected);
                 }
-                else
-                {
-                    // If previously selected mod was filtered out, clear selection
-                    if (SelectedMod != null && !_filteredMods.Contains(SelectedMod))
-                    {
-                        SelectedMod = null;
-                    }
-                }
-            }
-            else
-            {
-                // No previous selection - ensure we clear if selection not in filtered
-                if (SelectedMod != null && !_filteredMods.Contains(SelectedMod))
+                else if (SelectedMod != null && !_filteredMods.Contains(SelectedMod))
                 {
                     SelectedMod = null;
                 }
+            }
+            else if (SelectedMod != null && !_filteredMods.Contains(SelectedMod))
+            {
+                SelectedMod = null;
             }
 
             this.RaisePropertyChanged(nameof(ModCountText));

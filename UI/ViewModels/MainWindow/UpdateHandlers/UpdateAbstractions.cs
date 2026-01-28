@@ -67,5 +67,7 @@ namespace FactorioModManager.ViewModels.MainWindow.UpdateHandlers
         void IncrementDownloadProgressCompleted();
 
         void SetDownloadProgressVisible(bool visible);
+
+        void SetBatchDependencyInstallInProgress(bool inProgress);
     }
 }

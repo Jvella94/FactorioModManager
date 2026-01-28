@@ -40,6 +40,10 @@ namespace FactorioModManager.ViewModels.MainWindow.UpdateHandlers
             try { host.IncrementDownloadProgressCompleted(); } catch { }
         }
 
-        public Task EndAsync(bool minimal) => Task.CompletedTask;
+        public async Task EndAsync(bool minimal)
+        {
+            try { await host.SetStatusAsync($"ProgressReporter: End batch minimal={minimal}", LogLevel.Debug); } catch { }
+            try { host.SetDownloadProgressVisible(false); } catch { }
+        }
     }
 }

@@ -84,7 +84,7 @@ namespace FactorioModManager.Services.Mods
                     return new DependencyResolution { Proceed = false, InstallEnabled = false };
 
                 var target = modDetails.Releases.FirstOrDefault(r => string.Equals(r.Version, version, StringComparison.OrdinalIgnoreCase));
-                if (target == null)
+                if (target is null || target.Dependencies is null)
                 {
                     _logService.Log($"DependencyFlow: version {version} not found for {modName}", LogLevel.Warning);
                     return new DependencyResolution { Proceed = false, InstallEnabled = false };
@@ -93,51 +93,10 @@ namespace FactorioModManager.Services.Mods
                 var dependencyTree = new Dictionary<string, List<string>>();
                 var edgeLabels = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
                 var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-                var mandatoryParsed = Constants.DependencyHelper.GetMandatoryDependenciesWithConstraints(target.Dependencies);
-                var incompatibleDeps = Constants.DependencyHelper.GetIncompatibleDependencies(target.Dependencies);
-
                 var installedList = installedMods.ToList();
-                var missing = new List<(string Name, string? Op, string? Version)>();
-                var disabled = new List<ModViewModel>();
 
-                // helper to get effective installed version (apply plannedUpdates override if present)
-                string? GetEffectiveVersion(string name)
-                {
-                    var inst = installedList.FirstOrDefault(m => m.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
-                    if (inst == null) return null;
-                    if (plannedUpdates != null && plannedUpdates.TryGetValue(inst.Name, out var planned))
-                        return planned;
-                    return inst.Version;
-                }
-
-                foreach (var dep in mandatoryParsed)
-                {
-                    var name = dep.Name;
-                    if (Constants.DependencyHelper.IsGameDependency(name))
-                    {
-                        if (Constants.DependencyHelper.IsDLCDependency(name) && !_settingsService.GetHasSpaceAgeDLC())
-                        {
-                            _logService.Log($"Missing required DLC for dependency: {name}", LogLevel.Warning);
-                        }
-                        else
-                        {
-                            _logService.Log($"Skipping game dependency: {name}", LogLevel.Info);
-                            continue;
-                        }
-                    }
-
-                    var installed = installedList.FirstOrDefault(m => m.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
-                    var effectiveVersion = GetEffectiveVersion(name);
-                    if (installed == null)
-                        missing.Add((name, dep.VersionOperator, dep.Version));
-                    else if (!installed.IsEnabled)
-                        disabled.Add(installed);
-                    else if (!Constants.DependencyHelper.SatisfiesVersionConstraint(effectiveVersion, dep.VersionOperator, dep.Version))
-                        missing.Add((name, dep.VersionOperator, dep.Version));
-                }
-
-                var incompatibleLoaded = installedMods.Where(m => m.IsEnabled && incompatibleDeps.Contains(m.Name)).ToList();
+                var (missing, disabled, incompatibleLoaded) = await ProcessDependenciesAsync(
+                    target.Dependencies, installedList, plannedUpdates);
 
                 if (!dependencyTree.TryGetValue(modName, out var list))
                 {
@@ -329,54 +288,16 @@ namespace FactorioModManager.Services.Mods
                     return (new DependencyResolution { Proceed = false, InstallEnabled = false }, string.Empty);
 
                 var target = modDetails.Releases.FirstOrDefault(r => string.Equals(r.Version, version, StringComparison.OrdinalIgnoreCase));
-                if (target == null)
+                if (target is null || target.Dependencies is null)
                     return (new DependencyResolution { Proceed = false, InstallEnabled = false }, string.Empty);
 
                 var dependencyTree = new Dictionary<string, List<string>>();
                 var edgeLabels = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
                 var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-                var mandatoryParsed = Constants.DependencyHelper.GetMandatoryDependenciesWithConstraints(target.Dependencies);
-                var incompatibleDeps = Constants.DependencyHelper.GetIncompatibleDependencies(target.Dependencies);
-
                 var installedList = installedMods.ToList();
-                var missing = new List<(string Name, string? Op, string? Version)>();
-                var disabled = new List<ModViewModel>();
 
-                string? GetEffectiveVersion(string name)
-                {
-                    var inst = installedList.FirstOrDefault(m => m.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
-                    if (inst == null) return null;
-                    if (plannedUpdates != null && plannedUpdates.TryGetValue(inst.Name, out var planned))
-                        return planned;
-                    return inst.Version;
-                }
-
-                foreach (var dep in mandatoryParsed)
-                {
-                    var name = dep.Name;
-                    if (Constants.DependencyHelper.IsGameDependency(name))
-                    {
-                        if (Constants.DependencyHelper.IsDLCDependency(name) && !_settingsService.GetHasSpaceAgeDLC())
-                        {
-                            _logService.Log($"Missing required DLC for dependency: {name}", LogLevel.Warning);
-                        }
-                        else
-                        {
-                            _logService.Log($"Skipping game dependency: {name}", LogLevel.Info);
-                            continue;
-                        }
-                    }
-
-                    var installed = installedList.FirstOrDefault(m => m.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
-                    var effectiveVersion = GetEffectiveVersion(name);
-                    if (installed == null)
-                        missing.Add((name, dep.VersionOperator, dep.Version));
-                    else if (!installed.IsEnabled)
-                        disabled.Add(installed);
-                    else if (!Constants.DependencyHelper.SatisfiesVersionConstraint(effectiveVersion, dep.VersionOperator, dep.Version))
-                        missing.Add((name, dep.VersionOperator, dep.Version));
-                }
+                var (missing, disabled, incompatibleLoaded) = await ProcessDependenciesAsync(
+                    target.Dependencies, installedList, plannedUpdates);
 
                 if (!dependencyTree.TryGetValue(modName, out var list))
                 {
@@ -426,8 +347,8 @@ namespace FactorioModManager.Services.Mods
                 if (disabled.Count > 0 && targetIsEnabled)
                     result.ModsToEnable.AddRange(disabled);
 
-                if (targetIsEnabled && incompatibleDeps.Count > 0)
-                    result.ModsToDisable.AddRange(installedMods.Where(m => m.IsEnabled && incompatibleDeps.Contains(m.Name)));
+                if (targetIsEnabled && incompatibleLoaded.Count > 0)
+                    result.ModsToDisable.AddRange(incompatibleLoaded);
 
                 // Build message body
                 var body = BuildDependencyTreeMessage(dependencyTree, edgeLabels, result);
@@ -479,49 +400,9 @@ namespace FactorioModManager.Services.Mods
                     return result;
                 }
 
-                var mandatoryParsed = Constants.DependencyHelper.GetMandatoryDependenciesWithConstraints(latestRelease.Dependencies);
-                var incompatibleDeps = Constants.DependencyHelper.GetIncompatibleDependencies(latestRelease.Dependencies);
-
-                var installedModsList = installedMods.ToList();
-                var missingDeps = new List<(string Name, string? Op, string? Version)>();
-                var disabledDeps = new List<ModViewModel>();
-
-                string? GetEffectiveVersion(string name)
-                {
-                    var inst = installedModsList.FirstOrDefault(m => m.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
-                    if (inst == null) return null;
-                    if (plannedUpdates != null && plannedUpdates.TryGetValue(inst.Name, out var planned))
-                        return planned;
-                    return inst.Version;
-                }
-
-                foreach (var dep in mandatoryParsed)
-                {
-                    var depName = dep.Name;
-                    if (Constants.DependencyHelper.IsGameDependency(depName))
-                    {
-                        if (Constants.DependencyHelper.IsDLCDependency(depName) && !_settingsService.GetHasSpaceAgeDLC())
-                        {
-                            _logService.Log($"Missing required DLC for dependency: {depName}", LogLevel.Warning);
-                        }
-                        else
-                        {
-                            _logService.Log($"Skipping game dependency: {depName}", LogLevel.Info);
-                            continue;
-                        }
-                    }
-
-                    var depMod = installedModsList.FirstOrDefault(m => m.Name.Equals(depName, StringComparison.OrdinalIgnoreCase));
-                    var effectiveVersion = GetEffectiveVersion(depName);
-                    if (depMod == null)
-                        missingDeps.Add((depName, dep.VersionOperator, dep.Version));
-                    else if (!depMod.IsEnabled)
-                        disabledDeps.Add(depMod);
-                    else if (!Constants.DependencyHelper.SatisfiesVersionConstraint(effectiveVersion, dep.VersionOperator, dep.Version))
-                        missingDeps.Add((depName, dep.VersionOperator, dep.Version));
-                }
-
-                var incompatibleLoaded = installedMods.Where(m => m.IsEnabled && incompatibleDeps.Contains(m.Name)).ToList();
+                var installedList = installedMods.ToList();
+                var (missingDeps, disabledDeps, incompatibleLoaded) = await ProcessDependenciesAsync(
+                    latestRelease.Dependencies, installedList, plannedUpdates);
 
                 if (!dependencyTree.TryGetValue(modName, out var value))
                 {
@@ -582,7 +463,7 @@ namespace FactorioModManager.Services.Mods
                     result.ModsToEnable.AddRange(disabledDeps);
 
                 // Only consider disabling incompatible mods if the current target mod is enabled
-                var targetInstalled = installedModsList.FirstOrDefault(m => m.Name.Equals(modName, StringComparison.OrdinalIgnoreCase));
+                var targetInstalled = installedList.FirstOrDefault(m => m.Name.Equals(modName, StringComparison.OrdinalIgnoreCase));
                 var targetIsEnabled = targetInstalled?.IsEnabled ?? true;
                 if (targetIsEnabled && incompatibleLoaded.Count > 0)
                     result.ModsToDisable.AddRange(incompatibleLoaded);
@@ -594,6 +475,60 @@ namespace FactorioModManager.Services.Mods
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Processes dependencies for a given dependency list. Extracts missing, disabled, and incompatible mods.
+        /// </summary>
+        private Task<(List<(string Name, string? Op, string? Version)> Missing, List<ModViewModel> Disabled, List<ModViewModel> IncompatibleLoaded)> ProcessDependenciesAsync(
+            IReadOnlyList<string>? dependencies,
+            List<ModViewModel> installedList,
+            IDictionary<string, string>? plannedUpdates)
+        {
+            var mandatoryParsed = Constants.DependencyHelper.GetMandatoryDependenciesWithConstraints(dependencies);
+            var incompatibleDeps = Constants.DependencyHelper.GetIncompatibleDependencies(dependencies);
+
+            var missing = new List<(string Name, string? Op, string? Version)>();
+            var disabled = new List<ModViewModel>();
+
+            string? GetEffectiveVersion(string name)
+            {
+                var inst = installedList.FirstOrDefault(m => m.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+                if (inst == null) return null;
+                if (plannedUpdates != null && plannedUpdates.TryGetValue(inst.Name, out var planned))
+                    return planned;
+                return inst.Version;
+            }
+
+            foreach (var dep in mandatoryParsed)
+            {
+                var name = dep.Name;
+                if (Constants.DependencyHelper.IsGameDependency(name))
+                {
+                    if (Constants.DependencyHelper.IsDLCDependency(name) && !_settingsService.GetHasSpaceAgeDLC())
+                    {
+                        _logService.Log($"Missing required DLC for dependency: {name}", LogLevel.Warning);
+                    }
+                    else
+                    {
+                        _logService.Log($"Skipping game dependency: {name}", LogLevel.Debug);
+                        continue;
+                    }
+                }
+
+                var installed = installedList.FirstOrDefault(m => m.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+                var effectiveVersion = GetEffectiveVersion(name);
+                if (installed == null)
+                    missing.Add((name, dep.VersionOperator, dep.Version));
+                else if (!installed.IsEnabled)
+                    disabled.Add(installed);
+                else if (!Constants.DependencyHelper.SatisfiesVersionConstraint(effectiveVersion, dep.VersionOperator, dep.Version))
+                    missing.Add((name, dep.VersionOperator, dep.Version));
+            }
+
+            var incompatibleLoaded = installedList.Where(m => m.IsEnabled && incompatibleDeps.Contains(m.Name)).ToList();
+
+            return Task.FromResult((missing, disabled, incompatibleLoaded));
         }
 
         /// <summary>
