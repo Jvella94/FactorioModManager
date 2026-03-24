@@ -1,9 +1,10 @@
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using FactorioModManager.Services.Mods;
 using FactorioModManager.Models;
 using FactorioModManager.Services.Infrastructure;
+using FactorioModManager.Services.Mods;
 using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace FactorioModManager.ViewModels.MainWindow.UpdateHandlers
 {
@@ -47,17 +48,8 @@ namespace FactorioModManager.ViewModels.MainWindow.UpdateHandlers
 
         void ToggleMod(string modName, bool enabled);
 
-        Task<Result> RunInstallWithDependenciesAsync(string modName, Func<Task<Result>> installMainAsync);
-
         IModService ModService { get; }
         ILogService LogService { get; }
-
-        // Host-level update operations (authoritative implementations)
-        Task UpdateSingleAsync(ModViewModel? mod);
-
-        Task UpdateModsCoreAsync(List<ModViewModel> modsToUpdate, IDependencyHandler dependencyHandler, IProgressReporter progressReporter, int concurrency);
-
-        Task UpdateAllAsync();
 
         // Progress control delegated to host so host can update VM-owned UI properties
         void SetDownloadProgressTotal(int total);
@@ -69,5 +61,12 @@ namespace FactorioModManager.ViewModels.MainWindow.UpdateHandlers
         void SetDownloadProgressVisible(bool visible);
 
         void SetBatchDependencyInstallInProgress(bool inProgress);
+
+        // High-level operations exposed on the host (support optional cancellation tokens)
+        Task UpdateAllAsync(CancellationToken cancellationToken = default);
+
+        Task UpdateSingleAsync(ModViewModel? mod, CancellationToken cancellationToken = default);
+
+        Task<Result> RunInstallWithDependenciesAsync(string modName, Func<Task<Result>> installMainAsync, ModInfo? localModInfo = null, CancellationToken cancellationToken = default);
     }
 }

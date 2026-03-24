@@ -1,5 +1,6 @@
 ﻿using FactorioModManager.Models;
 using FactorioModManager.Services;
+using FactorioModManager.Services.Infrastructure;
 using FactorioModManager.ViewModels.MainWindow.UpdateHandlers;
 using ReactiveUI;
 using System;
@@ -171,6 +172,18 @@ namespace FactorioModManager.ViewModels.MainWindow
         {
             // Begin aggregating candidate dependency names for a single targeted recompute at the end
             StartCandidateAggregation();
+
+            // Initialize download progress helper to ensure speed tracking callbacks are connected
+            // before batch updates start. This is required for the download speed to be visible
+            // in the status bar during batch mod updates.
+            try
+            {
+                GetOrCreateDownloadProgressHelper();
+            }
+            catch (Exception ex)
+            {
+                _logService.LogDebug($"Failed to initialize download progress helper: {ex.Message}");
+            }
 
             var host = EnsureUpdatesHost();
             await host.UpdateAllAsync();
@@ -539,6 +552,9 @@ namespace FactorioModManager.ViewModels.MainWindow
         {
             if (_updatesHost != null) return _updatesHost;
 
+            // supply a compact UI callback adapter instead of many delegates
+            var uiCallbacks = new UpdateHostUiAdapter(this, _uiService);
+
             _updatesHost = new UpdatesHost(
                 allMods: _allMods,
                 dependencyFlow: _dependencyFlow,
@@ -549,23 +565,44 @@ namespace FactorioModManager.ViewModels.MainWindow
                 apiService: _apiService,
                 settingsService: _settingsService,
                 metadataService: _metadataService,
-                forceRefreshAffectedModsAsync: ForceRefreshAffectedModsAsync,
-                beginSingleDownloadProgressAsync: BeginSingleDownloadProgressAsync,
-                endSingleDownloadProgressAsync: EndSingleDownloadProgressAsync,
-                incrementBatchCompleted: () => Interlocked.Increment(ref _downloadProgressCompleted),
-                setStatusAsync: (msg, lvl) => _uiService.InvokeAsync(() => SetStatus(msg, lvl)),
-                confirmDependencyInstallAsync: ConfirmDependencyInstallAsync,
-                // new progress delegates
-                setDownloadProgressTotal: total => _uiService.Post(() => { DownloadProgressTotal = total; }),
-                setDownloadProgressCompleted: completed => _uiService.Post(() => { Interlocked.Exchange(ref _downloadProgressCompleted, completed); DownloadProgressCompleted = completed; }),
-                // increment delegate should ONLY increment; host will schedule UI update
-                incrementDownloadProgressCompleted: () => Interlocked.Increment(ref _downloadProgressCompleted),
-                setDownloadProgressVisible: visible => _uiService.Post(() => IsDownloadProgressVisible = visible),
-                // pass VM flush delegate for host timer to call
-                onApplyBatchedProgress: ApplyBatchedProgressToUi
+                uiCallbacks: uiCallbacks
              );
 
             return _updatesHost!;
+        }
+
+        // Adapter implementing the compact IUpdateHostUi interface by delegating into the ViewModel
+        private sealed class UpdateHostUiAdapter(MainWindowViewModel vm, IUIService uiService) : IUpdateHostUi
+        {
+            private readonly MainWindowViewModel _vm = vm;
+            private readonly IUIService _ui = uiService;
+
+            public Task ForceRefreshAffectedModsAsync(IEnumerable<string> names) => _vm.ForceRefreshAffectedModsAsync(names);
+
+            public Task BeginSingleDownloadProgressAsync() => _vm.BeginSingleDownloadProgressAsync();
+
+            public Task EndSingleDownloadProgressAsync(bool minimal = false) => _vm.EndSingleDownloadProgressAsync(minimal);
+
+            public void IncrementBatchCompleted() => Interlocked.Increment(ref _vm._downloadProgressCompleted);
+
+            public Task SetStatusAsync(string message, LogLevel level = LogLevel.Info)
+                => _ui.InvokeAsync(() => _vm.SetStatus(message, level));
+
+            public Task<bool> ConfirmDependencyInstallAsync(bool suppress, string title, string message, string confirmText, string cancelText)
+                => _vm.ConfirmDependencyInstallAsync(suppress, title, message, confirmText, cancelText);
+
+            public void SetDownloadProgressTotal(int total) => _ui.Post(() => { _vm.DownloadProgressTotal = total; });
+
+            public void SetDownloadProgressCompleted(int completed) => _ui.Post(() => { Interlocked.Exchange(ref _vm._downloadProgressCompleted, completed); _vm.DownloadProgressCompleted = completed; });
+
+            public void IncrementDownloadProgressCompleted() => Interlocked.Increment(ref _vm._downloadProgressCompleted);
+
+            public void SetDownloadProgressVisible(bool visible) => _ui.Post(() => _vm.IsDownloadProgressVisible = visible);
+
+            public void ApplyBatchedProgress() => _vm.ApplyBatchedProgressToUi();
+
+            public IProgress<(long bytesDownloaded, long? totalBytes)> CreateGlobalDownloadProgressReporter()
+                => _vm.CreateGlobalDownloadProgressReporter();
         }
     }
 }

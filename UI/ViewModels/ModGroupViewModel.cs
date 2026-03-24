@@ -18,6 +18,7 @@ namespace FactorioModManager.ViewModels
         private bool _isEditing;
         private string _editName = string.Empty;
         private bool _isActiveFilter = false;
+        private bool _requestRenameFocus = false;
 
         public string Name
         {
@@ -51,6 +52,13 @@ namespace FactorioModManager.ViewModels
         {
             get => _editName;
             set => this.RaiseAndSetIfChanged(ref _editName, value);
+        }
+
+        // Request that the rename editor focus/select the textbox (UI-only)
+        public bool RequestRenameFocus
+        {
+            get => _requestRenameFocus;
+            set => this.RaiseAndSetIfChanged(ref _requestRenameFocus, value);
         }
 
         // Indicates whether this group is currently used as the active filter

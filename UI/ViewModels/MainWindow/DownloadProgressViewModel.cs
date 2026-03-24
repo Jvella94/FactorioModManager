@@ -245,7 +245,11 @@ namespace FactorioModManager.ViewModels.MainWindow
                      var canShowSpeed = sampleCount >= 2;
 
                      // Update if speed changed significantly or toggled between empty/non-empty
-                     if (canShowSpeed && (lastReportedSpeed == 0 || speedDelta >= minSignificantChange || string.IsNullOrEmpty(speedText) != string.IsNullOrEmpty((string?)null)))
+                     var hasSpeed = !string.IsNullOrEmpty(speedText);
+                     var hadSpeed = lastReportedSpeed > 0;
+                     var speedToggled = hasSpeed != hadSpeed;
+
+                     if (canShowSpeed && (lastReportedSpeed == 0 || speedDelta >= minSignificantChange || speedToggled))
                      {
                          // Use UI thread posting for safety
                          _uiService.Post(() =>

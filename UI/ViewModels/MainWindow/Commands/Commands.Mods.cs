@@ -35,6 +35,9 @@ namespace FactorioModManager.ViewModels.MainWindow
         // New command to update all mods that have pending updates
         public ReactiveCommand<Unit, Unit> UpdateAllCommand { get; private set; } = null!;
 
+        // New command to disable all mods
+        public ReactiveCommand<Unit, Unit> DisableAllModsCommand { get; private set; } = null!;
+
         private void InitializeModCommands()
         {
             RefreshModsCommand = ReactiveCommand.CreateFromTask(RefreshModsAsync);
@@ -63,6 +66,9 @@ namespace FactorioModManager.ViewModels.MainWindow
 
             // Initialize new UpdateAllCommand
             UpdateAllCommand = ReactiveCommand.CreateFromTask(UpdateAllAsync);
+
+            // Initialize DisableAllModsCommand
+            DisableAllModsCommand = ReactiveCommand.CreateFromTask(DisableAllModsAsync);
         }
 
         /// <summary>
@@ -194,7 +200,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                     return Result.Fail(installResult.Error ?? "Install failed", installResult.Code);
                 }
 
-                var hostResult = await host.RunInstallWithDependenciesAsync(modName, InstallMainAsync);
+                var hostResult = await host.RunInstallWithDependenciesAsync(modName, InstallMainAsync, modInfo);
 
                 if (!hostResult.Success)
                 {

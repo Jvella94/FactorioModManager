@@ -99,32 +99,6 @@ namespace FactorioModManager.Views
                     }
                 }
                 catch { }
-
-                // Subscribe to filtered mods collection changes to keep view in context
-                vm.FilteredMods.CollectionChanged += (s, e) =>
-                {
-                    try
-                    {
-                        var modGrid = this.FindControl<DataGrid>("ModGrid");
-                        if (modGrid == null || modGrid.Columns.Count == 0)
-                            return;
-
-                        // Get the first column for ScrollIntoView
-                        var firstColumn = modGrid.Columns[0];
-
-                        // If there's a selected mod, scroll it into view
-                        if (vm.SelectedMod != null)
-                        {
-                            modGrid.ScrollIntoView(vm.SelectedMod, firstColumn);
-                        }
-                        // Otherwise, try to scroll to the first item to keep user in context
-                        else if (vm.FilteredMods.Count > 0)
-                        {
-                            modGrid.ScrollIntoView(vm.FilteredMods[0], firstColumn);
-                        }
-                    }
-                    catch { }
-                };
             }
         }
 

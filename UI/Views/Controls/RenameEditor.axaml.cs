@@ -37,8 +37,8 @@ namespace FactorioModManager.Views.Controls
             var save = this.FindControl<Button>("SaveBtn");
             var cancel = this.FindControl<Button>("CancelBtn");
 
-            if (save != null) save.Click += Save_Click;
-            if (cancel != null) cancel.Click += Cancel_Click;
+            save?.Click += Save_Click;
+            cancel?.Click += Cancel_Click;
 
             if (_editBox != null)
             {
@@ -127,11 +127,8 @@ namespace FactorioModManager.Views.Controls
         private void OnDataContextChanged(object? sender, EventArgs e)
         {
             // Unsubscribe previous
-            if (_notifier != null)
-            {
-                _notifier.PropertyChanged -= Notifier_PropertyChanged;
-                _notifier = null;
-            }
+            _notifier?.PropertyChanged -= Notifier_PropertyChanged;
+            _notifier = null;
 
             // Subscribe new if it supports INotifyPropertyChanged
             if (this.DataContext is INotifyPropertyChanged npc)
@@ -212,6 +209,56 @@ namespace FactorioModManager.Views.Controls
                 }
                 catch { }
             }
+            else if (string.Equals(e.PropertyName, "RequestRenameFocus", StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    var reqProp = this.DataContext?.GetType().GetProperty("RequestRenameFocus");
+                    if (reqProp != null && reqProp.GetValue(this.DataContext) is bool req && req)
+                    {
+                        // Schedule focus / select similar to IsRenaming handling
+                        Dispatcher.UIThread.Post(() =>
+                        {
+                            if (_editBox != null && TopLevel.GetTopLevel(_editBox) != null)
+                            {
+                                Dispatcher.UIThread.Post(async () =>
+                                {
+                                    try
+                                    {
+                                        await Task.Delay(10);
+                                        Dispatcher.UIThread.Post(() =>
+                                        {
+                                            try
+                                            {
+                                                if (_editBox != null && TopLevel.GetTopLevel(_editBox) != null)
+                                                {
+                                                    _editBox.Focus();
+                                                    _editBox.SelectAll();
+                                                }
+                                            }
+                                            catch { }
+                                        });
+                                    }
+                                    catch { }
+                                }, DispatcherPriority.Background);
+                            }
+                            else
+                            {
+                                _pendingSelect = true;
+                            }
+
+                            // Clear the flag on the DataContext so it doesn't re-fire
+                            try
+                            {
+                                if (this.DataContext != null && reqProp.CanWrite)
+                                    reqProp.SetValue(this.DataContext, false);
+                            }
+                            catch { }
+                        });
+                    }
+                }
+                catch { }
+            }
         }
 
         private void UpdateFromDataContext()
@@ -270,6 +317,47 @@ namespace FactorioModManager.Views.Controls
                     else
                     {
                         SetHighlight(false);
+                    }
+
+                    // Also check RequestRenameFocus initial value (in case it's set before attachment)
+                    var reqProp = this.DataContext.GetType().GetProperty("RequestRenameFocus");
+                    if (reqProp != null && reqProp.GetValue(this.DataContext) is bool req && req)
+                    {
+                        if (_editBox != null && TopLevel.GetTopLevel(_editBox) != null)
+                        {
+                            Dispatcher.UIThread.Post(async () =>
+                            {
+                                try
+                                {
+                                    await Task.Delay(10);
+                                    Dispatcher.UIThread.Post(() =>
+                                    {
+                                        try
+                                        {
+                                            if (_editBox != null && TopLevel.GetTopLevel(_editBox) != null)
+                                            {
+                                                _editBox.Focus();
+                                                _editBox.SelectAll();
+                                            }
+                                        }
+                                        catch { }
+                                    });
+                                }
+                                catch { }
+                            }, DispatcherPriority.Background);
+                        }
+                        else
+                        {
+                            _pendingSelect = true;
+                        }
+
+                        // Clear it
+                        try
+                        {
+                            if (reqProp.CanWrite)
+                                reqProp.SetValue(this.DataContext, false);
+                        }
+                        catch { }
                     }
                 }
             }

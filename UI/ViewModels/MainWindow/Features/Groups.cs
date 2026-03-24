@@ -29,7 +29,8 @@ namespace FactorioModManager.ViewModels.MainWindow
                 Name = newGroup.Name,
                 ModNames = newGroup.ModNames,
                 IsRenaming = true,
-                EditedName = newGroup.Name
+                EditedName = newGroup.Name,
+                RequestRenameFocus = true
             };
             UpdateGroupStatus(groupVm);
             Groups.Add(groupVm);

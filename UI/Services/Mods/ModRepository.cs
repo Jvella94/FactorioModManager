@@ -28,6 +28,14 @@ namespace FactorioModManager.Services.Mods
         private readonly ILogService _logService = logService;
         private readonly Settings.IModPathSettings _pathSettings = pathSettings;
 
+        // Dirty timer batching fields
+        private readonly Lock _modListLock = new();
+
+        private readonly Dictionary<string, ModListEntry> _pendingModStates = new(StringComparer.OrdinalIgnoreCase);
+        private System.Timers.Timer? _dirtyTimer;
+        private const int _dirtyDelayMs = 200;
+        private bool _dirty = false;
+
         public List<(ModInfo Info, bool IsEnabled, DateTime? LastUpdated, string? ThumbnailPath, string FilePath)> LoadAllMods()
         {
             var modsDirectory = _pathSettings.GetModsPath();
@@ -124,29 +132,36 @@ namespace FactorioModManager.Services.Mods
 
         public void SaveModEntry(string modName, bool enabled, string? version = null)
         {
-            var states = LoadModEntries();
-
-            if (states.TryGetValue(modName, out var existing))
+            lock (_modListLock)
             {
-                var newEntry = new ModListEntry
+                // Update in-memory state
+                if (!_pendingModStates.TryGetValue(modName, out var existing))
                 {
-                    Name = modName,
-                    Enabled = enabled,
-                    Version = version ?? existing.Version
-                };
-                states[modName] = newEntry;
-            }
-            else
-            {
-                states[modName] = new ModListEntry
+                    var all = LoadModEntries();
+                    foreach (var kv in all)
+                        _pendingModStates[kv.Key] = kv.Value;
+                }
+                if (_pendingModStates.TryGetValue(modName, out existing))
                 {
-                    Name = modName,
-                    Enabled = enabled,
-                    Version = version
-                };
+                    _pendingModStates[modName] = new ModListEntry
+                    {
+                        Name = modName,
+                        Enabled = enabled,
+                        Version = version ?? existing.Version
+                    };
+                }
+                else
+                {
+                    _pendingModStates[modName] = new ModListEntry
+                    {
+                        Name = modName,
+                        Enabled = enabled,
+                        Version = version
+                    };
+                }
+                _dirty = true;
+                StartOrResetDirtyTimer();
             }
-
-            SaveModEntries(states);
         }
 
         public Dictionary<string, ModListEntry> LoadModEntries()
@@ -184,9 +199,56 @@ namespace FactorioModManager.Services.Mods
 
         public void SaveModEntries(IDictionary<string, ModListEntry> states)
         {
+            lock (_modListLock)
+            {
+                // Cancel timer and flush immediately
+                _dirtyTimer?.Stop();
+                _dirtyTimer?.Dispose();
+                _dirtyTimer = null;
+                _pendingModStates.Clear();
+                foreach (var kv in states)
+                    _pendingModStates[kv.Key] = kv.Value;
+                _dirty = false;
+                WriteModListJson(_pendingModStates);
+            }
+        }
+
+        private void StartOrResetDirtyTimer()
+        {
+            if (_dirtyTimer is null)
+            {
+                _dirtyTimer = new System.Timers.Timer(_dirtyDelayMs);
+                _dirtyTimer.Elapsed += (s, e) => FlushDirtyModList();
+                _dirtyTimer.AutoReset = false;
+                _dirtyTimer.Start();
+            }
+            else
+            {
+                _dirtyTimer.Stop();
+                _dirtyTimer.Start();
+            }
+        }
+
+        private void FlushDirtyModList()
+        {
+            lock (_modListLock)
+            {
+                if (!_dirty) return;
+                _dirty = false;
+                if (_dirtyTimer is not null)
+                {
+                    _dirtyTimer.Stop();
+                    _dirtyTimer.Dispose();
+                    _dirtyTimer = null;
+                }
+                WriteModListJson(_pendingModStates);
+            }
+        }
+
+        private void WriteModListJson(Dictionary<string, ModListEntry> states)
+        {
             var modsDirectory = _pathSettings.GetModsPath();
             var modListPath = Path.Combine(modsDirectory, Constants.FileSystem.ModListFileName);
-
             try
             {
                 var dto = new ModListDto
@@ -198,10 +260,8 @@ namespace FactorioModManager.Services.Mods
                         Version = e.Version
                     })]
                 };
-
                 var json = JsonSerializer.Serialize(dto, Constants.JsonOptions.ModList);
                 File.WriteAllText(modListPath, json);
-
                 _logService.Log($"Wrote {Constants.FileSystem.ModListFileName} at {DateTime.UtcNow:O}");
             }
             catch (Exception ex)

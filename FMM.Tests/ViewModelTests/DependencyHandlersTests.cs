@@ -63,14 +63,6 @@ namespace FMM.Tests.ViewModelTests
                 vm?.IsEnabled = enabled;
             }
 
-            public Task<Result> RunInstallWithDependenciesAsync(string modName, Func<Task<Result>> installMainAsync) => Task.FromResult(Result.Ok());
-
-            public Task UpdateSingleAsync(ModViewModel? mod) => Task.CompletedTask;
-
-            public Task UpdateModsCoreAsync(List<ModViewModel> modsToUpdate, IDependencyHandler dependencyHandler, IProgressReporter progressReporter, int concurrency) => Task.CompletedTask;
-
-            public Task UpdateAllAsync() => Task.CompletedTask;
-
             public void SetDownloadProgressTotal(int total)
             { }
 
@@ -82,6 +74,15 @@ namespace FMM.Tests.ViewModelTests
 
             public void SetDownloadProgressVisible(bool visible)
             { }
+
+            public void SetBatchDependencyInstallInProgress(bool inProgress)
+            { }
+
+            public Task UpdateAllAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+            public Task UpdateSingleAsync(ModViewModel? mod, CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+            public Task<Result> RunInstallWithDependenciesAsync(string modName, Func<Task<Result>> installMainAsync, ModInfo? localModInfo = null, CancellationToken cancellationToken = default) => Task.FromResult(Result.Ok());
         }
 
         private class FakeDependencyFlow : IDependencyFlow
@@ -130,9 +131,6 @@ namespace FMM.Tests.ViewModelTests
                 return Task.FromResult((res, string.Empty));
             }
 
-            public Task<DependencyResolution> ResolveForInstallAsync(string modName, IEnumerable<ModViewModel> installedMods)
-                => Task.FromResult(new DependencyResolution { Proceed = true });
-
             public Task<DependencyResolution> ResolveForUpdateAsync(string modName, string version, IEnumerable<ModViewModel> installedMods, IDictionary<string, string>? plannedUpdates = null)
             {
                 var r = new DependencyResolution { Proceed = true };
@@ -160,6 +158,9 @@ namespace FMM.Tests.ViewModelTests
             public List<string> GetMissingMandatoryDepsForModInfo(ModInfo mod, IEnumerable<ModInfo> installedMods) => [];
 
             public bool ValidateMandatoryDependencies(List<string> dependencies, IEnumerable<ModViewModel> installedMods) => true;
+
+            public Task<DependencyResolution> ResolveForInstallAsync(string modName, IEnumerable<ModViewModel> installedMods, ModInfo? localModInfo = null)
+             => Task.FromResult(new DependencyResolution { Proceed = true });
         }
 
         [Fact]

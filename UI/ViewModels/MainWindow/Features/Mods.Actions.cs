@@ -3,6 +3,7 @@ using ReactiveUI;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using static FactorioModManager.Constants;
 
 namespace FactorioModManager.ViewModels.MainWindow
@@ -343,7 +344,6 @@ namespace FactorioModManager.ViewModels.MainWindow
                 RecomputeUnusedInternalFlagsForCandidates(candidateDeps);
             }
             ApplyModFilter();
-            this.RaisePropertyChanged(nameof(EnabledCountText));
             SetStatus($"Removed {mod.Title}");
         }
 
@@ -383,6 +383,58 @@ namespace FactorioModManager.ViewModels.MainWindow
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Disables all currently enabled mods.
+        /// </summary>
+        private async Task DisableAllModsAsync()
+        {
+            // Prevent toggling while Factorio is running
+            if (_factorioLauncher.IsFactorioRunning())
+            {
+                SetStatus("Cannot disable mods while Factorio is running.", LogLevel.Warning);
+                await _uiService.ShowMessageAsync(
+                    "Factorio is running",
+                    "Mods cannot be disabled while Factorio is running. Please close the game and try again.");
+                return;
+            }
+
+            // Get all currently enabled mods
+            var enabledMods = _allMods.Where(m => m.IsEnabled).ToList();
+
+            if (enabledMods.Count == 0)
+            {
+                SetStatus("No mods are currently enabled.", LogLevel.Warning);
+                return;
+            }
+
+            // Confirm with user
+            var confirmDisable = await _uiService.ShowConfirmationAsync(
+                "Disable All Mods",
+                $"Are you sure you want to disable all {enabledMods.Count} enabled mod(s)?",
+                null);
+
+            if (!confirmDisable)
+            {
+                SetStatus("Cancelled disabling all mods.");
+                return;
+            }
+
+            // Disable all enabled mods
+            foreach (var mod in enabledMods)
+            {
+                mod.IsEnabled = false;
+                _modService.ToggleMod(mod.Name, false);
+            }
+
+            SetStatus($"Disabled all {enabledMods.Count} mod(s)");
+
+            // Update UI state - update groups and enabled count
+            foreach (var group in Groups)
+                UpdateGroupStatus(group);
+
+            this.RaisePropertyChanged(nameof(EnabledCountText));
         }
     }
 }

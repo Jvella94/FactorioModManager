@@ -29,7 +29,7 @@ namespace FactorioModManager.Services.Mods
 
     public interface IDependencyFlow
     {
-        Task<DependencyResolution> ResolveForInstallAsync(string modName, IEnumerable<ModViewModel> installedMods);
+        Task<DependencyResolution> ResolveForInstallAsync(string modName, IEnumerable<ModViewModel> installedMods, ModInfo? localModInfo = null);
 
         // Single planned-updates-aware update resolver (plannedUpdates may be null)
         Task<DependencyResolution> ResolveForUpdateAsync(string modName, string version, IEnumerable<ModViewModel> installedMods, IDictionary<string, string>? plannedUpdates = null);
@@ -62,13 +62,13 @@ namespace FactorioModManager.Services.Mods
         private readonly IFactorioApiService _factorioApiService = factorioApiService ?? throw new ArgumentNullException(nameof(factorioApiService));
         private readonly ISettingsService _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
 
-        public async Task<DependencyResolution> ResolveForInstallAsync(string modName, IEnumerable<ModViewModel> installedMods)
+        public async Task<DependencyResolution> ResolveForInstallAsync(string modName, IEnumerable<ModViewModel> installedMods, ModInfo? localModInfo = null)
         {
             var visitedMods = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var dependencyTree = new Dictionary<string, List<string>>();
             var edgeLabels = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
-            var resolution = await ResolveDependenciesRecursivelyAsync(modName, installedMods, visitedMods, dependencyTree, edgeLabels, plannedUpdates: null);
-            // Do not show UI here. Caller should use BuildInstallPreviewAsync to obtain the message and show confirmation once.
+            // Pass localModInfo to enable fallback in recursive resolution
+            var resolution = await ResolveDependenciesRecursivelyAsync(modName, installedMods, visitedMods, dependencyTree, edgeLabels, plannedUpdates: null, localModInfo: localModInfo);
             return resolution;
         }
 
@@ -372,7 +372,8 @@ namespace FactorioModManager.Services.Mods
             HashSet<string> visitedMods,
             Dictionary<string, List<string>> dependencyTree,
             Dictionary<string, Dictionary<string, string>> edgeLabels,
-            IDictionary<string, string>? plannedUpdates)
+            IDictionary<string, string>? plannedUpdates,
+            ModInfo? localModInfo = null)
         {
             if (visitedMods.Contains(modName))
             {
@@ -386,15 +387,30 @@ namespace FactorioModManager.Services.Mods
 
             try
             {
+                // Try API first
                 var modDetails = await _factorioApiService.GetModDetailsFullAsync(modName);
-                if (modDetails?.Releases == null || modDetails.Releases.Count == 0)
+                List<string>? dependencies = null;
+
+                if (modDetails?.Releases != null && modDetails.Releases.Count > 0)
                 {
-                    _logService.Log($"DependencyFlow: no release details found for {modName}", LogLevel.Warning);
+                    // Use API dependencies if available
+                    var latestRelease = modDetails.Releases.OrderByDescending(r => r.ReleasedAt).FirstOrDefault();
+                    dependencies = latestRelease?.Dependencies;
+                    _logService.LogDebug($"DependencyFlow: using API dependencies for {modName}");
+                }
+                else if (localModInfo != null && modName.Equals(localModInfo.Name, StringComparison.OrdinalIgnoreCase))
+                {
+                    // Fallback to local ModInfo (info.json) if mod doesn't exist on portal
+                    dependencies = localModInfo.Dependencies;
+                    _logService.LogDebug($"DependencyFlow: mod {modName} not found on API, using local info.json dependencies as fallback");
+                }
+                else
+                {
+                    _logService.Log($"DependencyFlow: no release details found for {modName} and no local fallback available", LogLevel.Warning);
                     return new DependencyResolution { Proceed = false, InstallEnabled = false };
                 }
 
-                var latestRelease = modDetails.Releases.OrderByDescending(r => r.ReleasedAt).FirstOrDefault();
-                if (latestRelease == null || latestRelease.Dependencies == null)
+                if (dependencies == null || dependencies.Count == 0)
                 {
                     _logService.Log($"DependencyFlow: no dependencies found for {modName}", LogLevel.Info);
                     return result;
@@ -402,7 +418,7 @@ namespace FactorioModManager.Services.Mods
 
                 var installedList = installedMods.ToList();
                 var (missingDeps, disabledDeps, incompatibleLoaded) = await ProcessDependenciesAsync(
-                    latestRelease.Dependencies, installedList, plannedUpdates);
+                    dependencies, installedList, plannedUpdates);
 
                 if (!dependencyTree.TryGetValue(modName, out var value))
                 {

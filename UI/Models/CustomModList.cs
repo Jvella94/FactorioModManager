@@ -13,6 +13,7 @@ namespace FactorioModManager.Models
         private bool _isRenaming;
         private string _editedName = string.Empty;
         private DateTime _createdAt = DateTime.UtcNow;
+        private bool _requestRenameFocus = false;
 
         [JsonPropertyName("name")]
         public string Name
@@ -53,6 +54,14 @@ namespace FactorioModManager.Models
         {
             get => _editedName;
             set => SetField(ref _editedName, value);
+        }
+
+        // UI-only: request focus for rename editor (not persisted)
+        [JsonIgnore]
+        public bool RequestRenameFocus
+        {
+            get => _requestRenameFocus;
+            set => SetField(ref _requestRenameFocus, value);
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;
