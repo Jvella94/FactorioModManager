@@ -246,9 +246,22 @@ namespace FactorioModManager.ViewModels
         public bool IsOldVersionSelected =>
             SelectedVersion != null && SelectedVersion != Version;
 
-        public string LastUpdatedText => LastUpdated.HasValue
-            ? LastUpdated.Value.ToString("yyyy-MM-dd")
-            : "Unknown";
+        public string LastUpdatedText
+        {
+            get
+            {
+                if (!LastUpdated.HasValue)
+                    return "Unknown";
+
+                var dt = LastUpdated.Value;
+                // If the last updated date is today, show the time portion
+                if (dt.Date == DateTime.Today)
+                    return dt.ToString("HH:mm:ss");
+
+                // Otherwise show the date as before
+                return dt.ToString("yyyy-MM-dd");
+            }
+        }
 
         public string UpdateText => HasUpdate && !string.IsNullOrEmpty(LatestVersion)
             ? $"Update available: {LatestVersion}"

@@ -42,7 +42,6 @@
     <Menu Grid.Row="0">
       <MenuItem Header="_File">
         <MenuItem Header="_Refresh Mods List" Command="{Binding RefreshModsCommand}" />
-        <MenuItem Header="_Install Mod" Command="{Binding InstallModCommand}" />
         <MenuItem Header="_Open Mods Folder" Command="{Binding OpenModFolderCommand}" />
         <MenuItem Header="_Disable All Mods" Command="{Binding DisableAllModsCommand}" />
         <Separator />
@@ -51,6 +50,7 @@
         <MenuItem Header="_Settings" Command="{Binding OpenSettingsCommand}" />
       </MenuItem>
 
+      <MenuItem Header="_Install Mod" Command="{Binding InstallModCommand}" />
       <!-- Combined Updates menu -->
       <MenuItem Header="_Updates">
         <MenuItem Header="Check for Mod _Updates" Command="{Binding CheckUpdatesCustomCommand}" />
@@ -92,7 +92,7 @@
                         ToolTip.Tip="Show / hide groups panel">
             <StackPanel Orientation="Horizontal" Spacing="6">
               <TextBlock Text="📁" FontSize="14" />
-              <TextBlock Text="Playsets" />
+              <TextBlock Text="Lists Panel" />
             </StackPanel>
           </ToggleButton>
         </StackPanel>
@@ -192,12 +192,25 @@
       </Grid.ColumnDefinitions>
 
       <!-- Groups Panel and Mod Lists combined into a single left column grid to avoid overlap -->
-      <Grid Grid.Column="0">
+      <Grid Grid.Column="0" ClipToBounds="True">
         <Grid.RowDefinitions>
           <!-- Make rows stretch so expanders can fill available vertical space -->
           <RowDefinition Height="Auto" />
           <RowDefinition Height="*" />
         </Grid.RowDefinitions>
+
+        <!-- Loading overlay while mods are being refreshed -->
+        <Border Grid.RowSpan="2"
+                Background="#E0181818"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch"
+                IsVisible="{Binding IsRefreshing}"
+                ZIndex="10">
+          <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
+            <ProgressBar Width="140" Height="4" IsIndeterminate="True" />
+            <TextBlock Text="Loading..." Foreground="#DDD" FontSize="12" HorizontalAlignment="Center" />
+          </StackPanel>
+        </Border>
 
         <!-- Groups Panel (compact spacing + internal scrolling) -->
         <Border Grid.Row="0" BorderBrush="#333" BorderThickness="0,0,1,0"
@@ -217,6 +230,7 @@
           <Expander Header="Mod Groups"
                     IsExpanded="{Binding AreGroupsExpanded, Mode=TwoWay}"
                     VerticalAlignment="Stretch"
+                    HorizontalAlignment="Stretch"
                     Margin="0">
             <Grid VerticalAlignment="Stretch">
               <Grid.RowDefinitions>
@@ -232,6 +246,7 @@
                        DoubleTapped="GroupsListBox_OnDoubleTapped"
                        BorderThickness="0"
                        Background="Transparent"
+                       HorizontalAlignment="Stretch"
                        VerticalAlignment="Stretch">
                 <ListBox.ItemsPanel>
                   <ItemsPanelTemplate>
@@ -242,7 +257,7 @@
                 <ListBox.ItemTemplate>
                   <DataTemplate>
                     <!-- Reduced padding and margin for denser items; content stretches to full width -->
-                    <Border CornerRadius="4" Padding="6,6" Margin="0,0,0,4" Background="#2A2A2A" HorizontalAlignment="Stretch">
+                    <Border CornerRadius="4" Padding="6,6" Margin="0,0,0,2" Background="#2A2A2A" HorizontalAlignment="Stretch">
                       <Grid>
                         <Grid.RowDefinitions>
                           <RowDefinition Height="Auto" />
@@ -255,20 +270,23 @@
                         </StackPanel>
 
                         <!-- Action strip for selected item only; occupies available width and left-aligned -->
-                        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="6" Margin="0,6,0,0"
+                        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="4" Margin="0,4,0,0"
                                     IsVisible="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}"
                                     HorizontalAlignment="Left">
-                          <Button Content="Toggle"
+                          <Button Content="⚡"
                                   Command="{Binding $parent[Window].((vmmw:MainWindowViewModel)DataContext).ToggleGroupCommand}"
                                   CommandParameter="{Binding}"
-                                  FontSize="11" Padding="6,4" MinWidth="64" />
-                          <Button Content="Rename"
+                                  FontSize="14" Padding="5,3" MinWidth="30"
+                                  ToolTip.Tip="Toggle group mods" />
+                          <Button Content="✏"
                                   Command="{Binding $parent[Window].((vmmw:MainWindowViewModel)DataContext).RenameGroupCommand}"
                                   CommandParameter="{Binding}"
-                                  FontSize="11" Padding="6,4" MinWidth="64" />
-                          <Button Content="Delete"
+                                  FontSize="14" Padding="5,3" MinWidth="30"
+                                  ToolTip.Tip="Rename group" />
+                          <Button Content="🗑"
                                  Click="DeleteGroup_Click"
-                                 FontSize="11" Padding="6,4" MinWidth="64" />
+                                 FontSize="14" Padding="5,3" MinWidth="30"
+                                 ToolTip.Tip="Delete group" />
                         </StackPanel>
                       </Grid>
                     </Border>
@@ -296,10 +314,12 @@
         </Border>
 
         <!-- Mod Lists Panel (compact + internal scrolling) -->
-        <Border Grid.Row="1" BorderBrush="#2A2A2A" BorderThickness="1,10,1,1" Background="#202020" Padding="6" Margin="0,12,0,0">
-          <Expander Header="Saved Mod Lists"
+        <Border Grid.Row="1" BorderBrush="#333" BorderThickness="0,0,1,0" Background="#252525" Padding="6" Margin="0,0,0,0"
+                IsVisible="{Binding AreGroupsVisible}">
+          <Expander Header="Mod Lists"
                     IsExpanded="{Binding AreModListsExpanded, Mode=TwoWay}"
                     VerticalAlignment="Stretch"
+                    HorizontalAlignment="Stretch"
                     Margin="0">
             <Grid VerticalAlignment="Stretch">
               <Grid.RowDefinitions>
@@ -313,6 +333,7 @@
                      Name="ModListsListBox"
                      BorderThickness="0"
                      Background="Transparent"
+                     HorizontalAlignment="Stretch"
                      VerticalAlignment="Stretch">
                 <ListBox.ItemsPanel>
                   <ItemsPanelTemplate>
@@ -322,7 +343,7 @@
 
                 <ListBox.ItemTemplate>
                   <DataTemplate>
-                    <Border CornerRadius="4" Padding="6,6" Margin="0,0,0,4" Background="#2A2A2A" HorizontalAlignment="Stretch">
+                    <Border CornerRadius="4" Padding="6,6" Margin="0,0,0,2" Background="#2A2A2A" HorizontalAlignment="Stretch">
                       <Grid>
                         <Grid.RowDefinitions>
                           <RowDefinition Height="Auto" />
@@ -338,12 +359,12 @@
                           <TextBlock Text="{Binding Entries.Count, StringFormat='{}{0} mods'}" FontSize="10" Foreground="#888" />
                         </StackPanel>
 
-                        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="6" Margin="0,6,0,0"
+                        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="4" Margin="0,4,0,0"
                                     IsVisible="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}"
                                     HorizontalAlignment="Left">
-                          <Button Content="Apply" Command="{Binding DataContext.ApplyModListCommand, ElementName=RootWindow}" CommandParameter="{Binding Name}" FontSize="11" Padding="6" MinWidth="64" />
-                          <Button Content="Rename" Command="{Binding DataContext.StartRenameModListCommand, ElementName=RootWindow}" CommandParameter="{Binding}" FontSize="11" Padding="6" MinWidth="64" />
-                          <Button Content="Delete" Command="{Binding DataContext.DeleteModListCommand, ElementName=RootWindow}" CommandParameter="{Binding Name}" FontSize="11" Padding="6" MinWidth="64" />
+                          <Button Content="▶" Command="{Binding DataContext.ApplyModListCommand, ElementName=RootWindow}" CommandParameter="{Binding Name}" FontSize="14" Padding="5,3" MinWidth="30" ToolTip.Tip="Apply mod list" />
+                          <Button Content="✏" Command="{Binding DataContext.StartRenameModListCommand, ElementName=RootWindow}" CommandParameter="{Binding}" FontSize="14" Padding="5,3" MinWidth="30" ToolTip.Tip="Rename mod list" />
+                          <Button Content="🗑" Command="{Binding DataContext.DeleteModListCommand, ElementName=RootWindow}" CommandParameter="{Binding Name}" FontSize="14" Padding="5,3" MinWidth="30" ToolTip.Tip="Delete mod list" />
                         </StackPanel>
                       </Grid>
                     </Border>

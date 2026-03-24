@@ -166,6 +166,11 @@ namespace FMM.Tests.ViewModelTests
             public void SetDownloadProgressVisible(bool visible) => _setVisible(visible);
 
             public void ApplyBatchedProgress() => _onApplyBatched();
+
+            public IProgress<(long bytesDownloaded, long? totalBytes)> CreateGlobalDownloadProgressReporter()
+            {
+                return CreateGlobalDownloadProgressReporter();
+            }
         }
     }
 }

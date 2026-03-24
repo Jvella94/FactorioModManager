@@ -14,6 +14,7 @@ using System.Linq;
 using System.Reactive.Disposables;
 using System.Reactive.Disposables.Fluent;
 using System.Reactive.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using static FactorioModManager.Constants;
 
@@ -504,7 +505,12 @@ namespace FactorioModManager.ViewModels.MainWindow
         {
             try
             {
-                var currentVersion = "1.0.0"; // Replace with Assembly.GetExecutingAssembly().GetName().Version.ToString()
+                var currentVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString();
+                if (currentVersion is null)
+                {
+                    _logService.LogWarning("Unable to determine current app version for update check.");
+                    return;
+                }
                 var updateInfo = await _appUpdateChecker.CheckForUpdatesAsync(currentVersion);
 
                 if (updateInfo?.IsNewer == true)

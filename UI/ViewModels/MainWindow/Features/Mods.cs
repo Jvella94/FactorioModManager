@@ -414,7 +414,8 @@ namespace FactorioModManager.ViewModels.MainWindow
                 {
                     var dependencyName = DependencyHelper.ExtractDependencyName(dependency);
                     return dependencyName.Equals(modName, StringComparison.OrdinalIgnoreCase) &&
-                           !DependencyHelper.IsOptionalDependency(dependency);
+                           !DependencyHelper.IsOptionalDependency(dependency) &&
+                           !DependencyHelper.IsConflictDependency(dependency);
                 }));
         }
 
