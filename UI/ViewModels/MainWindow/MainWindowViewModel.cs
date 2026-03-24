@@ -7,6 +7,7 @@ using FactorioModManager.Services.Infrastructure;
 using FactorioModManager.Services.Mods;
 using FactorioModManager.Services.Settings;
 using ReactiveUI;
+using ReactiveUI.Avalonia;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -286,26 +287,26 @@ namespace FactorioModManager.ViewModels.MainWindow
                 x => x.ShowOnlyUnusedInternals,
                 x => x.ShowOnlyPendingUpdates)
                 .Throttle(TimeSpan.FromMilliseconds(150))
-                .ObserveOn(RxApp.MainThreadScheduler)
+                .ObserveOn(AvaloniaScheduler.Instance)
                 .Subscribe(_ => ScheduleApplyModFilter())
                 .DisposeWith(_disposables);
 
             // Throttle author search
             this.WhenAnyValue(x => x.AuthorSearchText)
                 .Throttle(TimeSpan.FromMilliseconds(100))
-                .ObserveOn(RxApp.MainThreadScheduler)
+                .ObserveOn(AvaloniaScheduler.Instance)
                 .Subscribe(_ => ApplyAuthorFilter())
                 .DisposeWith(_disposables);
 
             // Update HasSelectedMod
             this.WhenAnyValue(x => x.SelectedMod)
-                .ObserveOn(RxApp.MainThreadScheduler)
+                .ObserveOn(AvaloniaScheduler.Instance)
                 .Subscribe(_ => this.RaisePropertyChanged(nameof(HasSelectedMod)))
                 .DisposeWith(_disposables);
 
             // Raise DetailMod/HasDetailMod when either SelectedMod or PreviewMod changes
             this.WhenAnyValue(x => x.SelectedMod, x => x.PreviewMod)
-                .ObserveOn(RxApp.MainThreadScheduler)
+                .ObserveOn(AvaloniaScheduler.Instance)
                 .Subscribe(_ =>
                 {
                     this.RaisePropertyChanged(nameof(DetailMod));
@@ -315,7 +316,7 @@ namespace FactorioModManager.ViewModels.MainWindow
 
             // Sync author search with selected author
             this.WhenAnyValue(x => x.SelectedAuthorFilter)
-                .ObserveOn(RxApp.MainThreadScheduler)
+                .ObserveOn(AvaloniaScheduler.Instance)
                 .Subscribe(author =>
                 {
                     if (!string.IsNullOrEmpty(author))
@@ -337,7 +338,7 @@ namespace FactorioModManager.ViewModels.MainWindow
                             x => x.HasUpdate,
                             x => x.IsUnusedInternal)
                             .Throttle(TimeSpan.FromMilliseconds(100))
-                            .ObserveOn(RxApp.MainThreadScheduler)
+                            .ObserveOn(AvaloniaScheduler.Instance)
                             .Subscribe(_ =>
                             {
                                 this.RaisePropertyChanged(nameof(EnabledCountText));
@@ -363,7 +364,7 @@ namespace FactorioModManager.ViewModels.MainWindow
             // If the global HasUpdates becomes false while the Pending Updates filter is active, clear it
             this.WhenAnyValue(x => x.HasUpdates)
                 .Throttle(TimeSpan.FromMilliseconds(50))
-                .ObserveOn(RxApp.MainThreadScheduler)
+                .ObserveOn(AvaloniaScheduler.Instance)
                 .Subscribe(hasUpdates =>
                 {
                     if (!hasUpdates && ShowOnlyPendingUpdates)
@@ -377,7 +378,7 @@ namespace FactorioModManager.ViewModels.MainWindow
             // If there are no unused internal mods left while the Unused Internals filter is active, clear it
             this.WhenAnyValue(x => x.HasUnusedInternals)
                 .Throttle(TimeSpan.FromMilliseconds(50))
-                .ObserveOn(RxApp.MainThreadScheduler)
+                .ObserveOn(AvaloniaScheduler.Instance)
                 .Subscribe(hasUnused =>
                 {
                     if (!hasUnused && ShowOnlyUnusedInternals)

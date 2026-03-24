@@ -31,6 +31,8 @@ namespace FactorioModManager.Views
             _originalBorderThickness = InputTextBox.BorderThickness;
         }
 
+        private static readonly char[] _separator = ['/'];
+
         private async void Browse_Click(object? sender, RoutedEventArgs e)
         {
             var topLevel = GetTopLevel(this);
@@ -81,12 +83,12 @@ namespace FactorioModManager.Views
                     return false;
 
                 // ensure there is a mod name after the prefix
-                var after = path.Length > requiredPrefix.Length ? path.Substring(requiredPrefix.Length) : string.Empty;
+                var after = path.Length > requiredPrefix.Length ? path[requiredPrefix.Length..] : string.Empty;
                 if (string.IsNullOrWhiteSpace(after))
                     return false;
 
                 // first segment after /mod/ must be non-empty
-                var segments = after.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+                var segments = after.Split(_separator, StringSplitOptions.RemoveEmptyEntries);
                 if (segments.Length == 0) return false;
 
                 return true;

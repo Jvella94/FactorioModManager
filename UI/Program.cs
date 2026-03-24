@@ -19,5 +19,5 @@ internal sealed class Program
               .UsePlatformDetect()
               .WithInterFont()
               .LogToTrace()
-              .UseReactiveUI();  // <-- Make sure this is present
+              .UseReactiveUI(builder => { });  // <-- Make sure this is present
 }

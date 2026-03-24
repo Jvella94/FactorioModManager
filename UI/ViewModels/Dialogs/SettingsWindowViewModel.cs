@@ -3,6 +3,7 @@ using FactorioModManager.Services.Infrastructure;
 using FactorioModManager.Services.Platform;
 using FactorioModManager.Services.Settings;
 using ReactiveUI;
+using ReactiveUI.Avalonia;
 using System;
 using System.Reactive;
 using System.Reactive.Disposables;
@@ -171,7 +172,7 @@ namespace FactorioModManager.ViewModels.Dialogs
                 // Clear feedback after 3 seconds
                 _verboseClearDisposable?.Dispose();
                 _verboseClearDisposable = Observable.Timer(TimeSpan.FromSeconds(3))
-                    .ObserveOn(RxApp.MainThreadScheduler)
+                    .ObserveOn(AvaloniaScheduler.Instance)
                     .Subscribe(_ => VerboseStatusMessage = null);
             }
         }
@@ -248,7 +249,7 @@ namespace FactorioModManager.ViewModels.Dialogs
             // ✅ SaveCommand with validation
             var canSave = this.WhenAnyValue(x => x.ModsPath)
                 .Select(_ => Validate())
-                .ObserveOn(RxApp.MainThreadScheduler);
+                .ObserveOn(AvaloniaScheduler.Instance);
 
             SaveCommand = ReactiveCommand.Create(SaveSettings, canSave);
             CancelCommand = ReactiveCommand.Create(() => { });

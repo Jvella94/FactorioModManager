@@ -3,6 +3,7 @@ using DynamicData;
 using FactorioModManager.Models;
 using FactorioModManager.Services.Infrastructure;
 using ReactiveUI;
+using ReactiveUI.Avalonia;
 using System;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -160,7 +161,7 @@ namespace FactorioModManager.ViewModels.Dialogs
                 .FromEventPattern<EventHandler, EventArgs>(h => _logService.LogsUpdated += h, h => _logService.LogsUpdated -= h)
                 .Select(_ => Unit.Default)
                 .Throttle(TimeSpan.FromMilliseconds(500))
-                .ObserveOn(RxApp.MainThreadScheduler)
+                .ObserveOn(AvaloniaScheduler.Instance)
                 .Subscribe(async _ =>
                 {
                     await RefreshCommand.Execute();
