@@ -3,11 +3,11 @@
         x:Class="FactorioModManager.Views.UpdateCheckDialog"
         Classes="dialog"
         Title="Check for Updates"
-        Width="450" Height="180">
+        Width="450">
 
   <StackPanel Classes="dialog-content">
     <TextBlock Classes="dialog-label"
-               Text="Check for mods updated in the last:"/>
+               Text="Check for mods updated in the last:" />
 
     <StackPanel Orientation="Horizontal" Spacing="10">
       <NumericUpDown Name="HoursInput"
@@ -20,23 +20,23 @@
                      Width="120"
                      Height="32"
                      VerticalAlignment="Center"
-                     HorizontalContentAlignment="Center"/>
+                     HorizontalContentAlignment="Center" />
 
       <TextBlock Text="hour(s)"
                  VerticalAlignment="Center"
                  Foreground="White"
-                 FontSize="14"/>
+                 FontSize="14" />
     </StackPanel>
 
-    <StackPanel Classes="dialog-buttons">
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Classes="dialog-buttons">
       <Button Classes="dialog-button"
               Content="Check"
               Click="CheckUpdates"
-              IsDefault="True"/>
+              IsDefault="True" />
       <Button Classes="dialog-button"
               Content="Cancel"
               Click="Cancel"
-              IsCancel="True"/>
+              IsCancel="True" />
     </StackPanel>
   </StackPanel>
 </Window>

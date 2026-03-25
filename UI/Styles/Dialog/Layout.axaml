@@ -5,6 +5,7 @@
   <Style Selector="StackPanel.dialog-content">
     <Setter Property="Margin" Value="{StaticResource DialogContentPadding}" />
     <Setter Property="Spacing" Value="{StaticResource DialogSpacingValue}" />
+    <Setter Property="VerticalAlignment" Value="Top" />
   </Style>
 
   <!-- Dialog Content with Padding Variants -->
@@ -22,7 +23,7 @@
   <Style Selector="StackPanel.dialog-buttons">
     <Setter Property="Orientation" Value="Horizontal" />
     <Setter Property="HorizontalAlignment" Value="Right" />
-    <Setter Property="Spacing" Value="10" />
+    <Setter Property="Spacing" Value="{StaticResource DialogSpacingValue}" />
     <Setter Property="Margin" Value="{StaticResource DialogButtonMargin}" />
   </Style>
 

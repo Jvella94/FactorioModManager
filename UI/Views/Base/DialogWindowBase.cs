@@ -1,4 +1,5 @@
-﻿using Avalonia.Controls;
+﻿using Avalonia;
+using Avalonia.Controls;
 using System;
 using System.Threading.Tasks;
 
@@ -23,9 +24,13 @@ namespace FactorioModManager.Views.Base
             CanResize = false;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
             ShowInTaskbar = true;
+            // Let the window size itself to its content so added padding doesn't
+            // cause controls to be clipped.
+            SizeToContent = SizeToContent.Height;
 
             // Event handlers
             Opened += OnDialogOpened;
+            Padding = new Thickness(12, 20, 12, 12);
 
             // ESC key to cancel
             KeyDown += (s, e) =>
